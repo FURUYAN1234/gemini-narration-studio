@@ -1,9 +1,11 @@
 {
   "name": "gemini-narration-studio",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
-  "engines": {"node": ">=22"},
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node launch.mjs",
     "start:codex": "node launch.mjs --no-browser",

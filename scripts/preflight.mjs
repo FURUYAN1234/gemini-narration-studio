@@ -1,6 +1,7 @@
 import {readdir,readFile,stat} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {execFileSync} from 'node:child_process';
 import {SAMPLE_SETTINGS,previewFingerprint,wavInfo} from '../runtime/core.mjs';
 export function allowedFile(relative) {
   if(/(^|\/)(\.git|node_modules|output|data)(\/|$)/.test(relative))return false;
@@ -9,6 +10,11 @@ export function allowedFile(relative) {
 }
 export async function audit(root,{tracked=false}={}) {
   let count=0,samples=0;const sampleIds=new Set();
+  const hasGit=await stat(path.join(root,'.git')).then(()=>true,error=>{if(error.code==='ENOENT')return false;throw error;});
+  if(hasGit) {
+    const files=execFileSync('git',['ls-files','-z'],{cwd:root,encoding:'utf8',stdio:['ignore','pipe','ignore']}).split('\0').filter(Boolean);
+    for(const file of files)if(!allowedFile(file))throw new Error('TRACKED_RELEASE_FILE_REJECTED: '+file);
+  }
   async function walk(dir,prefix='') {
     for(const entry of await readdir(dir,{withFileTypes:true})) {
       if(!prefix&&['.git','node_modules','output','data'].includes(entry.name))continue;

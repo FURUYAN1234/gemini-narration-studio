@@ -79,7 +79,7 @@ export async function launch(args=process.argv.slice(2)) {
   const {NarrationSession}=await import('./runtime/core.mjs');
   const {startServer}=await import('./runtime/server.mjs');
   const session=await NarrationSession.open({outputDir:config.output});
-  const service=await startServer({session,port:config.port,videoRendererRoot:appRoot,launcherStatus:{app:'gemini-narration-studio',version:JSON.parse(await readFile(path.join(appRoot,'package.json'),'utf8')).version,output:config.output}});
+  const service=await startServer({session,port:config.port,sampleDir:path.join(config.output,'voice-samples'),videoRendererRoot:appRoot,launcherStatus:{app:'gemini-narration-studio',version:JSON.parse(await readFile(path.join(appRoot,'package.json'),'utf8')).version,output:config.output}});
   console.log('NARRATION_STUDIO_READY '+service.url);
   console.log('制作データ: '+config.output);
   if(config.openBrowser)openLocalBrowser(service.url);
