@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import {options,existingStudio} from '../launch.mjs';
-import {allowedFile} from '../scripts/preflight.mjs';
+import {allowedFile,audit} from '../scripts/preflight.mjs';
+import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
+import os from 'node:os';
 import {createServer} from 'node:http';
 test('portable launch keeps persistent data outside replaceable release copy',()=>{
   const config=options(['--no-browser'],'C:/Users/Test User');
@@ -21,4 +24,16 @@ test('reuse only exact matching standalone studio; reject another data directory
   const server=createServer((req,res)=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify({app:'gemini-narration-studio',output:path.resolve('a')}));});
   await new Promise(r=>server.listen(0,'127.0.0.1',r));
   try {assert.equal(await existingStudio(server.address().port,'a'),true);await assert.rejects(existingStudio(server.address().port,'b'),/OTHER_PROJECT/);}finally{await new Promise(r=>server.close(r));}
+});
+test('release audit rejects private state or installed packages forcibly staged in Git',async()=>{
+  const root=await mkdtemp(path.join(os.tmpdir(),'narration-release-test-'));
+  try {
+    execFileSync('git',['init','-q'],{cwd:root,stdio:'ignore'});
+    for(const file of ['output/job.json','node_modules/local/settings.json']) {
+      await mkdir(path.dirname(path.join(root,file)),{recursive:true});await writeFile(path.join(root,file),'{}');
+      execFileSync('git',['add','-f',file],{cwd:root,stdio:'ignore'});
+      await assert.rejects(audit(root),/TRACKED_RELEASE_FILE_REJECTED/);
+      execFileSync('git',['rm','--cached','-q',file],{cwd:root,stdio:'ignore'});
+    }
+  } finally {assert.equal(path.dirname(root),os.tmpdir());await rm(root,{recursive:true,force:true});}
 });
