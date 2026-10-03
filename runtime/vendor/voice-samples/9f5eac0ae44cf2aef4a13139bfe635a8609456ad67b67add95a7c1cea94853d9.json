@@ -1,0 +1,12 @@
+{
+  "id": "9f5eac0ae44cf2aef4a13139bfe635a8609456ad67b67add95a7c1cea94853d9",
+  "file": "9f5eac0ae44cf2aef4a13139bfe635a8609456ad67b67add95a7c1cea94853d9.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-lite-tts",
+    "voice": "Laomedeia",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T03:13:24.322Z",
+  "durationSeconds": 5.6
+}

@@ -1,0 +1,13 @@
+{
+  "id": "4f7f02839bf5cd9f0aec25969a402dc763017bb62b3e3240a565448324c890b5",
+  "file": "4f7f02839bf5cd9f0aec25969a402dc763017bb62b3e3240a565448324c890b5.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-lite-tts",
+    "voice": "Sadachbia",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "low"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:22:16.765Z",
+  "durationSeconds": 5.56
+}

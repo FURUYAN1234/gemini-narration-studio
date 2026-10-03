@@ -1,0 +1,13 @@
+{
+  "id": "a1c60dfba5b295fdf8e7bfa5c3ef7abfa2dc96690c1db5ab2a6ae53cc081e34b",
+  "file": "a1c60dfba5b295fdf8e7bfa5c3ef7abfa2dc96690c1db5ab2a6ae53cc081e34b.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-tts",
+    "voice": "Orus",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "low"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:17:09.154Z",
+  "durationSeconds": 5.56
+}

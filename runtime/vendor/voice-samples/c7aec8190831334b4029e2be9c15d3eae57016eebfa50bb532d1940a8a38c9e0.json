@@ -1,0 +1,13 @@
+{
+  "id": "c7aec8190831334b4029e2be9c15d3eae57016eebfa50bb532d1940a8a38c9e0",
+  "file": "c7aec8190831334b4029e2be9c15d3eae57016eebfa50bb532d1940a8a38c9e0.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-lite-tts",
+    "voice": "Achernar",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "low"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:21:29.691Z",
+  "durationSeconds": 5.48
+}

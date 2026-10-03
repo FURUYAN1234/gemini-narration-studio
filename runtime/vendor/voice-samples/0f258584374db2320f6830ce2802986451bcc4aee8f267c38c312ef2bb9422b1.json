@@ -1,0 +1,13 @@
+{
+  "id": "0f258584374db2320f6830ce2802986451bcc4aee8f267c38c312ef2bb9422b1",
+  "file": "0f258584374db2320f6830ce2802986451bcc4aee8f267c38c312ef2bb9422b1.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-tts",
+    "voice": "Alnilam",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "low"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:18:35.463Z",
+  "durationSeconds": 5.2
+}

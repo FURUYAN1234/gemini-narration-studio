@@ -1,0 +1,13 @@
+{
+  "id": "05ddabad042eddb27d650f18ada7a4cdcc271b29b9af785fcd1ec74079e4229c",
+  "file": "05ddabad042eddb27d650f18ada7a4cdcc271b29b9af785fcd1ec74079e4229c.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-tts",
+    "voice": "Zubenelgenubi",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "high"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:19:11.807Z",
+  "durationSeconds": 5.16
+}

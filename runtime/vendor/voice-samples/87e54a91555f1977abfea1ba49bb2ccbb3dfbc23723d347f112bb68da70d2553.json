@@ -1,0 +1,13 @@
+{
+  "id": "87e54a91555f1977abfea1ba49bb2ccbb3dfbc23723d347f112bb68da70d2553",
+  "file": "87e54a91555f1977abfea1ba49bb2ccbb3dfbc23723d347f112bb68da70d2553.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-tts",
+    "voice": "Achird",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "low"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:19:02.112Z",
+  "durationSeconds": 5.52
+}

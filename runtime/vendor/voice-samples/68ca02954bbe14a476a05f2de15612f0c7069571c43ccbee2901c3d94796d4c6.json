@@ -1,0 +1,13 @@
+{
+  "id": "68ca02954bbe14a476a05f2de15612f0c7069571c43ccbee2901c3d94796d4c6",
+  "file": "68ca02954bbe14a476a05f2de15612f0c7069571c43ccbee2901c3d94796d4c6.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-tts",
+    "voice": "Umbriel",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "high"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:17:45.013Z",
+  "durationSeconds": 4.76
+}

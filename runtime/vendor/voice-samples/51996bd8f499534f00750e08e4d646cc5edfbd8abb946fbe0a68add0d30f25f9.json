@@ -1,0 +1,13 @@
+{
+  "id": "51996bd8f499534f00750e08e4d646cc5edfbd8abb946fbe0a68add0d30f25f9",
+  "file": "51996bd8f499534f00750e08e4d646cc5edfbd8abb946fbe0a68add0d30f25f9.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-lite-tts",
+    "voice": "Despina",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "high"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:21:04.259Z",
+  "durationSeconds": 5.56
+}

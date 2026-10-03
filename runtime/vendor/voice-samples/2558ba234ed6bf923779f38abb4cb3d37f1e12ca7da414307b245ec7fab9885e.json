@@ -1,0 +1,13 @@
+{
+  "id": "2558ba234ed6bf923779f38abb4cb3d37f1e12ca7da414307b245ec7fab9885e",
+  "file": "2558ba234ed6bf923779f38abb4cb3d37f1e12ca7da414307b245ec7fab9885e.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-lite-tts",
+    "voice": "Enceladus",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "low"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:20:38.931Z",
+  "durationSeconds": 5.24
+}

@@ -1,0 +1,13 @@
+{
+  "id": "0de5436640254df593f5c7bdf6c0de12e5ea525d595165b1ae79280e6f68a133",
+  "file": "0de5436640254df593f5c7bdf6c0de12e5ea525d595165b1ae79280e6f68a133.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-lite-tts",
+    "voice": "Vindemiatrix",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "high"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:22:13.498Z",
+  "durationSeconds": 5.32
+}

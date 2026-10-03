@@ -1,0 +1,12 @@
+{
+  "id": "67c5c4f1ab723229f111d80f3c28a578912008aa4566390063a253fffb327d59",
+  "file": "67c5c4f1ab723229f111d80f3c28a578912008aa4566390063a253fffb327d59.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-lite-tts",
+    "voice": "Schedar",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T03:13:45.555Z",
+  "durationSeconds": 5.64
+}

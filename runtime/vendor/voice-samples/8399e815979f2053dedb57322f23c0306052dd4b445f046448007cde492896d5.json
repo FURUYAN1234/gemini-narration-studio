@@ -1,0 +1,12 @@
+{
+  "id": "8399e815979f2053dedb57322f23c0306052dd4b445f046448007cde492896d5",
+  "file": "8399e815979f2053dedb57322f23c0306052dd4b445f046448007cde492896d5.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-tts",
+    "voice": "Pulcherrima",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T01:57:59.455Z",
+  "durationSeconds": 5.6
+}

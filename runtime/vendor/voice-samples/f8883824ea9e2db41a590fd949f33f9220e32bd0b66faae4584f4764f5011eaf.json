@@ -1,0 +1,12 @@
+{
+  "id": "f8883824ea9e2db41a590fd949f33f9220e32bd0b66faae4584f4764f5011eaf",
+  "file": "f8883824ea9e2db41a590fd949f33f9220e32bd0b66faae4584f4764f5011eaf.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-lite-tts",
+    "voice": "Charon",
+    "style": "落ち着いた日本語で、要点と区切りを明瞭に説明する。"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T03:12:39.595Z",
+  "durationSeconds": 4.96
+}

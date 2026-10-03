@@ -1,0 +1,13 @@
+{
+  "id": "3ffab8eb2fabed18ba5781ef4349c5324d4804bcea71503b3d6bd23d37b817cb",
+  "file": "3ffab8eb2fabed18ba5781ef4349c5324d4804bcea71503b3d6bd23d37b817cb.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-tts",
+    "voice": "Puck",
+    "style": "明るく親しみやすい日本語で、聞き取りやすく話す。",
+    "pitch": "high"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:16:38.365Z",
+  "durationSeconds": 5.12
+}

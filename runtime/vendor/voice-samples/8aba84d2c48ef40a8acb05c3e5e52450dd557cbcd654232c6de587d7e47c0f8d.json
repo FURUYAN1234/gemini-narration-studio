@@ -1,0 +1,13 @@
+{
+  "id": "8aba84d2c48ef40a8acb05c3e5e52450dd557cbcd654232c6de587d7e47c0f8d",
+  "file": "8aba84d2c48ef40a8acb05c3e5e52450dd557cbcd654232c6de587d7e47c0f8d.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-tts",
+    "voice": "Aoede",
+    "style": "やわらかく親しみやすい日本語で、穏やかに話す。",
+    "pitch": "high"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:16:32.720Z",
+  "durationSeconds": 5.84
+}

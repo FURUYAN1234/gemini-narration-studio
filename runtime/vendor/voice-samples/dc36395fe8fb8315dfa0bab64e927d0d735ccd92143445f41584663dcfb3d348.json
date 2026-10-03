@@ -1,0 +1,12 @@
+{
+  "id": "dc36395fe8fb8315dfa0bab64e927d0d735ccd92143445f41584663dcfb3d348",
+  "file": "dc36395fe8fb8315dfa0bab64e927d0d735ccd92143445f41584663dcfb3d348.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-lite-tts",
+    "voice": "Autonoe",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T03:13:00.424Z",
+  "durationSeconds": 5.12
+}

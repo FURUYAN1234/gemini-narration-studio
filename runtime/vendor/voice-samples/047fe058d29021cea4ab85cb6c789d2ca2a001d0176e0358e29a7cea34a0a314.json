@@ -1,0 +1,13 @@
+{
+  "id": "047fe058d29021cea4ab85cb6c789d2ca2a001d0176e0358e29a7cea34a0a314",
+  "file": "047fe058d29021cea4ab85cb6c789d2ca2a001d0176e0358e29a7cea34a0a314.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-lite-tts",
+    "voice": "Gacrux",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "low"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:21:46.815Z",
+  "durationSeconds": 5.92
+}

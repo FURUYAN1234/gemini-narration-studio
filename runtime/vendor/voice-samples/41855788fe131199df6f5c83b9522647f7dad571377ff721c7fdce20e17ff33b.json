@@ -1,0 +1,12 @@
+{
+  "id": "41855788fe131199df6f5c83b9522647f7dad571377ff721c7fdce20e17ff33b",
+  "file": "41855788fe131199df6f5c83b9522647f7dad571377ff721c7fdce20e17ff33b.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-tts",
+    "voice": "Algenib",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T01:57:35.962Z",
+  "durationSeconds": 4.92
+}

@@ -1,0 +1,13 @@
+{
+  "id": "e358c34fdf7fe2df7ec70711cbe1160d041fca0678df40e4a16cf63cfc72b006",
+  "file": "e358c34fdf7fe2df7ec70711cbe1160d041fca0678df40e4a16cf63cfc72b006.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-tts",
+    "voice": "Leda",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "high"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:17:05.760Z",
+  "durationSeconds": 5.64
+}

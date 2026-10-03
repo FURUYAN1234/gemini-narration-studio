@@ -1,0 +1,13 @@
+{
+  "id": "f7bd577aa98f2e337797fea1b2a561f6d59823051d01b097093d023f78890dee",
+  "file": "f7bd577aa98f2e337797fea1b2a561f6d59823051d01b097093d023f78890dee.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-lite-tts",
+    "voice": "Iapetus",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "high"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:20:47.331Z",
+  "durationSeconds": 4.88
+}

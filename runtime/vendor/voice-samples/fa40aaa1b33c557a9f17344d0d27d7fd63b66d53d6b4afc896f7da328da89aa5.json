@@ -1,0 +1,12 @@
+{
+  "id": "fa40aaa1b33c557a9f17344d0d27d7fd63b66d53d6b4afc896f7da328da89aa5",
+  "file": "fa40aaa1b33c557a9f17344d0d27d7fd63b66d53d6b4afc896f7da328da89aa5.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-tts",
+    "voice": "Zephyr",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T01:56:55.824Z",
+  "durationSeconds": 5.28
+}

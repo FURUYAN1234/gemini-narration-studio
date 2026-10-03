@@ -1,0 +1,13 @@
+{
+  "id": "b75eebd4bc521473de3e7aee78749dde09b6d5f5310fba33cdfea7be31948501",
+  "file": "b75eebd4bc521473de3e7aee78749dde09b6d5f5310fba33cdfea7be31948501.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-tts",
+    "voice": "Sadaltager",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "low"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:19:27.986Z",
+  "durationSeconds": 4.88
+}

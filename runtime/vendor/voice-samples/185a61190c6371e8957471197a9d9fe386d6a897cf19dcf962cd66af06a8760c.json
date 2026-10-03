@@ -1,0 +1,13 @@
+{
+  "id": "185a61190c6371e8957471197a9d9fe386d6a897cf19dcf962cd66af06a8760c",
+  "file": "185a61190c6371e8957471197a9d9fe386d6a897cf19dcf962cd66af06a8760c.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-tts",
+    "voice": "Sulafat",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "high"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:19:38.114Z",
+  "durationSeconds": 5
+}

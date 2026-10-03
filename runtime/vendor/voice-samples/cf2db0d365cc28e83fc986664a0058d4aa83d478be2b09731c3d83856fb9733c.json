@@ -1,0 +1,13 @@
+{
+  "id": "cf2db0d365cc28e83fc986664a0058d4aa83d478be2b09731c3d83856fb9733c",
+  "file": "cf2db0d365cc28e83fc986664a0058d4aa83d478be2b09731c3d83856fb9733c.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-tts",
+    "voice": "Rasalgethi",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "low"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:18:14.076Z",
+  "durationSeconds": 5.68
+}

@@ -1,0 +1,13 @@
+{
+  "id": "863315af865a329859b0e538f3698d8ea93b538ac539029c46ce905faa8c83bd",
+  "file": "863315af865a329859b0e538f3698d8ea93b538ac539029c46ce905faa8c83bd.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-lite-tts",
+    "voice": "Erinome",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "high"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:21:10.086Z",
+  "durationSeconds": 5.16
+}

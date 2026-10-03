@@ -1,0 +1,12 @@
+{
+  "id": "72f8d85f4c8304be49cf93f5c12b7a47f5153ebcffaed0b7450d1e8e2d25db4e",
+  "file": "72f8d85f4c8304be49cf93f5c12b7a47f5153ebcffaed0b7450d1e8e2d25db4e.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-tts",
+    "voice": "Kore",
+    "style": "自然な日本語で、落ち着いた親しみやすいナレーション。文章の区切りで短く間を取り、明瞭に話す。"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03",
+  "durationSeconds": 19.24
+}

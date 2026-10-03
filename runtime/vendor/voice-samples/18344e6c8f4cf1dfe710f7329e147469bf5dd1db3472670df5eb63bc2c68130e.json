@@ -1,0 +1,13 @@
+{
+  "id": "18344e6c8f4cf1dfe710f7329e147469bf5dd1db3472670df5eb63bc2c68130e",
+  "file": "18344e6c8f4cf1dfe710f7329e147469bf5dd1db3472670df5eb63bc2c68130e.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-tts",
+    "voice": "Kore",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "high"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:16:25.184Z",
+  "durationSeconds": 5.48
+}

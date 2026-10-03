@@ -1,0 +1,21 @@
+{
+  "name": "gemini-narration-studio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=22"},
+  "scripts": {
+    "start": "node launch.mjs",
+    "start:codex": "node launch.mjs --no-browser",
+    "test": "node --test runtime/tests/*.test.mjs tests/*.test.mjs",
+    "build": "node scripts/preflight.mjs",
+    "preflight": "node scripts/preflight.mjs"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.428",
+    "@remotion/renderer": "4.0.428",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.428"
+  }
+}

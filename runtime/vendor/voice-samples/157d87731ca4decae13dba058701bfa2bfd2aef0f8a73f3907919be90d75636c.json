@@ -1,0 +1,13 @@
+{
+  "id": "157d87731ca4decae13dba058701bfa2bfd2aef0f8a73f3907919be90d75636c",
+  "file": "157d87731ca4decae13dba058701bfa2bfd2aef0f8a73f3907919be90d75636c.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-lite-tts",
+    "voice": "Fenrir",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。",
+    "pitch": "low"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T06:20:09.660Z",
+  "durationSeconds": 5.28
+}

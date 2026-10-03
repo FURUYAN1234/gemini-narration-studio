@@ -1,0 +1,45 @@
+{
+  "retrieved": "2026-10-03",
+  "sources": [
+    {
+      "sha256": "D3696656844B424D148936ADDD9E20F4D956FB967DE8F23915BCB35D9DF31730",
+      "url": "https://raw.githubusercontent.com/hakimel/reveal.js/5.2.1/dist/theme/moon.css",
+      "file": "moon.css"
+    },
+    {
+      "sha256": "1F1344B2FB5D70CBC27DCE84385EC279685575743E86EBDEDF6451E1A2E47571",
+      "url": "https://raw.githubusercontent.com/hakimel/reveal.js/5.2.1/dist/theme/black.css",
+      "file": "black.css"
+    },
+    {
+      "sha256": "97F64970FFD6C745FFAB96AD26C504950F665E18FA851AC8864FC1851CE99780",
+      "url": "https://raw.githubusercontent.com/hakimel/reveal.js/5.2.1/dist/theme/white.css",
+      "file": "white.css"
+    },
+    {
+      "sha256": "34014800F4126AC2525E224166F099F26628612E95C41F76D70841B63138C989",
+      "url": "https://raw.githubusercontent.com/hakimel/reveal.js/5.2.1/LICENSE",
+      "file": "reveal-LICENSE.txt"
+    }
+  ],
+  "license": "MIT",
+  "usage": "Extract local theme colors for narration UI and Remotion presentation layouts; upstream imports not served",
+  "version": "5.2.1",
+  "project": "reveal.js",
+  "fonts": {
+    "license": "OFL-1.1",
+    "sources": [
+      {
+        "sha256": "C2F3B4D463500A2DDCD3849CDED1FCEEB9FD6D1C32E6CBECD568453BA50FC68F",
+        "file": "NotoSansJP.ttf",
+        "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf"
+      },
+      {
+        "sha256": "1C05C68C34F9708415AADA51F17E1B0092D2CEA709BF4A94CD38114F9E73D7D9",
+        "file": "NotoSansJP-OFL.txt",
+        "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansjp/OFL.txt"
+      }
+    ],
+    "project": "Noto Sans JP"
+  }
+}

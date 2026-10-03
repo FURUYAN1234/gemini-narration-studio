@@ -1,0 +1,12 @@
+{
+  "id": "169607160c7d62e340789c1098f8d2832480450a2ea3795baaed77907698087f",
+  "file": "169607160c7d62e340789c1098f8d2832480450a2ea3795baaed77907698087f.wav",
+  "settings": {
+    "model": "gemini-3.8-flash-lite-tts",
+    "voice": "Callirrhoe",
+    "style": "自然な日本語で、落ち着いて明瞭に話す。"
+  },
+  "source": "Gemini TTS",
+  "createdAt": "2026-10-03T03:13:03.420Z",
+  "durationSeconds": 5.6
+}
