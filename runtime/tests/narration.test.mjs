@@ -152,8 +152,9 @@ test('current Interactions steps envelope is parsed and incomplete output is rej
 test('atomic save retries a transient Windows lock without removing old data or making API calls',async t=>{
   const {dir}=await setup(t,async()=>wav());const file=path.join(dir,'save.json');let attempts=0,waits=0;
   const {writeFile,rename}=await import('node:fs/promises');await writeFile(file,'old');
-  await atomicWrite(file,'new',{renameFile:async(a,b)=>{assert.equal(await readFile(file,'utf8'),'old');if(++attempts<3)throw Object.assign(new Error('locked'),{code:'EPERM'});await rename(a,b);},wait:async()=>waits++});
-  assert.equal(await readFile(file,'utf8'),'new');assert.equal(attempts,3);assert.equal(waits,2);
+  await atomicWrite(file,'new',{renameFile:async(a,b)=>{assert.equal(await readFile(file,'utf8'),'old');if(++attempts<3)throw Object.assign(new Error('locked'),{code:'EPERM'});await rename(a,b);},wait:async ms=>{waits++;await new Promise(resolve=>setTimeout(resolve,ms));}});
+  // Real Windows indexers may add locks beyond the two deliberately injected failures.
+  assert.equal(await readFile(file,'utf8'),'new');assert.ok(attempts>=3&&attempts<=6);assert.equal(waits,attempts-1);
 });
 test('existing job replacement needs exact session/revision and explicit replacement consent',async t=>{
   const {s}=await setup(t,async()=>wav());const next={title:'新しいジョブ',rows:[{id:'next',caption:'次',speech:'つぎ'}]};

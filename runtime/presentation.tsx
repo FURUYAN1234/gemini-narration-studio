@@ -2,11 +2,13 @@ import React,{useState,useEffect} from 'react';
 import {AbsoluteFill,Audio,Composition,Img,Sequence,interpolate,staticFile,useCurrentFrame,delayRender,continueRender,cancelRender} from 'remotion';
 import {loadLocalFont} from './font-loader.mjs';
 import {captionAtFrame} from './subtitles.mjs';
+import {musicVolume,musicClips,musicClipGain} from './music.mjs';
+import {MotionSlide} from './motion-presentation';
 
 // Layouts adapt reveal.js themes (MIT; see vendor/reveal-LICENSE.txt).
-export type Slide={id:string;scene?:string;caption:string;src:string;from:number;frames:number;title?:string;points?:string[];image?:string;layout?:'title'|'split'|'steps';subtitles?:{text:string;from:number;to:number}[]};
+export type Slide={id:string;scene?:string;caption:string;src:string;from:number;frames:number;title?:string;points?:string[];image?:string;imageFocus?:{x:number;y:number;zoom:number;label:string};layout?:'title'|'split'|'steps';subtitles?:{text:string;from:number;to:number}[]};
 export type Design={name:string;layout:'split'|'visual'|'steps'|'editorial'|'focus';background:string;foreground:string;heading:string;accent:string;decoration:string;titleSize:number;imageSide:string;imageRatio:number;radius:number};
-export type PresentationData={title:string;fps:number;durationInFrames:number;rows:Slide[];design?:Design};
+export type PresentationData={bookends?:{titleRowId:string;endLabel:string;endUrl:string;owner:string;creationYear:number;from:number;frames:number};gapFrames?:number;music?:{src:string;durationSeconds:number;level:number};title:string;fps:number;durationInFrames:number;rows:Slide[];design?:Design;motion?:{version:1;style:'cinematic'|'kinetic'|'editorial';intensity:'subtle'|'standard'|'bold'}|null};
 export type Theme={name:string;background:string;foreground:string;heading:string;accent:string};
 const font='NarrationJapanese';
 // Remotion initializes its global handles while modules load. Create the font
@@ -51,5 +53,18 @@ const DesignedSlide=({row,data,index,design:d}:{row:Slide;data:PresentationData;
   <Audio src={staticFile(row.src)}/>
  </AbsoluteFill>;
 };
-export const NarratedPresentation=({data,theme}:{data:PresentationData;theme:Theme})=>{useJapaneseFont();return <AbsoluteFill>{data.rows.map((row,index)=><Sequence key={row.id} from={row.from} durationInFrames={row.frames+7}>{data.design?<DesignedSlide row={row} data={data} index={index} design={data.design}/>:<SlideView row={row} data={data} theme={theme} index={index}/>}</Sequence>)}</AbsoluteFill>;};
+const BackgroundMusic=({data}:{data:PresentationData})=>{if(!data.music)return null;const music=data.music;return <>{musicClips(data.durationInFrames,Math.floor(music.durationSeconds*data.fps),data.fps).map(clip=><Sequence key={clip.from} from={clip.from} durationInFrames={clip.frames}><Audio src={staticFile(music.src)} volume={frame=>musicVolume(clip.from+frame,data,music.level)*musicClipGain(frame,clip)}/></Sequence>)}</>;};
+const Bookend=({data,theme,row}:{data:PresentationData;theme:Theme;row?:Slide})=>{
+ const frame=useCurrentFrame(),ending=!row,b=data.bookends!,frames=ending?b.frames:row!.frames+(data.gapFrames??7);
+ const fade=interpolate(frame,[0,18,Math.max(19,frames-18),frames],[0,1,1,0],{extrapolateLeft:'clamp',extrapolateRight:'clamp'});
+ const accent=data.design?.accent||theme.accent,background=data.design?.background||theme.background,foreground=data.design?.foreground||theme.foreground;
+ return <AbsoluteFill style={{background,color:foreground,fontFamily:font,overflow:'hidden'}}>
+  <div style={{position:'absolute',width:1100,height:1100,borderRadius:'50%',border:`1px solid ${accent}`,opacity:.10,top:-600,right:-280,transform:`translateX(${frame*.2}px)`}}/>
+  {ending?<div style={{position:'absolute',right:86,bottom:140,textAlign:'right',opacity:fade*.85,fontSize:26,lineHeight:1.8,maxWidth:1500,overflowWrap:'anywhere'}}><div>{b.endLabel}</div><div style={{fontSize:24}}>{b.endUrl}</div></div>:
+  <AbsoluteFill style={{justifyContent:'center',padding:'100px 150px',opacity:fade,transform:`translateY(${interpolate(frame,[0,24],[22,0],{extrapolateRight:'clamp'})}px)`}}><div style={{width:110,height:5,background:accent,marginBottom:42}}/><div style={{fontWeight:800,fontSize:Math.min(92,Math.max(42,Math.floor(1800/Math.max(1,[...row!.caption].length)))),lineHeight:1.55,letterSpacing:3,overflowWrap:'anywhere'}}>{row!.caption}</div></AbsoluteFill>}
+  {ending&&<div style={{position:'absolute',right:86,bottom:80,maxWidth:550,textAlign:'right',overflowWrap:'anywhere',opacity:fade*.75,fontSize:25,letterSpacing:2}}>@{b.creationYear}/{b.owner}</div>}
+  {row&&<Audio src={staticFile(row.src)}/>}
+ </AbsoluteFill>;
+};
+export const NarratedPresentation=({data,theme}:{data:PresentationData;theme:Theme})=>{useJapaneseFont();return <AbsoluteFill><BackgroundMusic data={data}/>{data.rows.map((row,index)=><Sequence key={row.id} from={row.from} durationInFrames={row.frames+(data.gapFrames??7)}>{data.bookends?.titleRowId===row.id?<Bookend data={data} theme={theme} row={row}/>:data.motion?<MotionSlide row={row} data={data} index={index} design={data.design} theme={theme} motion={data.motion}/>:data.design?<DesignedSlide row={row} data={data} index={index} design={data.design}/>:<SlideView row={row} data={data} theme={theme} index={index}/>}</Sequence>)}{data.bookends&&<Sequence from={data.bookends.from} durationInFrames={data.bookends.frames}><Bookend data={data} theme={theme}/></Sequence>}</AbsoluteFill>;};
 export const NarratedPresentationComposition=({data,theme}:{data:PresentationData;theme:Theme})=><Composition id="GeminiNarratedPresentation" component={NarratedPresentation} defaultProps={{data,theme}} durationInFrames={data.durationInFrames} fps={data.fps} width={1920} height={1080}/>;

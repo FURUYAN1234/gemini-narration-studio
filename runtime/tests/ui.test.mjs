@@ -7,6 +7,12 @@ import {VIDEO_TEMPLATES} from '../designs.mjs';
 
 const appSource = await readFile(new URL('../ui/app.mjs', import.meta.url), 'utf8');
 const html = await readFile(new URL('../ui/index.html', import.meta.url), 'utf8');
+test('motion choice requires saving, uses only presentation endpoint, survives polling and refuses sealed edits',async()=>{
+ const ui=await setup({rows:[{id:'one',caption:'字幕。',speech:'よみ。',reviewed:true,audio:{file:'one.wav'},audioCurrent:true,listenedCurrent:true}]});ui.get('motion-style').value='kinetic';await ui.get('motion-style').emit('change');await ui.poll();assert.equal(ui.get('motion-style').value,'kinetic');assert.equal(ui.get('apply-motion').disabled,false);
+ await ui.get('apply-motion').emit('click');assert.equal(ui.state().presentation.motion.style,'kinetic');assert.equal(ui.get('apply-motion').disabled,true);assert.equal(ui.requests.some(r=>['generate','draft','design-draft'].includes(r.route)),false);
+ ui.get('motion-style').value='cinematic';await ui.get('motion-style').emit('change');ui.get('motion-style').value='kinetic';await ui.get('motion-style').emit('change');assert.equal(ui.get('apply-motion').disabled,true);assert.equal(ui.get('confirm-full').disabled,false);
+ await ui.get('confirm-full').emit('click');assert.equal(ui.get('motion-style').disabled,true);assert.equal(ui.get('apply-motion').disabled,true);
+});
 test('cut correction input has a send/apply action and global reading confirmation remains distinct',async()=>{
  const ui=await setup({rows:[{id:'one',caption:'字幕。',speech:'よみ。',reviewed:true,audio:{file:'one.wav'},audioCurrent:true,listenedCurrent:true}]});const list=[...ui.get('rows').walk()],input=list.findIndex(e=>e.attributes['aria-label']==='1カットへの修正指示'),apply=list.findIndex(e=>e.dataset.applyReview==='one');assert.ok(input>=0&&input<apply);assert.equal(list.some(e=>e.dataset.confirmCut||e.dataset.editCut),false);assert.equal(ui.get('confirm-script').disabled,true);assert.match(html,/<div class="reading-confirm-actions"><button id="confirm-script"/);
 });
@@ -83,6 +89,9 @@ test('new/switch UI is disabled while edits are unsaved or generation is active'
  ui.externalVideo({running:true});await ui.poll();assert.equal(ui.get('new-project').disabled,true);assert.equal(ui.requests.some(r=>r.route==='new-project'),false);
 });
 
+test('planning action clearly creates script before narration/video and text-only path is an explicit alternative',()=>{
+ assert.match(html,/素材から構成・台本を作る（API利用）/);assert.doesNotMatch(html,/素材から動画を組み立てる（API利用）/);assert.ok(html.indexOf('class="text-only-alternative"')<html.indexOf('id="draft-script"'));assert.match(html,/この段階では構成・台本/);
+});
 test('material intake precedes script planning in visual and keyboard order',()=>{
  const ids=['asset-mode','material-files','material-list','script-mode','production-instructions','script-input','append-script','save-production'];
  const positions=ids.map(id=>html.indexOf(`id="${id}"`));
@@ -90,9 +99,9 @@ test('material intake precedes script planning in visual and keyboard order',()=
  assert.ok(positions.every((position,index)=>index===0||position>positions[index-1]));
  assert.match(html,/素材と台本を用意する/);
 });
-test('design chooser is before materials and script, and the bottom advertisement is removed',()=>{
- assert.ok(html.indexOf('id="design-planning"')<html.indexOf('id="asset-mode"'));
- assert.ok(html.indexOf('id="design-planning"')<html.indexOf('id="script-mode"'));
+test('materials and AI planning precede optional design controls, and the bottom advertisement is removed',()=>{
+ assert.ok(html.indexOf('id="material-files"')<html.indexOf('id="plan-sources"'));
+ assert.ok(html.indexOf('id="plan-sources"')<html.indexOf('id="design-planning"'));
  assert.ok(!html.includes('PRESENTATION TEMPLATE'));assert.match(html,/テンプレートを使わず、AIで今回用に作る/);
 });
 test('template comparison is local; deciding saves renderer design while retaining unsaved sentence edits',async()=>{
@@ -247,7 +256,7 @@ class Element {
     this.checked = false;
     this.disabled = false;
     this.files = [];
-    const classes=new Set();this.classList = {toggle(name,on) {if(on)classes.add(name);else classes.delete(name);},contains:name=>classes.has(name)};
+    const classes=new Set();this.classList = {toggle(name,on) {if(on)classes.add(name);else classes.delete(name);},contains:name=>classes.has(name),add:name=>classes.add(name),remove:name=>classes.delete(name)};
     this.style = {setProperty() {}};
   }
   setAttribute(name, value) {
@@ -257,6 +266,7 @@ class Element {
   removeAttribute(name){delete this.attributes[name];if(name==='src')this.src='';}
   play(){this.played=true;return Promise.resolve();}
   pause(){this.paused=true;}
+  focus(options){this.focusOptions=options;this.focused=true;}
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; }
   addEventListener(name, listener) {
@@ -274,7 +284,13 @@ class Element {
   }
 }
 
-async function setup({rows,samples,assets=[],previewError,rowError,draftWait,pausedStep,confirmResult=true,secondReviewed = true,voices=['Kore','Puck']} = {}) {
+test('source planning applies automatic title/voice, preserves manual choices, keeps real proposal for review',async()=>{
+ const sourcePlan={script:'入口です。',readings:[{caption:'入口です。',speech:'いりぐちです。'}],storyboard:{title:'AIのタイトル',summary:'資料の構成',voice:'Puck',voiceReason:'明るい説明',sources:[{id:'text',label:'本文',status:'provided',summary:'入口'}],scenes:[{caption:'入口です。',title:'入口',points:['最初の一歩'],imageFile:'',sourceIds:['text']}],motion:{version:1,style:'editorial',intensity:'standard'}}};
+ for(const mode of ['auto','manual']){const ui=await setup({sourcePlan,rows:[]});await ui.edit(ui.get('source-text'),'資料本文');await ui.edit(ui.get('production-instructions'),'短い説明動画');await ui.edit(ui.get('title-mode'),mode);await ui.edit(ui.get('voice-mode'),mode);await ui.get('plan-sources').emit('click');assert.equal(ui.requests.filter(r=>r.route==='source-plan').length,1);assert.equal(ui.state().title,mode==='auto'?'AIのタイトル':'Original title');assert.equal(ui.state().settings.voice,mode==='auto'?'Puck':'Kore');assert.equal(ui.state().production.brief.storyboard.title,'AIのタイトル');assert.equal(ui.requests.some(r=>['approve','generate','finalize'].includes(r.route)),false);assert.equal(ui.get('storyboard-preview').hidden,false);const voice=[...ui.get('storyboard-preview').walk()].find(e=>e.attributes.class==='voice-proposal');assert.equal(voice.children[0].textContent,'声の提案：Puck');assert.equal(voice.children[1].textContent,'明るい説明');await ui.edit(ui.get('script-input'),'書き換え。');await ui.get('save-production').emit('click');assert.equal(ui.state().production.brief.storyboard,undefined);}
+});
+test('failed source request preserves existing script and title without automatic paid retry',async()=>{const ui=await setup({sourceError:'SOURCE_URL_NOT_RETRIEVED'});await ui.edit(ui.get('script-input'),'保存する台本。');await ui.edit(ui.get('production-instructions'),'説明動画');await ui.get('plan-sources').emit('click');assert.equal(ui.get('script-input').value,'保存する台本。');assert.equal(ui.state().title,'Original title');assert.equal(ui.requests.filter(r=>r.route==='source-plan').length,1);assert.match(ui.get('source-status').textContent,/取得成功を確認できません/);});
+
+async function setup({sourcePlan,sourceError,rows,samples,assets=[],previewError,rowError,draftWait,pausedStep,confirmResult=true,secondReviewed = true,voices=['Kore','Puck']} = {}) {
   const elements = new Map();let anonymous=0;
   for(const [,tag,attributes] of html.matchAll(/<([\w-]+)([^>]*)>/g)){const id=attributes.match(/\bid="([^"]+)"/)?.[1];if(!id&&!attributes.includes('data-cancel')&&!attributes.includes('data-revise-step'))continue;const element=new Element(tag);for(const [,name,value]of attributes.matchAll(/\b(data-[\w-]+)(?:="([^"]*)")?/g))element.setAttribute(name,value||'');elements.set(id||'anonymous-'+ ++anonymous,element);}
   const all = () => [...elements.values()].flatMap(element => [...element.walk()]);
@@ -340,6 +356,7 @@ async function setup({rows,samples,assets=[],previewError,rowError,draftWait,pau
     else if (route === 'append-script') state.rows.push({id:'added',caption:input.script,speech:input.readings?.[0]?.speech||input.script,reviewed:false,attempts:0,hints:[]});
     else if (route === 'preview') {if(previewError&&requests.filter(r=>r.route==='preview').length===previewError)return reply({error:'PROVIDER_RATE_LIMIT'},false);const id='sample-'+state.samples.length;state.samples.push({id,file:id+'.wav',settings:input.settings,durationSeconds:5});return reply({sample:id});}
     else if(route==='prepare-samples'){const configs=SAMPLE_SETTINGS.filter(c=>voices.includes(c.voice));const missing=configs.filter(c=>!state.samples.some(s=>s.settings.model===c.model&&s.settings.voice===c.voice&&s.settings.style===c.style&&(s.settings.pitch||'standard')===(c.pitch||'standard')));state.sampleProgress={running:false,total:missing.length,completed:0};for(const config of missing){if(previewError&&state.sampleProgress.completed+1===previewError){state.error='PROVIDER_RATE_LIMIT';break;}const id='sample-'+state.samples.length;state.samples.push({id,file:id+'.wav',settings:config,durationSeconds:5});state.sampleProgress.completed++;}return reply({started:true,total:missing.length});}
+    else if(route==='source-plan'){if(sourceError)return reply({error:sourceError},false);assert.equal(input.consent,true);return reply(sourcePlan);}
     else if (route === 'draft') {if(draftWait){state.busy=true;await draftWait;state.busy=false;return reply({error:'CANCELED'},false);}return reply({script:'AI draft result',readings:[{caption:'AI draft result',speech:'えーあいだいほん。'}]});}
     else if (route === 'approve') {
       if (input.revision !== state.revision) return reply({error: 'STALE_REVISION'}, false);
@@ -364,6 +381,7 @@ async function setup({rows,samples,assets=[],previewError,rowError,draftWait,pau
   await get('consent').emit('change');
   return {
     get, row, textArea, edit, requests, confirmations, location:context.window.location,
+    observeScroll: callback => {context.window.scrollTo=callback;},
     state: () => structuredClone(state),
     poll: async () => {assert.equal(intervals.length, 1); await intervals[0]();},
     restart: () => {state.instanceId = 'instance-2'; state.keyConfigured = false; token = 'fixture-token-2';},
@@ -371,9 +389,22 @@ async function setup({rows,samples,assets=[],previewError,rowError,draftWait,pau
     updateAssets: assets=>{state.production.assets=assets;},
     externalVideo:value=>{state.video={...state.video,...value};},
     externalBusy:value=>{state.busy=value;},
+    externalMusic:(music,current=true)=>{state.production.music=music;state.musicCurrent=current;},
     externalCutInfo: (id,value)=>Object.assign(state.rows.find(r=>r.id===id),value),
   };
 }
+
+test('BGM removal stops preview; stale BGM blocks final confirmation without paid retry',async()=>{
+ const ui=await setup({rows:[{id:'one',caption:'制作。',speech:'せいさく。',reviewed:true,audio:{file:'one.wav',durationSeconds:3},audioCurrent:true,listenedCurrent:true}]});
+ const music={file:'a'.repeat(64)+'.mp3',durationSeconds:30,level:.16};ui.externalMusic(music);await ui.poll();assert.equal(ui.get('music-result').hidden,false);assert.match(ui.get('music-player').src,/api\/music-audio/);
+ ui.get('music-player').paused=false;ui.externalMusic(undefined);await ui.poll();assert.equal(ui.get('music-player').paused,true);assert.equal(ui.get('music-player').src,'');assert.equal(ui.get('music-result').hidden,true);
+ ui.externalMusic(music,false);await ui.poll();assert.equal(ui.get('confirm-full').disabled,true);assert.equal(ui.requests.some(r=>r.route==='generate-music'),false);
+});
+test('BGM level and cut pause capture the selected value before busy-state rendering resets controls',async()=>{
+ const ui=await setup({rows:[{id:'one',caption:'制作。',speech:'せいさく。',reviewed:true,audio:{file:'one.wav'},audioCurrent:true,listenedCurrent:true}]});ui.externalMusic({file:'a'.repeat(64)+'.mp3',durationSeconds:30,level:.16});await ui.poll();
+ ui.get('music-level').value='0.24';await ui.get('music-level').emit('change');assert.equal(ui.requests.findLast(r=>r.route==='music').input.level,.24);
+ ui.get('cut-pause').value='0.8';await ui.get('cut-pause').emit('change');assert.equal(ui.requests.findLast(r=>r.route==='cut-pause').input.seconds,.8);assert.equal(ui.requests.some(r=>r.route==='generate-music'),false);
+});
 
 for (const action of ['key', 'title', 'settings', 'other-row approval']) {
   test('unsaved row caption and reading survive ' + action, async () => {
@@ -436,6 +467,7 @@ test('instance change refreshes bootstrap token without losing the unsaved readi
   await ui.poll();
   assert.equal(ui.textArea('one', 'speech').value, 'Reading survives restart');
   assert.match(ui.get('key-state').textContent, /未設定/);
+  assert.equal(ui.get('key-reset-notice').hidden,false);
   assert.equal(ui.requests.filter(request => request.route === 'bootstrap').length, 2);
   ui.get('api-key').value = 'test-fixture-not-a-real-key';
   await ui.get('key-form').emit('submit');
@@ -444,6 +476,8 @@ test('instance change refreshes bootstrap token without losing the unsaved readi
   assert.equal(ui.state().keyConfigured, true);
   assert.equal(ui.textArea('one', 'speech').value, 'Reading survives restart');
   assert.equal(ui.get('api-key').value, '');
+  assert.equal(ui.get('key-reset-notice').hidden,true);
+  await ui.get('clear-key').emit('click');assert.equal(ui.get('key-reset-notice').hidden,true);
 });
 
 test('batch correction sends pending instructions once, preserves untouched audio, and requires fresh reading before rebuilding changed audio',async()=>{
@@ -451,4 +485,33 @@ test('batch correction sends pending instructions once, preserves untouched audi
 });
 test('individual correction applies only that cut and preserves other pending instructions; missing key cannot submit',async()=>{
  const ui=await setup();for(const n of [1,2])await ui.edit([...ui.get('rows').walk()].find(e=>e.attributes['aria-label']===n+'カットへの修正指示'),'直す');await ui.edit(ui.get('review-overall'),'全体を見直す');await [...ui.get('rows').walk()].find(e=>e.dataset.applyReview==='one').emit('click');assert.equal(ui.requests.find(r=>r.route==='apply-review').input.id,'one');assert.equal(ui.get('review-overall').value,'全体を見直す');assert.equal([...ui.get('rows').walk()].find(e=>e.attributes['aria-label']==='2カットへの修正指示').value,'直す');ui.restart();await ui.poll();assert.equal(ui.get('apply-review').disabled,true);assert.equal([...ui.get('rows').walk()].find(e=>e.dataset.applyReview==='two').disabled,true);
+});
+
+test('bookend edits survive polling, block final approval and save without generation',async()=>{
+ const ui=await setup();await ui.edit(ui.get('opening-title'),'制作の紹介');await ui.edit(ui.get('opening-speech'),'せいさくのしょうかい');await ui.edit(ui.get('ending-label'),'制作システム');await ui.edit(ui.get('ending-url'),'https://example.com');await ui.edit(ui.get('ending-owner'),'Author');ui.get('ending-seconds').value='4';await ui.poll();assert.equal(ui.get('opening-title').value,'制作の紹介');assert.equal(ui.get('confirm-full').disabled,true);
+ await ui.get('save-bookends').emit('click');const call=ui.requests.find(r=>r.route==='bookends');assert.equal(call.input.owner,'Author');assert.equal(call.input.endSeconds,4);assert.equal(call.input.speech,'せいさくのしょうかい');assert.equal(ui.requests.some(r=>['generate','generate-music','finalize'].includes(r.route)),false);
+});
+
+for(const buttonId of ['new-project','new-project-bottom'])test(buttonId+' starts an empty project at the page top and preserves the completed project and key',async()=>{
+ const ui=await setup({rows:[{id:'one',caption:'字幕。',speech:'よみ。',reviewed:true,audio:{file:'one.wav'},audioCurrent:true}]});
+ await ui.get('confirm-full').emit('click');ui.externalVideo({running:false,stage:'complete'});await ui.poll();const original=ui.state();
+ let scroll;ui.observeScroll(value=>{scroll=value;});await ui.get(buttonId).emit('click');
+ assert.equal(ui.location.hash,'#top');assert.equal(scroll.top,0);assert.equal(scroll.behavior,'instant');assert.equal(ui.get('new-project').focused,true);
+ assert.equal(ui.state().rows.length,0);assert.equal(ui.state().production.assets.length,0);assert.equal(ui.state().keyConfigured,true);
+ assert.equal(ui.requests.filter(r=>r.route==='new-project').length,1);assert.equal(ui.requests.some(r=>['generate','generate-music','source-plan'].includes(r.route)),false);
+ ui.get('project-select').value='original';await ui.get('project-select').emit('change');assert.deepEqual(ui.state().production.finalization,original.production.finalization);assert.deepEqual(ui.state().rows,original.rows);
+});
+test('bottom new video control shares unsaved and active work guards',async()=>{
+ const ui=await setup();await ui.edit(ui.get('production-instructions'),'未保存');assert.equal(ui.get('new-project-bottom').disabled,true);
+ await ui.get('save-production').emit('click');assert.equal(ui.get('new-project-bottom').disabled,false);
+ ui.externalVideo({running:true});await ui.poll();assert.equal(ui.get('new-project-bottom').disabled,true);
+ ui.externalVideo({running:false});ui.externalBusy(true);await ui.poll();assert.equal(ui.get('new-project-bottom').disabled,true);assert.equal(ui.requests.some(r=>r.route==='new-project'),false);
+});
+test('existing BGM precedes optional recreation, missing BGM opens creation, polling retains user disclosure choice',async()=>{
+ assert.ok(html.indexOf('id="music-status"')<html.indexOf('id="music-result"'));assert.ok(html.indexOf('id="music-result"')<html.indexOf('id="music-create"'));assert.ok(html.indexOf('id="music-create"')<html.indexOf('id="generate-music"'));
+ assert.ok(html.indexOf('id="new-project-bottom"')>html.indexOf('id="manifest"'));
+ const ui=await setup();assert.equal(ui.get('music-create').open,true);
+ ui.externalMusic({file:'a'.repeat(64)+'.mp3',durationSeconds:30,level:.24});await ui.poll();assert.equal(ui.get('music-create').open,false);assert.equal(ui.get('music-result').hidden,false);
+ ui.get('music-create').open=true;await ui.poll();assert.equal(ui.get('music-create').open,true);
+ ui.externalMusic(undefined);await ui.poll();assert.equal(ui.get('music-create').open,true);assert.equal(ui.get('music-result').hidden,true);assert.equal(ui.requests.some(r=>r.route==='generate-music'),false);
 });

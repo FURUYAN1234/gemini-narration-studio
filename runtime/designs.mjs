@@ -1,11 +1,12 @@
 import {safeText} from './production.mjs';
+import {MOTION_SCHEMA,normalizeMotion} from './motion.mjs';
 
 export const DESIGN_LAYOUTS=['split','visual','steps','editorial','focus'];
 export const DESIGN_SCHEMA={type:'object',additionalProperties:false,properties:{
  name:{type:'string'},layout:{type:'string',enum:DESIGN_LAYOUTS},
  background:{type:'string'},foreground:{type:'string'},heading:{type:'string'},accent:{type:'string'},
  decoration:{type:'string',enum:['none','line','grid','frame','band']},
- titleSize:{type:'integer',minimum:44,maximum:80},imageSide:{type:'string',enum:['left','right']},
+ motion:MOTION_SCHEMA,titleSize:{type:'integer',minimum:44,maximum:80},imageSide:{type:'string',enum:['left','right']},
  imageRatio:{type:'number',minimum:.32,maximum:.6},radius:{type:'integer',minimum:0,maximum:32}
 },required:['name','layout','background','foreground','heading','accent','decoration','titleSize','imageSide','imageRatio','radius']};
 const make=(id,name,description,layout,background,foreground,heading,accent,decoration,titleSize=60,imageSide='right',imageRatio=.46,radius=16)=>({id,name,description,design:{name,layout,background,foreground,heading,accent,decoration,titleSize,imageSide,imageRatio,radius}});
@@ -22,15 +23,16 @@ export const VIDEO_TEMPLATES=[
 const luminance=color=>{const rgb=[1,3,5].map(i=>parseInt(color.slice(i,i+2),16)/255).map(n=>n<=.04045?n/12.92:((n+.055)/1.055)**2.4);return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];};
 export function contrast(a,b){const first=luminance(a),second=luminance(b);return (Math.max(first,second)+.05)/(Math.min(first,second)+.05);}
 export function normalizeDesign(input){
- if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(key=>!DESIGN_SCHEMA.required.includes(key)))throw new Error('INVALID_DESIGN');
+ if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(key=>!Object.hasOwn(DESIGN_SCHEMA.properties,key)))throw new Error('INVALID_DESIGN');
  const name=safeText(input.name,80);if(!name||/[<>]/.test(name)||!DESIGN_LAYOUTS.includes(input.layout)||!DESIGN_SCHEMA.properties.decoration.enum.includes(input.decoration)||!['left','right'].includes(input.imageSide))throw new Error('INVALID_DESIGN');
  for(const key of ['background','foreground','heading','accent'])if(typeof input[key]!=='string'||!/^#[0-9a-f]{6}$/i.test(input[key]))throw new Error('INVALID_DESIGN');
  if(!Number.isInteger(input.titleSize)||input.titleSize<44||input.titleSize>80||!Number.isFinite(input.imageRatio)||input.imageRatio<.32||input.imageRatio>.6||!Number.isInteger(input.radius)||input.radius<0||input.radius>32)throw new Error('INVALID_DESIGN');
  if(contrast(input.background,input.foreground)<4.5||contrast(input.background,input.heading)<4.5||contrast(input.background,input.accent)<3)throw new Error('INVALID_DESIGN_CONTRAST');
- return Object.fromEntries(DESIGN_SCHEMA.required.map(key=>[key,key==='name'?name:input[key]]));
+ return {...Object.fromEntries(DESIGN_SCHEMA.required.map(key=>[key,key==='name'?name:input[key]])),...(input.motion!==undefined?{motion:normalizeMotion(input.motion)}:{})};
 }
 export function normalizePresentation(input={theme:'moon'}){
  if(!input||!['moon','black','white'].includes(input.theme))throw new Error('INVALID_THEME');
+ if(Object.hasOwn(input,'motion')){const {motion,...rest}=input;return {...normalizePresentation(rest),motion:motion===null?null:normalizeMotion(motion)};}
  if(input.mode===undefined){if(Object.keys(input).some(key=>key!=='theme'))throw new Error('INVALID_PRESENTATION');return {theme:input.theme};}
  if(input.mode==='template'){if(!VIDEO_TEMPLATES.some(t=>t.id===input.template)||Object.keys(input).some(key=>!['theme','mode','template'].includes(key)))throw new Error('INVALID_TEMPLATE');return {theme:input.theme,mode:'template',template:input.template};}
  if(input.mode==='ai'){if(Object.keys(input).some(key=>!['theme','mode','instructions','design'].includes(key)))throw new Error('INVALID_PRESENTATION');return {theme:input.theme,mode:'ai',instructions:safeText(input.instructions||'',2000),...(input.design?{design:normalizeDesign(input.design)}:{})};}
@@ -38,3 +40,4 @@ export function normalizePresentation(input={theme:'moon'}){
 }
 export function assertDesignReady(presentation){const value=normalizePresentation(presentation);if(value.mode==='ai'&&!value.design)throw new Error('DESIGN_REQUIRED');return value;}
 export function presentationDesign(presentation){const value=assertDesignReady(presentation);return value.mode==='ai'?value.design:value.mode==='template'?normalizeDesign(VIDEO_TEMPLATES.find(t=>t.id===value.template).design):null;}
+export function presentationMotion(presentation){const value=normalizePresentation(presentation);return Object.hasOwn(value,'motion')?value.motion:value.design?.motion||null;}

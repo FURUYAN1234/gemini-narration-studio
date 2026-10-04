@@ -8,3 +8,5 @@
 - Chrome Headless Shell and Remotion FFmpeg are installed by the renderer setup; their original package notices apply.
 
 Browser setup uses the official [Remotion ensureBrowser API](https://www.remotion.dev/docs/renderer/ensure-browser). No other Antigravity application is required to render.
+
+- Node.js 22.23.3 Windows x64 portable distribution: automatically downloaded only when supported Node.js/npm is missing, from https://nodejs.org/dist/v22.23.3/. The official archive SHA-256 is pinned in scripts/bootstrap.ps1 and checked before extraction. Node.js license and notices remain in the installed runtime folder.

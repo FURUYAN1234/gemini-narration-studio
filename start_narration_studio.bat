@@ -1,11 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-where node >nul 2>nul
-if errorlevel 1 (
-  echo Please install Node.js 22 or later from https://nodejs.org/ then run this file again.
-  pause
-  exit /b 1
-)
-node launch.mjs %*
-if errorlevel 1 pause
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\bootstrap.ps1" %*
+set "studio_exit=%errorlevel%"
+if not "%studio_exit%"=="0" pause
+exit /b %studio_exit%

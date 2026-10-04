@@ -10,6 +10,16 @@ import {startServer} from '../server.mjs';
 import {prepareReviewedAudio} from '../client.mjs';
 
 const custom={...VIDEO_TEMPLATES[0].design,name:'今回だけの案',accent:'#923349',imageSide:'left',imageRatio:.52,titleSize:68};
+test('motion changes bind the final revision without charging or invalidating current readings/audio; explicit off survives AI design',async t=>{
+ const {s,dir}=await setup(t,async()=>({...custom,motion:{version:1,style:'kinetic',intensity:'bold'}}));
+ const original=s.status(),motion={version:1,style:'editorial',intensity:'standard'};
+ await s.setPresentation({...original.presentation,motion});const next=s.status();assert.notEqual(next.revision,original.revision);
+ assert.deepEqual(next.rows,original.rows);assert.deepEqual((await NarrationSession.open({outputDir:dir})).status().presentation.motion,motion);
+ await s.draftDesign('大きく文字を動かす');assert.equal(s.status().presentation.motion.style,'kinetic');
+ await s.setPresentation({...s.status().presentation,motion:null});await s.draftDesign('演出案');assert.equal(s.status().presentation.motion,null);
+ const p=await ProductionInputs.open(dir);await p.confirmCut(s.status().rows[0],p.cutFingerprint(s.status().rows[0]));await p.finalize(s.status());await s.exportManifest();
+ await s.setPresentation({...s.status().presentation,motion});await assert.rejects(prepareReviewedAudio({sourceDir:dir,publicDir:path.join(dir,'out')}),/STALE|FINAL/);
+});
 function wav(){const b=Buffer.alloc(48);b.write('RIFF');b.writeUInt32LE(40,4);b.write('WAVE',8);b.write('fmt ',12);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(24000,24);b.writeUInt32LE(48000,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(4,40);return b;}
 async function setup(t,designProvider){const dir=await mkdtemp(path.join(tmpdir(),'studio-design-'));t.after(()=>rm(dir,{recursive:true,force:true}));const s=await NarrationSession.open({outputDir:dir,provider:async()=>wav(),designProvider});s.setKey('test-design-key');await s.appendRow({id:'one',caption:'字幕。',speech:'よみ。'});await s.approve('one',s.revision());await s.generate(['one']);await s.markListened('one',s.revision());return {dir,s};}
 

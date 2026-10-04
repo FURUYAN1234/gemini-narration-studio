@@ -8,7 +8,7 @@ import {prepareReviewedAudio} from './client.mjs';
 import {themeTokens} from './themes.mjs';
 import {ProductionInputs} from './production.mjs';
 import {fullDecodeVideo,renderErrorCode} from './video.mjs';
-import {presentationDesign} from './designs.mjs';
+import {presentationDesign,presentationMotion} from './designs.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url)),args=process.argv.slice(2),option=name=>{const index=args.indexOf(name);return index<0?undefined:args[index+1];};
 const report=event=>console.log(JSON.stringify(event));
@@ -28,16 +28,18 @@ try{
   report({stage:'preparing',progress:0});await mkdir(publicDir,{recursive:true});
   const data=await prepareReviewedAudio({sourceDir,publicDir}),production=await ProductionInputs.open(sourceDir),theme=await themeTokens(data.presentation.theme);
   const design=presentationDesign(data.presentation);if(design)data.design=design;
+  const motion=presentationMotion(data.presentation);if(motion)data.motion=motion;
   const scenes=production.status().visuals||await readFile(path.join(sourceDir,'video-scenes.json'),'utf8').then(JSON.parse).catch(error=>{if(error.code==='ENOENT')return {};throw error;});
   await mkdir(path.join(publicDir,'cuts'),{recursive:true});
   for(const row of data.rows){
     const asset=production.cutImage(row);
     if(asset){await writeFile(path.join(publicDir,'cuts',asset.file),await production.readAsset(asset.file));row.image='cuts/'+asset.file;row.layout='split';}
-    const visual=scenes[row.id]||{};row.title=typeof visual.title==='string'?visual.title.slice(0,200):row.scene||data.title;
+    const visual=scenes[row.id]||{};if(visual.imageFocus)row.imageFocus=visual.imageFocus;row.title=typeof visual.title==='string'?visual.title.slice(0,200):row.scene||data.title;
     row.points=Array.isArray(visual.points)?visual.points.filter(v=>typeof v==='string').slice(0,6).map(v=>v.slice(0,160)):[];
   }
+  const music=production.status().music;if(music){await writeFile(path.join(publicDir,'cuts',music.file),await production.readAsset(music.file));data.music={src:'cuts/'+music.file,durationSeconds:music.durationSeconds,level:music.level};}
   await writeFile(path.join(publicDir,'video-data.json'),JSON.stringify({data,theme}));
-  for(const name of ['presentation.tsx','font-loader.mjs','subtitles.mjs'])await copyFile(path.join(here,name),path.join(work,name));
+  for(const name of ['presentation.tsx','motion-presentation.tsx','motion.mjs','music.mjs','font-loader.mjs','subtitles.mjs'])await copyFile(path.join(here,name),path.join(work,name));
   for(const name of ['NotoSansJP.ttf','NotoSansJP-OFL.txt','reveal-LICENSE.txt'])await copyFile(path.join(here,'vendor',name),path.join(publicDir,'narration',name));
   const entry=path.join(work,'main.tsx');await writeFile(entry,"import React from 'react';import {registerRoot} from 'remotion';import {NarratedPresentationComposition} from './presentation';import payload from './public/video-data.json';registerRoot(()=> <NarratedPresentationComposition data={payload.data} theme={payload.theme}/>);\n");
   checkCanceled();report({stage:'bundling',progress:0});
@@ -51,7 +53,7 @@ try{
   const run=promisify(execFile);checkCanceled();await fullDecodeVideo(ffmpeg,output,{signal:controller.signal});
   const {stdout}=await run(ffprobe,['-v','error','-show_streams','-show_format','-of','json',output],{windowsHide:true,maxBuffer:1024*1024,signal:controller.signal});checkCanceled();const metadata=JSON.parse(stdout),video=metadata.streams.find(s=>s.codec_type==='video'),audio=metadata.streams.find(s=>s.codec_type==='audio');
   if(!video||!audio||video.width!==composition.width||video.height!==composition.height||Math.abs(Number(metadata.format.duration)-composition.durationInFrames/composition.fps)>0.25)throw new Error('VIDEO_MEDIA_QA_FAILED');
-  await writeFile(path.join(sourceDir,'video','media-qa.json'),JSON.stringify({fullDecode:true,frames:composition.durationInFrames,fps:composition.fps,metadata,provider:data.provider,settings:data.settings,rows:data.rows.map(r=>({id:r.id,image:r.image,file:r.file,frames:r.frames})),renderedAt:new Date().toISOString()},null,2));report({stage:'verifying',progress:1});
+  await writeFile(path.join(sourceDir,'video','media-qa.json'),JSON.stringify({fullDecode:true,frames:composition.durationInFrames,fps:composition.fps,metadata,provider:data.provider,settings:data.settings,...(data.music?{music:data.music}:{}),...(data.bookends?{bookends:data.bookends}:{}),rows:data.rows.map(r=>({id:r.id,image:r.image,file:r.file,frames:r.frames})),renderedAt:new Date().toISOString()},null,2));report({stage:'verifying',progress:1});
 }catch(error){
   // This local renderer never receives credentials. Keep bounded, redacted
   // diagnostics on disk so encoding failures can be diagnosed without UI logs.

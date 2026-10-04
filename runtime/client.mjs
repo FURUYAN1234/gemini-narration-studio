@@ -14,15 +14,17 @@ export async function importJob(file,base='http://127.0.0.1:6181',{sessionId,rep
   const result=await fetch(base+'/api/job',{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':token},body:JSON.stringify({job,sessionId,expectedRevision:state.revision,confirmReplace:replace})});
   const value=await result.json();if(!result.ok)throw new Error(value.error);return value;
 }
-export async function prepareReviewedAudio({sourceDir,publicDir,fps=30,gapFrames=7}) {
-  if(!Number.isInteger(fps)||fps<1||fps>120||!Number.isInteger(gapFrames)||gapFrames<0)throw new Error('INVALID_TIMING');
+export async function prepareReviewedAudio({sourceDir,publicDir,fps=30,gapFrames}) {
+  if(!Number.isInteger(fps)||fps<1||fps>120)throw new Error('INVALID_TIMING');
   const production=await ProductionInputs.open(sourceDir);production.assertNoCorrections();
+  const storedPause=production.status().pauseSeconds,storedGap=storedPause===undefined?7:Math.round(storedPause*fps);if(gapFrames===undefined)gapFrames=storedGap;if(!Number.isInteger(gapFrames)||gapFrames<0||(storedPause!==undefined&&gapFrames!==storedGap))throw new Error('INVALID_TIMING');
   const manifest=JSON.parse(await readFile(path.join(sourceDir,'narration-manifest.json'),'utf8'));
   // Re-open the current persisted job; an old manifest cannot bypass later edits.
   const {NarrationSession}=await import('./core.mjs');
   const session=await NarrationSession.open({outputDir:sourceDir});const current=await session.exportManifest({persist:false});
   production.assertCutsConfirmed(session.status().rows);
   production.assertFinalization(session.status());
+  production.assertMusicCurrent(session.status());
   // The first studio version had no presentation field. Accept only that exact
   // default-theme migration; all reading/audio guards above still apply.
   const legacyJob={...session.job};delete legacyJob.presentation;
@@ -40,5 +42,5 @@ export async function prepareReviewedAudio({sourceDir,publicDir,fps=30,gapFrames
     const subtitles=buildSubtitleCues({caption:row.caption,speech:row.speech,bytes,fps,frames});
     await copyFile(source,path.join(publicDir,src));rows.push({...row,src,from,frames,subtitles});from+=frames+gapFrames;
   }
-  const result={...current,fps,durationInFrames:from,rows};await writeFile(path.join(publicDir,'narration.json'),JSON.stringify(result,null,2),'utf8');return result;
+  const bookends=production.status().bookends;const ending=bookends?{...bookends,from,frames:Math.round(bookends.endSeconds*fps)}:undefined;const result={...current,title:bookends?rows[0].caption:current.title,fps,gapFrames,durationInFrames:from+(ending?.frames||0),rows,...(ending?{bookends:ending}:{})};await writeFile(path.join(publicDir,'narration.json'),JSON.stringify(result,null,2),'utf8');return result;
 }
