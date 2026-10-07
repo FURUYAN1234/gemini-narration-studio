@@ -11,9 +11,9 @@ import {ProductionInputs,normalizePause} from '../production.mjs';
 import {startServer} from '../server.mjs';
 const file='a'.repeat(64)+'.png';
 const brief={scriptMode:'ai',assetMode:'mixed',script:'',instructions:'説明動画',references:{text:'制作の説明',urls:[]}};
-const output={title:'制作',summary:'制作の流れ',voice:'Kore',voiceReason:'解説',motion:{version:1,style:'editorial',intensity:'standard'},sources:[{id:'text',summary:'制作の説明'}],rows:[{caption:'制作します。',speech:'せいさくします。',title:'制作',points:[],imageFile:'',imagePrompt:'漫画制作の机とペン。文字なし。',imageReason:'工程を示す素材がない',sourceIds:['text']}]};
+const output={visualStyle:'白地に青い図',title:'制作',summary:'制作の流れ',voice:'Kore',voiceReason:'解説',motion:{version:1,style:'editorial',intensity:'standard'},sources:[{id:'text',summary:'制作の説明'}],rows:[{purpose:'detail',caption:'制作します。',speech:'せいさくします。',title:'制作',points:[],imageFile:'',imagePrompt:'漫画制作の机とペン。文字なし。',imageReason:'工程を示す素材がない',sourceIds:['text']}]};
 test('mixed plans allow missing artwork; supplied-only plans cannot request paid images',async()=>{
- const bundle=await collectSources(brief,[],()=>{});const plan=normalizeSourcePlan(output,bundle,['Kore']);assert.equal(plan.storyboard.scenes[0].imagePrompt,output.rows[0].imagePrompt);
+ const bundle=await collectSources(brief,[],()=>{});const plan=normalizeSourcePlan(output,bundle,['Kore']);assert.ok(plan.storyboard.scenes[0].imagePrompt.includes(output.rows[0].imagePrompt));assert.ok(plan.storyboard.scenes[0].imagePrompt.includes(output.visualStyle));
  assert.throws(()=>normalizeSourcePlan(output,{...bundle,assetMode:'provided'},['Kore']),/IMAGE_GENERATION_NOT_ALLOWED/);
  const conflicting=structuredClone(output);conflicting.rows[0].imageFile=file;
  assert.throws(()=>normalizeSourcePlan(conflicting,{...bundle,sources:[...bundle.sources,{id:'asset-0',file,kind:'image/png'}]},['Kore']));

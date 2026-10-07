@@ -23,6 +23,20 @@ export function focusFrame({frame,frames,focus}){
 }
 export const clamp=n=>Math.min(1,Math.max(0,n));
 export const ease=n=>1-(1-clamp(n))**3;
+export const EXPANDED_LAYOUTS=['poster','gallery','rail','stack'];
+// Fixed 1080p safe regions are shared by animated and still template rendering.
+// Captions own y=895..1080; title, image and point cells never enter that region.
+export function templateGeometry(layout,{hasImage=false,pointCount=0}={}){
+ if(!EXPANDED_LAYOUTS.includes(layout)||typeof hasImage!=='boolean'||!Number.isInteger(pointCount)||pointCount<0||pointCount>6)throw new Error('INVALID_TEMPLATE_GEOMETRY');
+ const box=(x,y,w,h)=>({x,y,w,h});
+ let heading,image,region,columns=1;
+ if(layout==='poster'){heading=box(110,160,1700,210);image=box(1050,410,760,440);region=box(110,410,hasImage?860:1700,440);columns=pointCount>3?2:1;}
+ else if(layout==='gallery'){heading=box(110,165,hasImage?610:1700,465);image=box(790,165,1020,465);region=box(110,680,1700,175);columns=Math.min(3,Math.max(1,pointCount));}
+ else if(layout==='rail'){heading=box(110,160,hasImage?600:1700,220);image=box(110,430,600,425);region=hasImage?box(790,160,1020,695):box(110,420,1700,435);}
+ else {heading=box(110,160,1700,160);image=box(1270,380,540,470);region=box(110,380,hasImage?1100:1700,470);columns=pointCount>1?2:1;}
+ const rows=Math.max(1,Math.ceil(pointCount/columns)),gap=18,w=(region.w-gap*(columns-1))/columns,h=(region.h-gap*(rows-1))/rows;
+ return {heading,image:hasImage?image:null,points:Array.from({length:pointCount},(_,i)=>box(region.x+i%columns*(w+gap),region.y+Math.floor(i/columns)*(h+gap),w,h))};
+}
 export function motionFrame({frame,frames,fps,motion}){
  normalizeMotion(motion);
  if(!Number.isFinite(frame)||!Number.isInteger(frames)||frames<1||!Number.isFinite(fps)||fps<=0)throw new Error('INVALID_MOTION_TIMING');

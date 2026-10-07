@@ -47,7 +47,7 @@ const Artwork=({image,box,m,state,side,frame,fps}:{image:string;box:Box;m:Motion
  </div>;
 };
 
-const FocusArtwork=({image,focus,box,d,frame,frames,reveal}:{image:string;focus:NonNullable<Slide['imageFocus']>;box:Box;d:Design;frame:number;frames:number;reveal:number})=>{
+export const FocusArtwork=({image,focus,box,d,frame,frames,reveal}:{image:string;focus:NonNullable<Slide['imageFocus']>;box:Box;d:Design;frame:number;frames:number;reveal:number})=>{
  const [dimensions,setDimensions]=useState<{width:number;height:number}|null>(null);
  const [handle]=useState(()=>delayRender('Measure focus image'));
  useEffect(()=>{if(dimensions)continueRender(handle);},[dimensions,handle]);

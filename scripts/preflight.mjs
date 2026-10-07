@@ -3,10 +3,11 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {SAMPLE_SETTINGS,previewFingerprint,wavInfo} from '../runtime/core.mjs';
+import {validateAsset} from '../runtime/production.mjs';
 export function allowedFile(relative) {
   if(/(^|\/)(\.git|node_modules|output|data)(\/|$)/.test(relative))return false;
   if(/(^|\/)(\.env[^/]*|\.npmrc|job\.json|production\.json|active-project\.json|video-receipt\.json|credentials[^/]*|auth\.json)$/.test(relative))return false;
-  return /^(package(-lock)?\.json|\.gitignore|start_narration_studio\.bat|launch\.mjs|README\.md|THIRD_PARTY_NOTICES\.md|scripts\/(bootstrap\.ps1|[^/]+\.mjs)|tests\/[^/]+\.test\.mjs|docs\/(deploy\.md|publication\.md|note-draft\.md|releases\/v\d+\.\d+\.\d+\.md)|runtime\/[^/]+\.(mjs|tsx)|runtime\/tests\/[^/]+\.test\.mjs|runtime\/ui\/(app\.mjs|index\.html|style\.css)|runtime\/vendor\/[A-Za-z0-9_.\/-]+)$/.test(relative);
+  return /^(package(-lock)?\.json|\.gitignore|start_narration_studio\.bat|launch\.mjs|README\.md|THIRD_PARTY_NOTICES\.md|scripts\/(bootstrap\.ps1|[^/]+\.mjs)|tests\/[^/]+\.test\.mjs|docs\/(deploy\.md|publication\.md|note-draft\.md|releases\/v\d+\.\d+\.\d+\.md|screenshots\/[A-Za-z0-9_-]+\.(png|jpg|jpeg|webp))|runtime\/[^/]+\.(mjs|tsx)|runtime\/tests\/[^/]+\.test\.mjs|runtime\/ui\/(app\.mjs|index\.html|style\.css)|runtime\/vendor\/[A-Za-z0-9_.\/-]+)$/.test(relative);
 }
 export async function audit(root,{tracked=false}={}) {
   let count=0,samples=0;const sampleIds=new Set();
@@ -23,6 +24,10 @@ export async function audit(root,{tracked=false}={}) {
       if(entry.isSymbolicLink())throw new Error('RELEASE_SYMLINK_REJECTED');
       if(entry.isDirectory()){await walk(path.join(dir,entry.name),rel+'/');continue;}
       if(!allowedFile(rel))throw new Error('RELEASE_FILE_REJECTED: '+rel);
+      if(rel.startsWith('docs/screenshots/')){
+        try{validateAsset(entry.name,await readFile(path.join(root,rel)));}
+        catch{throw new Error('DOCUMENTATION_IMAGE_INVALID: '+rel);}
+      }
       if(/\.(json|mjs|tsx|md|html|css|bat|ps1)$/.test(rel)) {
         const text=await readFile(path.join(root,rel),'utf8');
         if(/AIza[\w-]{35}|sk-(?:proj-)?[A-Za-z0-9_-]{24,}|gh[pousr]_[A-Za-z0-9]{30,}/.test(text))throw new Error('RELEASE_SECRET_REJECTED');

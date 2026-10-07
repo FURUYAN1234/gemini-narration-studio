@@ -3,11 +3,12 @@ import {AbsoluteFill,Audio,Composition,Img,Sequence,interpolate,staticFile,useCu
 import {loadLocalFont} from './font-loader.mjs';
 import {captionAtFrame} from './subtitles.mjs';
 import {musicVolume,musicClips,musicClipGain} from './music.mjs';
-import {MotionSlide} from './motion-presentation';
+import {MotionSlide,FocusArtwork} from './motion-presentation';
+import {EXPANDED_LAYOUTS,templateGeometry,fitText,motionFrame,ease,pointSchedule} from './motion.mjs';
 
 // Layouts adapt reveal.js themes (MIT; see vendor/reveal-LICENSE.txt).
 export type Slide={id:string;scene?:string;caption:string;src:string;from:number;frames:number;title?:string;points?:string[];image?:string;imageFocus?:{x:number;y:number;zoom:number;label:string};layout?:'title'|'split'|'steps';subtitles?:{text:string;from:number;to:number}[]};
-export type Design={name:string;layout:'split'|'visual'|'steps'|'editorial'|'focus';background:string;foreground:string;heading:string;accent:string;decoration:string;titleSize:number;imageSide:string;imageRatio:number;radius:number};
+export type Design={name:string;layout:'split'|'visual'|'steps'|'editorial'|'focus'|'poster'|'gallery'|'rail'|'stack';background:string;foreground:string;heading:string;accent:string;decoration:string;titleSize:number;imageSide:string;imageRatio:number;radius:number};
 export type PresentationData={bookends?:{titleRowId:string;endLabel:string;endUrl:string;owner:string;creationYear:number;from:number;frames:number};gapFrames?:number;music?:{src:string;durationSeconds:number;level:number};title:string;fps:number;durationInFrames:number;rows:Slide[];design?:Design;motion?:{version:1;style:'cinematic'|'kinetic'|'editorial';intensity:'subtle'|'standard'|'bold'}|null};
 export type Theme={name:string;background:string;foreground:string;heading:string;accent:string};
 const font='NarrationJapanese';
@@ -53,6 +54,34 @@ const DesignedSlide=({row,data,index,design:d}:{row:Slide;data:PresentationData;
   <Audio src={staticFile(row.src)}/>
  </AbsoluteFill>;
 };
+// New structures use the same bounded geometry with motion on or off.
+const ExpandedSlide=({row,data,index,design:d}:{row:Slide;data:PresentationData;index:number;design:Design})=>{
+ const frame=Math.min(useCurrentFrame(),row.frames-1),points=row.points||[],g=templateGeometry(d.layout,{hasImage:!!row.image,pointCount:points.length});
+ const moving=!!data.motion,state=moving?motionFrame({frame,frames:row.frames,fps:data.fps,motion:data.motion}):null,reveal=state?.reveal??ease(frame/Math.max(1,Math.min(12,row.frames*.15)));
+ const box=(b:{x:number;y:number;w:number;h:number}):React.CSSProperties=>({position:'absolute',left:b.x,top:b.y,width:b.w,height:b.h,boxSizing:'border-box'});
+ const text=(value:string,b:{x:number;y:number;w:number;h:number},size:number,role:string,color:string)=>{
+  const fit=fitText(value,{width:b.w,height:b.h,maxSize:size,lineHeight:1.25,balance:role==='heading'});
+  return <div data-template-text={role} style={{...box(b),fontSize:fit.size,lineHeight:1.25,color,fontWeight:role==='heading'?800:500}}>{fit.lines.map((line:string,i:number)=><div key={i} style={{whiteSpace:'pre'}}>{line.replace(/\r?\n$/,'')}</div>)}</div>;
+ };
+ const times=pointSchedule(row,points.length,data.fps),active=Math.max(0,times.findLastIndex(time=>frame>=time)),caption=captionAtFrame(row,frame);
+ return <AbsoluteFill data-video-layout={d.layout} style={{background:d.background,fontFamily:font,color:d.foreground,overflow:'hidden'}}>
+  <div style={{position:'absolute',left:110,right:110,top:90,borderBottom:`2px solid ${d.accent}`,paddingBottom:18,fontSize:22,color:d.accent,display:'flex',justifyContent:'space-between'}}><span>{row.scene||data.title}</span><span>{String(index+1).padStart(2,'0')} / {data.rows.length}</span></div>
+  <div style={{opacity:reveal,transform:`translateY(${(1-reveal)*(data.motion?.style==='kinetic'?35:16)}px)`}}>{text(row.title||row.scene||data.title,g.heading,d.layout==='poster'?d.titleSize*1.7:d.titleSize,'heading',d.heading)}</div>
+  {g.image&&row.image&&(row.imageFocus?<FocusArtwork image={row.image} focus={row.imageFocus} box={g.image} d={d} frame={frame} frames={row.frames} reveal={reveal}/>:<div style={{...box(g.image),overflow:'hidden',opacity:reveal,border:`1px solid ${d.accent}66`,borderRadius:d.radius,padding:18}}><Img src={staticFile(row.image)} style={{width:'100%',height:'100%',objectFit:'contain',transform:state?`scale(${state.scale}) translateX(${state.pan*.15}px)`:'none'}}/></div>)}
+  {d.layout==='rail'&&g.points.length>1&&<div aria-hidden="true" style={{position:'absolute',left:g.points[0].x+20,top:g.points[0].y+20,width:2,height:g.points.at(-1)!.y-g.points[0].y,background:d.accent,opacity:.55}}/>}
+  {points.map((point,i)=>{
+   const b=g.points[i],appearance=moving?ease((frame-times[i])/Math.max(1,Math.min(data.fps*.45,row.frames*.12))):reveal,padding=d.layout==='rail'?64:24,inner={x:b.x+padding,y:b.y+16,w:b.w-padding-20,h:b.h-32};
+   return <div key={i} style={{opacity:appearance}}>
+    <div style={{...box(b),border:d.layout==='rail'?'none':`1px solid ${d.accent}66`,borderRadius:d.radius,background:moving&&active===i?`${d.accent}18`:`${d.accent}08`}}/>
+    {d.layout==='rail'&&<div style={{position:'absolute',left:b.x,top:b.y+10,width:40,height:40,borderRadius:'50%',background:d.accent,color:d.background,fontSize:22,textAlign:'center',lineHeight:'40px'}}>{i+1}</div>}
+    {text(point,inner,d.layout==='poster'?38:32,'point',d.foreground)}
+   </div>;
+  })}
+  <div style={{position:'absolute',left:0,right:0,top:895,height:185,background:d.background,borderTop:`1px solid ${d.accent}`,opacity:1}}/>
+  {text(caption,{x:110,y:920,w:1700,h:128},34,'caption',d.foreground)}
+  <Audio src={staticFile(row.src)}/>
+ </AbsoluteFill>;
+};
 const BackgroundMusic=({data}:{data:PresentationData})=>{if(!data.music)return null;const music=data.music;return <>{musicClips(data.durationInFrames,Math.floor(music.durationSeconds*data.fps),data.fps).map(clip=><Sequence key={clip.from} from={clip.from} durationInFrames={clip.frames}><Audio src={staticFile(music.src)} volume={frame=>musicVolume(clip.from+frame,data,music.level)*musicClipGain(frame,clip)}/></Sequence>)}</>;};
 const Bookend=({data,theme,row}:{data:PresentationData;theme:Theme;row?:Slide})=>{
  const frame=useCurrentFrame(),ending=!row,b=data.bookends!,frames=ending?b.frames:row!.frames+(data.gapFrames??7);
@@ -66,5 +95,5 @@ const Bookend=({data,theme,row}:{data:PresentationData;theme:Theme;row?:Slide})=
   {row&&<Audio src={staticFile(row.src)}/>}
  </AbsoluteFill>;
 };
-export const NarratedPresentation=({data,theme}:{data:PresentationData;theme:Theme})=>{useJapaneseFont();return <AbsoluteFill><BackgroundMusic data={data}/>{data.rows.map((row,index)=><Sequence key={row.id} from={row.from} durationInFrames={row.frames+(data.gapFrames??7)}>{data.bookends?.titleRowId===row.id?<Bookend data={data} theme={theme} row={row}/>:data.motion?<MotionSlide row={row} data={data} index={index} design={data.design} theme={theme} motion={data.motion}/>:data.design?<DesignedSlide row={row} data={data} index={index} design={data.design}/>:<SlideView row={row} data={data} theme={theme} index={index}/>}</Sequence>)}{data.bookends&&<Sequence from={data.bookends.from} durationInFrames={data.bookends.frames}><Bookend data={data} theme={theme}/></Sequence>}</AbsoluteFill>;};
+export const NarratedPresentation=({data,theme}:{data:PresentationData;theme:Theme})=>{useJapaneseFont();return <AbsoluteFill><BackgroundMusic data={data}/>{data.rows.map((row,index)=><Sequence key={row.id} from={row.from} durationInFrames={row.frames+(data.gapFrames??7)}>{data.bookends?.titleRowId===row.id?<Bookend data={data} theme={theme} row={row}/>:data.design&&EXPANDED_LAYOUTS.includes(data.design.layout)?<ExpandedSlide row={row} data={data} index={index} design={data.design}/>:data.motion?<MotionSlide row={row} data={data} index={index} design={data.design} theme={theme} motion={data.motion}/>:data.design?<DesignedSlide row={row} data={data} index={index} design={data.design}/>:<SlideView row={row} data={data} theme={theme} index={index}/>}</Sequence>)}{data.bookends&&<Sequence from={data.bookends.from} durationInFrames={data.bookends.frames}><Bookend data={data} theme={theme}/></Sequence>}</AbsoluteFill>;};
 export const NarratedPresentationComposition=({data,theme}:{data:PresentationData;theme:Theme})=><Composition id="GeminiNarratedPresentation" component={NarratedPresentation} defaultProps={{data,theme}} durationInFrames={data.durationInFrames} fps={data.fps} width={1920} height={1080}/>;

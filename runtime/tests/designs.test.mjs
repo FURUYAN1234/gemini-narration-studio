@@ -23,8 +23,8 @@ test('motion changes bind the final revision without charging or invalidating cu
 function wav(){const b=Buffer.alloc(48);b.write('RIFF');b.writeUInt32LE(40,4);b.write('WAVE',8);b.write('fmt ',12);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(24000,24);b.writeUInt32LE(48000,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(4,40);return b;}
 async function setup(t,designProvider){const dir=await mkdtemp(path.join(tmpdir(),'studio-design-'));t.after(()=>rm(dir,{recursive:true,force:true}));const s=await NarrationSession.open({outputDir:dir,provider:async()=>wav(),designProvider});s.setKey('test-design-key');await s.appendRow({id:'one',caption:'字幕。',speech:'よみ。'});await s.approve('one',s.revision());await s.generate(['one']);await s.markListened('one',s.revision());return {dir,s};}
 
-test('eight templates have distinct designs, five layouts and readable validated palettes',()=>{
- assert.equal(VIDEO_TEMPLATES.length,8);assert.equal(new Set(VIDEO_TEMPLATES.map(t=>t.id)).size,8);assert.equal(new Set(VIDEO_TEMPLATES.map(t=>JSON.stringify(t.design))).size,8);assert.equal(new Set(VIDEO_TEMPLATES.map(t=>t.design.layout)).size,5);
+test('twelve templates have distinct designs, nine layouts and readable validated palettes',()=>{
+ assert.equal(VIDEO_TEMPLATES.length,12);assert.equal(new Set(VIDEO_TEMPLATES.map(t=>t.id)).size,12);assert.equal(new Set(VIDEO_TEMPLATES.map(t=>JSON.stringify(t.design))).size,12);assert.equal(new Set(VIDEO_TEMPLATES.map(t=>t.design.layout)).size,9);
  for(const t of VIDEO_TEMPLATES)assert.deepEqual(presentationDesign({theme:'moon',mode:'template',template:t.id}),normalizeDesign(t.design));
 });
 test('declarative design rejects code, URLs, credential text, unreadable colors and out-of-range geometry',()=>{
@@ -53,7 +53,7 @@ test('AI authoring sends only disclosed title/instructions, calls once, and pres
 test('HTTP chooser enforces CSRF, stale revision, explicit AI consent and final seal',async t=>{
  let calls=0;const {s,dir}=await setup(t,async()=>{calls++;return custom;});const service=await startServer({session:s,port:0,sampleDir:path.join(dir,'samples'),bundledSampleDir:path.join(dir,'empty')});t.after(()=>service.close());
  const {token}=await (await fetch(service.url+'/api/bootstrap')).json();const post=(route,input,auth=token)=>fetch(service.url+'/api/'+route,{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':auth},body:JSON.stringify(input)});
- assert.equal((await (await fetch(service.url+'/api/designs')).json()).length,8);
+ assert.equal((await (await fetch(service.url+'/api/designs')).json()).length,12);
  assert.equal((await post('presentation',{revision:s.revision(),presentation:{theme:'moon',mode:'template',template:'pop'}},'bad')).status,403);
  assert.equal((await (await post('presentation',{revision:'stale',presentation:{theme:'moon',mode:'template',template:'pop'}})).json()).error,'STALE_REVISION');
  assert.equal((await post('presentation',{revision:s.revision(),presentation:{theme:'moon',mode:'template',template:'pop'}})).status,200);

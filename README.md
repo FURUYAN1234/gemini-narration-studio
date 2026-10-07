@@ -1,77 +1,115 @@
-# Gemini ナレーション・スタジオ v1.1.0
+# Gemini Narration Studio / Gemini ナレーション・スタジオ v1.2.0
 
-台本・素材から、読みの確認、Gemini音声、カットごとの画像と音声の見直し、字幕付きMP4の保存までを行うローカルアプリです。Windows x64向けです。現在は非公開GitHubで配布しており、招待された利用者だけがアクセスできます。
+A Windows x64 local app for turning materials and scripts into narrated, subtitled MP4 videos. Review Japanese readings, create Gemini speech, check each cut's image and audio, then export locally. Distribution currently uses a private GitHub repository; access requires an invitation.
 
-## 起動する
+素材・台本から、読みの確認、Gemini音声、カットごとの画像と音声の見直し、字幕付きMP4の保存までを行うWindows x64用ローカルアプリです。現在は非公開GitHubで配布しており、アクセスには招待が必要です。
 
-1. [最新Release](https://github.com/FURUYAN1234/gemini-narration-studio/releases/latest)からSource code (zip)をダウンロードし、書き込み可能なフォルダへZIPをすべて展開します。
-2. `start_narration_studio.bat`をダブルクリックします。Node.js 22以上とnpmがあれば使い、未導入・古い場合は公式のNode.js 22.23.3を利用者専用フォルダへ自動導入します。管理者権限やシステムPATHの変更は不要です。
-3. 必要なRemotion/Reactと動画処理用ブラウザも、初回・不足時にダウンロードされます。完了すると `http://127.0.0.1:6181/` が開きます。初回はインターネット接続が必要で、環境によって数分かかります。
-4. Googleを使う処理の前に、画面上部へGemini APIキーを入力します。APIキーは起動中のメモリだけに保持し、保存しません。
+## Start / 起動する
 
-開発元PCでの正式な実行用コピーは `C:\gemini-narration-studio-main` です。利用者はZIPを展開した任意の書き込み可能な場所から起動できます。起動した黒いウィンドウは利用中そのままにしてください。終了はCtrl+Cです。既に同じ制作データのスタジオが起動している場合は、その画面を開きます。他のアプリや別データの起動済みプロセスを勝手に停止しません。
+1. Download **Source code (zip)** from the [latest Release](https://github.com/FURUYAN1234/gemini-narration-studio/releases/latest) and extract the whole ZIP to a writable folder. / [最新Release](https://github.com/FURUYAN1234/gemini-narration-studio/releases/latest)の **Source code (zip)** を書き込み可能なフォルダーへすべて展開します。
+2. Double-click `start_narration_studio.bat`. It reuses Node.js 22+ and npm, or installs official Node.js 22.23.3 into your user folder when needed. No administrator rights or system PATH changes are required. / バッチをダブルクリックします。Node.js 22以上とnpmは再利用し、不足時は公式のNode.js 22.23.3を利用者専用フォルダーへ導入します。管理者権限やシステムPATHの変更は不要です。
+3. Missing Remotion/React dependencies and the rendering browser are downloaded. The app opens at `http://127.0.0.1:6181/`. Initial setup needs internet access and may take several minutes. / 動画処理ライブラリと描画ブラウザーを不足時に取得して画面を開きます。初回は接続が必要で、数分かかる場合があります。
+4. Enter your Gemini API key at the top before using Google services. The key stays in server memory and is never saved to disk. / Googleを使う処理の前に画面上部へGemini APIキーを入力します。キーは起動中のメモリだけに保持し、ファイルへ保存しません。
 
-制作データは `%USERPROFILE%\GeminiNarrationStudio`、完成動画はWindowsの「ダウンロード」に保存します。アプリ本体の更新で制作データは置き換わりません。異なる保存場所は `start_narration_studio.bat --output "D:\動画制作"` のように指定できます。
+Keep the terminal window open while using the app; Ctrl+C exits. The maintained copy on the author's PC is `C:\gemini-narration-studio-main`; other users can run the extracted ZIP from any writable folder. A studio already serving the same production folder is reused. Unrelated apps and studios using other data are not stopped.
 
-### 初回準備とトラブル対応
+利用中は黒いウィンドウを開いたままにし、終了時はCtrl+Cを押します。開発元PCの正式コピーは `C:\gemini-narration-studio-main` です。利用者は任意の書き込み可能な場所から起動できます。同じ制作データのスタジオが起動済みなら再利用し、他のアプリや別データのプロセスは停止しません。
 
-自動導入したNode.jsは `%LOCALAPPDATA%\GeminiNarrationStudio\runtime`、動画処理ライブラリと描画ブラウザはアプリの `node_modules` に保存します。Node.js ZIPは[公式配布](https://nodejs.org/dist/v22.23.3/)のSHA-256と照合し、不一致なら展開・実行しません。Git・Python・VOICEVOX・Hugging Faceの導入は不要です。
+Production data lives in `%USERPROFILE%\GeminiNarrationStudio`; finished MP4s go to Windows Downloads. App updates do not replace production data. A custom location can be set with `start_narration_studio.bat --output "D:\Video"`.
 
-通信遮断や書き込み権限エラーが出たら、黒いウィンドウの理由を確認し、ネット接続と展開先の権限を直して再実行してください。企業PCでダウンロードが禁止されている場合は管理者へ相談してください。Windowsの警告を無条件に解除しないでください。準備だけ行う場合は `start_narration_studio.bat --setup-only` を使えます。
+制作データは `%USERPROFILE%\GeminiNarrationStudio`、完成MP4はWindowsの「ダウンロード」に保存します。本体の更新で制作データを置き換えません。別の保存場所は `start_narration_studio.bat --output "D:\動画制作"` のように指定できます。
 
-## Codexから使う
+### Setup and troubleshooting / 初回準備とトラブル対応
 
-個人Skill `gemini-video-narration` が既存セッションを確認し、必要な場合はこのアプリを `node C:\gemini-narration-studio-main\launch.mjs --no-browser` で起動してCodex内ブラウザへ表示します。Codexから呼び出す場合とローカル起動で同じ台本・音声・素材を使えます。APIキーをチャットへ渡す必要はありません。
+Portable Node.js is stored under `%LOCALAPPDATA%\GeminiNarrationStudio\runtime`; rendering dependencies and the browser live in `node_modules`. Node.js ZIPs must match the SHA-256 from the [official distribution](https://nodejs.org/dist/v22.23.3/) before extraction. Git, Python, VOICEVOX and Hugging Face are not required. Read terminal errors and fix connectivity or folder permissions before retrying; consult your administrator for company restrictions. Do not bypass Windows warnings blindly. `--setup-only` performs setup without opening the studio.
 
-最初の指示や素材・テンプレートを用意し、台本とひらがなの読みを整えてから声とピッチを選びます。全30声×2モデル×3ピッチの180サンプルを同梱しているため、比較にはAPI呼び出しが不要です。ピッチは話し方の指示で、正確な半音指定ではありません。
+Node.jsは利用者専用のruntimeフォルダー、動画処理ライブラリと描画ブラウザーは `node_modules` に保存します。ZIPは[公式配布](https://nodejs.org/dist/v22.23.3/)のSHA-256と照合し、不一致なら展開・実行しません。Git・Python・VOICEVOX・Hugging Faceは不要です。エラーでは黒いウィンドウの理由を確認し、接続やフォルダーの権限を直してください。企業PCの制限は管理者へ相談し、Windowsの警告を無条件に解除しないでください。準備だけなら `--setup-only` を使えます。
 
-全カットをスクロールで見直せます。修正指示は「修正を反映」で送信し、変更が必要な画像・音声だけを作り直します。送信/音声/画像生成にはAPI料金が発生する場合があります。最後の「すべて確認OK・動画を生成」は確認した素材を使い、ローカルでMP4を作ります。処理の中断や前工程からの修正が可能です。
+## Templates / 動画テンプレート
 
-## 動画の動きを決める
+Compare twelve layouts below the materials/script section. The four additions adapt layout, spacing and color principles from [Hallmark](https://github.com/Nutlope/hallmark) for subtitled 16:9 video.
 
-「素材と台本」の「画面の動きを演出する」で、シネマ（画像への寄りと奥行き）、タイポグラフィ（大きな文字と大胆な展開）、図解（線と要点の段階表示）を選べます。動きは控えめ・標準・大きくの3段階。「この演出を使う」で保存します。新しい制作はシネマから始まり、既存の制作は設定を変えるまで従来の表示を保ちます。
+素材と台本の下で12種類の見本を比較できます。新しい4種類には[Hallmark](https://github.com/Nutlope/hallmark)の構成・余白・色の統一という考え方を、字幕のある16:9動画向けに取り入れました。
 
-選んだ配色を使い、カットの構図を演出に合わせて組み直します。背景・画像・文字を別々に動かし、見出しの登場、要点の切り替え、場面転換をローカルで描画します。演出だけの変更に画像・音声の再生成やAPI呼び出しはありません。画像内の人物の動作、画像からの3D形状生成は含みません。外部サービスや追加モデルのダウンロードは使いません。
+| Template / テンプレート | Composition / 構成 |
+|---|---|
+| Broadsheet / ニュース紙面 | Wide headline with explanation and image below. / 横長の大見出しと下段の説明・画像。 |
+| Gallery / 展示ギャラリー | Large artwork and supporting points. / 広い画像と下段の要点。 |
+| Flow / 流れ解説 | Artwork beside a vertical numbered sequence. / 素材の横に番号付き要点を縦に配置。 |
+| Briefing / ブリーフィング | Heading above point cards and artwork. / 上段の見出しと下段の要点カード・画像。 |
 
-「動きの見本」は音声なしの簡易表示で、完成動画そのものではありません。再生・停止でき、端末の動きを減らす設定にも従います。完成動画の動きをなくす場合は「静かなスライド」を選びます。字幕と要点のタイミングは既存音声の間と読みの長さからの推定です。
+![New template examples / 追加テンプレートの実画面](docs/screenshots/templates.jpg)
 
-AIデザインではGeminiが配色・配置と演出を提案できます。明示的に「静かなスライド」を保存した場合はその設定を維持します。確定済み動画を変える場合は「この動画の修正版を作る」を使い、元動画を残して見直します。完成前の読み・音声・画像の確認は従来どおり必要です。
+Select a preview and save the design. Comparing/selecting templates uses no generation API. New layouts retain their structure during motion rendering and reveal points over time. Existing readings/audio remain available. Sealed projects allow preview browsing; create a separate revision to change the finished video.
 
-## 配布・バックアップ
+見本を選び「このデザインに決定する」で保存します。比較・選択では生成APIを使いません。新しい構成は動きを有効にしても維持され、要点を順に表示します。保存済みの読み・音声は再利用できます。最終確定済みの制作では見本の比較だけが可能で、動画を変更するには修正版を作ります。
 
-このアプリはGitHub Pagesへ公開しません。配布ZIPにはアプリ・ライセンス・標準サンプルだけを含め、APIキー、個人の台本、制作画像・音声・動画は含めません。既存のAntigravityバックアップにアプリのGit回復情報、Cドライブコピーのバージョン証拠、既定の制作データを追加登録しています。バックアップ実行は別操作です。
+## Materials and planning / 素材と構成案
 
-開発時は `npm ci`、`npm test`、`npm run build` を使います。開発元の共有Runtimeを更新した場合は、`scripts/sync_narration_distribution.mjs` でこの配布版へ同期し、テスト後にバージョンを上げて正式な配布手順を実行します。
+Add images, PDF, UTF-8 TXT, audio, video, reference text or public URLs, then describe the video. Planning sends these inputs and instructions to Gemini 3.5 Flash once: up to 12 MB and 20 files combined, plus 10 URLs. URL Context must report successful retrieval before a plan is accepted. Login-only pages and recursive crawling are unsupported. Failures do not automatically retry or delete existing scripts/audio.
 
-利用しているライブラリと原典は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照してください。
+画像・PDF・UTF-8 TXT・音声・動画、参考本文、公開URLを追加し、目的を書きます。構成作成では入力と指示をGemini 3.5 Flashへ1回送信します。合計12MB・20ファイル、URL10件までです。URL Contextの取得成功記録がなければ構成案を適用しません。ログインが必要なページやリンク先の自動探索には対応せず、自動再試行や既存台本・音声の削除も行いません。
 
+The plan includes captions, hiragana readings, headings, points, source attribution, image assignments/focus and title/voice proposals. Choose automatic or manual title/voice selection; titles remain editable. Check source summaries and each cut's references. Each cut also has a context, detail or summary purpose and a shared visual-style proposal carried into planned image prompts. These explanatory-video principles draw on [Director Skills](https://github.com/kangarooking/director-skills). Timing follows actual synthesized speech. Planning does not generate images, synthesize speech or approve the final video. Older saved projects remain readable. Text-only drafting does not send attached file bodies.
 
-### 素材から動画を組み立てる
-最初に画像・PDF・UTF-8 TXT・音声・動画、参考本文、公開URLを追加し、動画の目的を書きます。「素材から構成・台本を作る」は添付ファイルの中身と参考本文・URL・指示をGemini 3.5 Flashへ1回送信し、構成、字幕とひらがなの読み、見出し・要点、画像の割り当てと注目位置、タイトル案、声の提案を作ります。合計12MB・20ファイル、URL10件まで。URLはGeminiのURL Contextで読み、取得成功の記録がないと提案を適用しません。失敗時の自動再試行はありません。元の台本・生成済み音声を自動で消しません。
+字幕・ひらがなの読み・見出し・要点・出典・画像の割り当てと注目位置・タイトル・声を提案します。タイトルと声は自動／手動を選べ、タイトルは手修正できます。資料要約と各カットの出典を確認してください。各カットに全体像・詳細・要約の役割と共通の視覚方針を提案し、配色・外見・図の表記を生成予定の画像指示へ反映します。[Director Skills](https://github.com/kangarooking/director-skills)の素材分析・分鏡・一貫性の考え方を解説動画に合わせています。時間は実音声に合わせます。構成作成は画像・音声の生成や最終確認を代行せず、既存の制作も開けます。文章だけの台本作成では添付ファイル本体を送りません。
 
-タイトルと声は「AIにまかせる／自分で選ぶ」を選択できます。AIタイトルは手修正でき、声のメニューも引き続き使えます。各カットの出典と資料要約を確認し、読み確認へ進むと画面演出と画像割り当ても引き継ぎます。画像は全体から指定箇所へ寄る動きと注目ラベルを付けられます。人物の新しい動作や背景除去は生成しません。画像を差し替えると古い画像用の注目位置は解除されます。
+### Supplied and generated artwork / 提供画像と生成画像
 
-素材解析は音声合成や最終確認を代行しません。読みを確認してから別途音声を合成し、画像と音声を確認して動画へ進みます。「文章だけで台本を作る」従来のボタンは添付ファイル本体を送りません。公開・ログイン不要のURLのみが対象で、ページ内のリンク先まで自動探索しません。
+Provided-only mode prohibits image generation. Mixed mode selects relevant images and proposes generation only for missing artwork; not every reference needs to appear. Review a cut's instructions and up to three reference images before explicitly generating one image with Gemini. Image-only changes reuse unchanged script/audio. Failures preserve completed assets without retrying automatically. Image focus can zoom toward a labeled area; replacing artwork clears its old focus. Check names and explanations too. Headings/points are editable without an API call. These controls do not generate new actions for pictured people or remove backgrounds.
 
-### 提供画像と生成画像を組み合わせる
-「提供素材から選び、不足する絵をAIで補う」では、構成作成時に関連する画像を選び、足りないカットには生成案を用意します。資料は分析しても全部を映す必要はありません。読み確認画面の各カットにある「AIで画像を補う・差し替える」で指示と参照画像（最大3枚）を確認し、Geminiで1枚ずつ生成します。画像だけの変更では台本・確認済み音声を再利用します。提供素材のみのモードは画像生成を許可しません。失敗時の自動再試行はなく、先に完成した素材は残ります。
+提供素材のみでは画像を生成しません。混合モードは関連する画像を選び、不足したカットに生成案を用意します。資料をすべて映す必要はありません。指示と参照画像（最大3枚）を確認して、明示操作で1枚ずつ生成します。画像だけの変更は台本・音声を再利用し、失敗時も完成済み素材を残して自動再試行しません。注目位置とラベルで指定箇所へ寄れます。差し替え時は古い注目位置を解除するので、人物名や説明も確認してください。見出し・要点はAPIなしで編集できます。人物の新しい動作や背景除去は生成しません。
 
-### 内容と長さに合わせたBGM
-ナレーション作成後、「動画に合わせるBGM」からGemini APIのLyria 3.5を1回使って原曲を作成します。曲調は任意指定、空欄なら台本から自動選択。歌のない曲を指示しますが、出力に歌声がないことは試聴して確認してください。原曲を聴き、音量を選ぶかBGMなしに戻せます。動画では実際の音声尺に合わせ、短い曲はクロスフェードで接続、ナレーション中は減音し、開始・終了にフェードを入れます。長い曲は動画尺で終わります。台本や音声が変わると古いBGMでの確定を止めます。確定後は修正版を作成してください。使用にはキーのLyria利用権限が必要です。エラー時に別サービスへ切り替えたり、自動再課金したりしません。
+## Voice and reading review / 声と読みの確認
 
-カットの見出し・要点は画面からAPIなしで修正できます。画像を差し替えた際は元の人物名や説明も確認してください。「動画のカット間に置く間」で話し終わりの余白を変更できます。新規動画の初期値は0.8秒、従来の保存済み動画は元の長さを維持します。余白・BGM音量の変更は音声や音楽の再生成を必要としません。
+Prepare written captions and corresponding hiragana pronunciation, then choose the voice and pitch. The app bundles 180 samples: 30 voices across two models and three pitch settings. Comparison uses no API request. Pitch is a speaking-style instruction, not a precise semitone adjustment. Review every cut's image, caption and reading before approving pronunciation and creating speech; listen to the actual result before final confirmation. Corrections may use the API and regenerate only affected assets. Local hints do not prove correct pronunciation. Final confirmation seals the reviewed inputs and renders locally.
 
-### 冒頭タイトルとエンドクレジット
-「全文確認」の「冒頭タイトル・エンドクレジット」で、表示タイトル・ひらがなの読み・EDの名前とURL・作者名・表示秒数を保存できます。保存はAPIなし。先頭に追加したタイトルの読みを確認してから、その音声だけを作成します。本編の音声は再利用します。EDの名前・URL・作者マークを右下に控えめに表示します。作者マークは `@作成年/作者名` になります。年は制作データに保存され、再書き出しや修正版で翌年に変わりません。
-タイトル追加でBGMが未確認になった場合は「今のBGMをこの内容で使う（APIなし）」で曲を再利用できます。動画の冒頭からEDまで尺を合わせ、話している部分だけ減音し、最後をフェードアウトします。新しい音声とクレジットを確認してから確定してください。確定済み動画には修正版を作って追加します。
+通常表記の字幕と対応するひらがなの読みを整え、声とピッチを選びます。全30声×2モデル×3ピッチの180サンプルを同梱し、比較ではAPIを使いません。ピッチは話し方への指示で、正確な半音指定ではありません。全カットの画像・字幕・読みを見直し、読みを確定してから音声を作り、実音声を聴いて最終確認してください。修正はAPIを使う場合があり、必要な素材だけを作り直します。確認候補の表示は読みの正解を保証しません。最終確認で内容を固定してローカルで描画します。
 
-### 次の動画を作る
-最下部の「新しい動画を作成」から、現在の制作を保存したまま空の制作を開始し、画面先頭へ戻れます。上部の「保存した制作を開く」で以前の動画を再表示できます。未保存の編集や実行中の処理があると切り替えを止めます。APIキーはサーバーを終了するまで保持されます。BGMは作成済みの曲を先に表示し、作り直しは下の折りたたみ内に置いています。
+![Actual reading review / 実アプリの読み確認画面](docs/screenshots/reading.jpg)
 
-## APIと利用上の確認
+### Using Codex / Codexから使う
 
-構成作成・文章修正・音声・画像・BGM生成はGoogleへの送信とAPI利用が発生します。送信対象と回数は画面で確認してください。APIキー自体はファイル保存しませんが、素材・台本・生成物は制作フォルダに保存します。作品や参照素材の利用権限・個人情報を確認してから送信してください。声の比較サンプル・ローカル演出・MP4組み立ては追加の生成APIを使いません。
+The personal `gemini-video-narration` Skill reuses an existing session or starts `node C:\gemini-narration-studio-main\launch.mjs --no-browser` in the Codex in-app browser. Ordinary local use shares the same scripts, audio and materials. Enter keys in the app, never in chat. Work can be paused, and earlier stages can create separate revisions while retaining completed originals.
 
-アプリ本体にオープンソースライセンスは現在設定していません。第三者ライブラリの条件はそれぞれ適用され、GitHubの公開設定だけでその条件は変わりません。[第三者コンポーネント](THIRD_PARTY_NOTICES.md)を確認してください。
+個人Skill `gemini-video-narration` は既存セッションを再利用し、必要時にアプリを起動してCodex内ブラウザーへ表示します。通常起動と同じ台本・音声・素材を使います。キーはチャットへ渡さずアプリに入力してください。制作の中断や前工程からの修正版作成ができ、元の完成済み制作は残ります。
 
-公開用の紹介原稿は [note記事原稿](docs/note-draft.md)、公開切り替え時の確認項目は [公開準備](docs/publication.md) にまとめています。記事原稿の保存はnoteへの投稿・公開ではありません。
+## Motion / 画面の動き
+
+Choose cinema (zoom/depth), typography (large text/transitions), editorial (lines/points) or quiet slides, with gentle, standard or bold motion. Save the choice. New projects start with cinema; old projects retain their previous display until changed. Selected colors are reused, and the four new templates preserve their structure. Backgrounds, images and text animate locally without speech/image regeneration, extra models or external animation services. This does not create people's actions or 3D geometry. The silent preview supports play/pause and reduced-motion preferences; it is not the final video. Subtitle/point timing is estimated from speech pauses and reading length. AI designs may propose colors, placement and motion; an explicitly saved quiet-slide choice remains in force. Sealed videos require a revision for changes.
+
+シネマ（寄りと奥行き）、タイポグラフィ（大きな文字と展開）、図解（線と要点）、静かなスライドから選び、控えめ・標準・大きくの強さを保存します。新規制作はシネマ、既存制作は変更するまで従来の表示です。配色を引き継ぎ、新しい4種類は構成を維持します。背景・画像・文字をこのPCで動かし、演出変更だけでは音声・画像を再生成せず、追加モデルや外部の動画サービスも使いません。人物の動作や3D形状の生成は含みません。見本は音声なしの簡易表示で再生・停止と動きを減らす設定に対応し、完成動画そのものではありません。字幕・要点の時間は音声の間と読みの長さからの推定です。AIデザインは配色・配置・動きを提案できますが、保存した静かなスライド設定は維持します。確定済み動画の変更には修正版を使います。
+
+## Music, title and credits / BGM・タイトル・クレジット
+
+After narration, explicitly request one Lyria 3.5 generation matching the script and speech duration. Style instructions are optional; the prompt asks for instrumental music, but listen to verify no vocals. Your key needs Lyria access. Choose a level or remove music. The renderer crossfades short tracks, ducks during speech and fades at the beginning/end; long tracks end with the video. Errors do not switch services or automatically retry. Script/audio changes make old music unconfirmed; review and reuse with the no-API action where applicable, or create a revision after sealing. New cut pauses default to 0.8 seconds; older projects retain their saved duration. Pause/level changes do not regenerate speech/music. Existing BGM appears before folded recreation controls.
+
+音声作成後、Lyria 3.5を1回使って台本・音声尺に合うBGMを作れます。曲調は任意指定で、空欄なら自動です。歌なしを指示しますが、実際に歌声がないことは試聴して確認してください。Lyriaの利用権限が必要です。音量を選ぶかBGMなしに戻せます。短い曲はクロスフェードでつなぎ、ナレーション中に減音し、開始・終了をフェードします。長い曲は動画尺で終わります。他社切り替えや自動再課金はありません。台本・音声が変わると古いBGMでの確定を止め、確認後にAPIなしで再利用するか、確定済みなら修正版を作ります。カット間は新規制作で0.8秒、既存では保存値を維持し、余白・音量変更では再生成しません。作成済みBGMを先に表示し、再作成は下に折りたたみます。
+
+The opening-title/ending section stores title text, its hiragana reading, ending name, URL, author and duration without an API call. Approve the title's reading and synthesize only that speech; body audio is reused. Ending credits align subtly lower-right. The author mark uses `@creation-year/author`; the saved year remains unchanged on later exports/revisions. Recheck title audio, credits and any BGM reuse before sealing.
+
+冒頭タイトル・エンドクレジット欄では表示タイトル・ひらがなの読み・EDの名前とURL・作者名・表示秒数をAPIなしで保存できます。タイトルの読みを確認してその音声だけを作り、本編の音声は再利用します。EDは右下に控えめに表示し、作者マークは `@作成年/作者名` です。保存した年は翌年の再出力・修正版でも変わりません。タイトル音声・クレジット・BGMの再利用を確認してから確定します。
+
+## Export and saved projects / 出力と保存した制作
+
+Final confirmation prepares the exact reviewed assets, renders the video, checks streams and full decoding, and saves a uniquely named MP4 to Downloads with a matching hash. The finished player and download action appear after success. The bottom new-video action saves the current project, starts an empty one and returns to the top. Reopen earlier work from the saved-project menu. Unsaved edits and active processing block switching; the key remains in memory until server exit and completed originals are preserved.
+
+最終確認後、確定素材を用意して描画し、映像・音声情報と全デコードを検査します。ハッシュ一致を確認して固有名のMP4をダウンロードへ保存し、成功後にプレーヤーとダウンロード操作を表示します。最下部の新規作成で現在の制作を保存し、空の制作を始めて画面先頭へ戻れます。以前の制作は保存メニューから開きます。未保存の編集・処理中は切り替えを止め、キーは終了までメモリに保持し、完成済みの元作品は残します。
+
+![Actual video completion / 実アプリの動画完成画面](docs/screenshots/finished.jpg)
+
+## Distribution and backup / 配布とバックアップ
+
+GitHub Pages is disabled. Release ZIPs contain the app, third-party notices, standard samples and documentation screenshots, excluding credentials and personal scripts/artwork/audio/videos. Antigravity full backup includes this app's Git recovery data, C-drive version evidence and safe files in the default production folder. Backup is a separate operation, not triggered by deployment. Custom `--output` folders need separate backup coverage. Keys must be entered again after restoration.
+
+GitHub Pagesは無効です。配布ZIPにはアプリ・第三者の案内・標準サンプル・説明用キャプチャを含め、認証情報や個人の台本・制作画像・音声・動画は含めません。AntigravityフルバックアップにGit復旧情報、Cドライブ版の証拠、既定の制作フォルダー内の安全なファイルを登録しています。バックアップはデプロイとは別操作です。別の `--output` は別途対象にする必要があり、復元後はキーを再入力します。
+
+Use `npm ci`, `npm test` and `npm run build` for development. Copy shared-runtime updates using the root `scripts/sync_narration_distribution.mjs`, validate, bump the version and use the established release transaction. Read [third-party terms](THIRD_PARTY_NOTICES.md). The app itself currently has no open-source license; repository visibility does not change third-party obligations.
+
+開発時は `npm ci`・`npm test`・`npm run build` を使います。共有Runtimeの更新はルートの同期スクリプトで配布版へ反映し、検査・バージョン更新後に正式な配布手順を実行します。[第三者の条件](THIRD_PARTY_NOTICES.md)を確認してください。本体にオープンソースライセンスは現在設定しておらず、公開設定で第三者条件が変わることもありません。
+
+## API use and publication / API利用と公開
+
+Planning, corrections, speech, image and music generation send data to Google and may incur charges; review disclosed inputs and request counts. Keys are not saved, but materials/scripts/generated work remain in the production folder. Check rights and personal information before sending. Cached samples, local motion and MP4 assembly do not call a generation API. The [article draft](docs/note-draft.md) and [publication checklist](docs/publication.md) describe future public delivery. Saving a draft here does not publish it on note or social media.
+
+構成・修正・音声・画像・BGM生成ではGoogleへの送信とAPI料金が発生する場合があるため、画面の対象・回数を確認してください。キーは保存しませんが、素材・台本・生成物は制作フォルダーへ保存します。送信前に権利と個人情報を確認してください。保存済みサンプル・ローカル演出・MP4組み立てでは生成APIを使いません。[note記事原稿](docs/note-draft.md)と[公開準備](docs/publication.md)は今後の一般公開用です。原稿の保存はnoteやSNSへの投稿・公開ではありません。

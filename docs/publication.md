@@ -1,4 +1,4 @@
-# 公開準備 v1.1.0
+# 公開準備 v1.2.0
 
 現在の配布は非公開GitHub Release。note用原稿は `note-draft.md` で管理し、noteへの保存・公開状態は別途確認する。個人の制作画像・音声・動画を原稿やGitへ無断で添付しない。
 
@@ -6,7 +6,7 @@
 
 - README: Windows x64、初回の自動導入、保存場所、素材先行フロー、読み確認、画像・BGM・タイトル・ED、API送信と料金発生の場面。
 - 起動バッチと `scripts/bootstrap.ps1`: Node.js/npmの検出、不足時の公式ZIP取得・固定SHA-256確認、既存環境の再利用。Remotion/Reactと描画ブラウザは既存の `launch.mjs` が導入。
-- GitHub Release: v1.1.0、英日説明、ソースZIP。秘密情報・制作物・node_modulesを配布前監査で拒否。
+- GitHub Release: v1.2.0、英日説明、ソースZIP。秘密情報・制作物・node_modulesを配布前監査で拒否。
 - note用原稿: 公開待ちの記事本文。記事内のリンクは現在非公開であることを明示。
 
 ## 実際の一般公開時に行うこと

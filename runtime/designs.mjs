@@ -1,7 +1,7 @@
 import {safeText} from './production.mjs';
 import {MOTION_SCHEMA,normalizeMotion} from './motion.mjs';
 
-export const DESIGN_LAYOUTS=['split','visual','steps','editorial','focus'];
+export const DESIGN_LAYOUTS=['split','visual','steps','editorial','focus','poster','gallery','rail','stack'];
 export const DESIGN_SCHEMA={type:'object',additionalProperties:false,properties:{
  name:{type:'string'},layout:{type:'string',enum:DESIGN_LAYOUTS},
  background:{type:'string'},foreground:{type:'string'},heading:{type:'string'},accent:{type:'string'},
@@ -18,7 +18,11 @@ export const VIDEO_TEMPLATES=[
  make('magazine','雑誌風','大きな見出しと片側の素材で構成。','editorial','#f5efeb','#332d35','#221b26','#922544','line',72,'right',.4,0),
  make('cinema','シネマ字幕','映像を主役に、落ち着いた字幕を添える。','visual','#14161e','#f2f1f7','#ffffff','#a9c6ff','none',52),
  make('pop','ポップ案内','色の帯と丸い素材枠で、親しみやすく。','split','#fff6dc','#4b3440','#33212b','#97324f','band',72,'left',.48,32),
- make('minimal','余白ミニマル','見出しと素材を中央に、静かに見せる。','focus','#ffffff','#253748','#142332','#1c6573','none',56,'right',.48,0)
+ make('minimal','余白ミニマル','見出しと素材を中央に、静かに見せる。','focus','#ffffff','#253748','#142332','#1c6573','none',56,'right',.48,0),
+ make('broadsheet','ニュース紙面','横長の大見出しと、説明・画像の二段構成。','poster','#f4f0e7','#3c3933','#24221e','#8c342b','line',80,'right',.44,0),
+ make('gallery','展示ギャラリー','左の見出し、広い画像、下段の要点で作品を紹介。','gallery','#152b29','#e9efdf','#fffdf3','#c5dca3','frame',66,'right',.56,0),
+ make('flow','流れ解説','左の素材と、縦につながる番号付きの要点。','rail','#f0f6f5','#294443','#123432','#14665b','line',64,'left',.38,8),
+ make('briefing','ブリーフィング','上段に見出し、下段に要点カードと画像を配置。','stack','#17243b','#e7edf5','#ffffff','#e4bd73','band',68,'right',.32,12)
 ];
 const luminance=color=>{const rgb=[1,3,5].map(i=>parseInt(color.slice(i,i+2),16)/255).map(n=>n<=.04045?n/12.92:((n+.055)/1.055)**2.4);return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];};
 export function contrast(a,b){const first=luminance(a),second=luminance(b);return (Math.max(first,second)+.05)/(Math.min(first,second)+.05);}

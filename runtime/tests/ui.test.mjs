@@ -105,11 +105,21 @@ test('materials and AI planning precede optional design controls, and the bottom
  assert.ok(!html.includes('PRESENTATION TEMPLATE'));assert.match(html,/テンプレートを使わず、AIで今回用に作る/);
 });
 test('template comparison is local; deciding saves renderer design while retaining unsaved sentence edits',async()=>{
- const ui=await setup();assert.equal(ui.get('template-gallery').children.length,8);
+ const ui=await setup();assert.equal(ui.get('template-gallery').children.length,12);
  await ui.edit(ui.textArea('one','speech'),'Unsaved pronunciation');const button=ui.get('template-gallery').children.find(b=>b.dataset.template==='blueprint');await button.emit('click');
  assert.equal(ui.requests.some(r=>r.route==='presentation'||r.route==='design-draft'),false);assert.equal(ui.get('generate-all').disabled,true);
  await ui.get('apply-design').emit('click');assert.equal(ui.state().presentation.template,'blueprint');assert.equal(ui.textArea('one','speech').value,'Unsaved pronunciation');assert.equal(ui.get('apply-design').disabled,true);
  assert.equal(ui.requests.filter(r=>r.route==='presentation').length,1);assert.equal(ui.requests.some(r=>r.route==='generate'),false);
+});
+test('all added structures are selectable without API generation and preserve pending reading edits',async()=>{
+ for(const id of ['broadsheet','gallery','flow','briefing']){
+  const ui=await setup();await ui.edit(ui.textArea('one','speech'),'変更中の読み');
+  const button=ui.get('template-gallery').children.find(b=>b.dataset.template===id);assert.ok(button,id);
+  await button.emit('click');assert.equal(ui.requests.some(r=>['presentation','generate','design-draft'].includes(r.route)),false);
+  await ui.get('apply-design').emit('click');assert.equal(ui.state().presentation.template,id);
+  assert.equal(ui.textArea('one','speech').value,'変更中の読み');assert.equal(ui.requests.filter(r=>r.route==='presentation').length,1);
+  assert.equal(ui.requests.some(r=>['generate','design-draft'].includes(r.route)),false);
+ }
 });
 test('AI design uses one explicit consent-gated action; instructions survive polling and result updates preview',async()=>{
  const ui=await setup();ui.get('design-mode').value='ai';await ui.get('design-mode').emit('change');assert.equal(ui.get('template-gallery').hidden,true);assert.equal(ui.get('apply-design').hidden,true);

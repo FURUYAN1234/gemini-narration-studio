@@ -21,6 +21,16 @@ test('distribution permits source and samples but rejects private state and sett
   for(const file of ['launch.mjs','scripts/bootstrap.ps1','docs/publication.md','docs/note-draft.md','package-lock.json','runtime/core.mjs','runtime/vendor/voice-samples/abc.wav','runtime/vendor/sources.json'])assert.equal(allowedFile(file),true,file);
   for(const file of ['.env','runtime/job.json','runtime/vendor/production.json','data/job.json','node_modules/a.js','runtime/vendor/.npmrc','output/private.png','runtime/private.txt'])assert.equal(allowedFile(file),false,file);
 });
+test('documentation screenshots stay in a narrow image-only release directory',async()=>{
+ for(const file of ['docs/screenshots/templates.jpg','docs/screenshots/reading.png'])assert.equal(allowedFile(file),true,file);
+ for(const file of ['docs/screenshots/.env.jpg','docs/screenshots/../private.jpg','docs/screenshots/private.mp4','docs/screenshots/code.html','docs/screenshots/nested/image.jpg'])assert.equal(allowedFile(file),false,file);
+ const root=await mkdtemp(path.join(os.tmpdir(),'narration-doc-image-'));
+ try{
+  await mkdir(path.join(root,'docs/screenshots'),{recursive:true});
+  await writeFile(path.join(root,'docs/screenshots/fake.jpg'),'<script>not an image</script>');
+  await assert.rejects(audit(root),/DOCUMENTATION_IMAGE_INVALID/);
+ }finally{await rm(root,{recursive:true,force:true});}
+});
 
 test('Windows bootstrap reuses ready Node/npm and rejects missing runtime and corrupt downloads before extraction', {skip:process.platform!=='win32'}, async()=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'narration-bootstrap-test-'));

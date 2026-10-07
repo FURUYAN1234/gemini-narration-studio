@@ -8,7 +8,7 @@ import {collectSources,buildSourcePlanRequest,normalizeSourcePlan,MAX_SOURCE_BYT
 import {NarrationSession,VOICES,classifyGoogleFailure,redactProviderDiagnostic,prepareGooglePayload,buildDraftRequest} from '../core.mjs';
 import {startServer} from '../server.mjs';
 const file='a'.repeat(64)+'.png',brief={scriptMode:'ai',assetMode:'provided',script:'',instructions:'説明動画',references:{text:'中央の丸が入口です。',urls:[]}};
-const focus={x:.5,y:.4,zoom:1.6,label:'入口'},output={title:'入口から始めよう',summary:'入口の説明',voice:'Kore',voiceReason:'落ち着いた説明',motion:{version:1,style:'editorial',intensity:'standard'},sources:[{id:'text',summary:'入口は中央の丸。'}],rows:[{caption:'入口は中央です。',speech:'いりぐちはちゅうおうです。',title:'中央から',points:['入口'],imageFile:'',sourceIds:['text']}]};
+const focus={x:.5,y:.4,zoom:1.6,label:'入口'},output={visualStyle:'白地に青い図',title:'入口から始めよう',summary:'入口の説明',voice:'Kore',voiceReason:'落ち着いた説明',motion:{version:1,style:'editorial',intensity:'standard'},sources:[{id:'text',summary:'入口は中央の丸。'}],rows:[{purpose:'detail',caption:'入口は中央です。',speech:'いりぐちはちゅうおうです。',title:'中央から',points:['入口'],imageFile:'',sourceIds:['text']}]};
 test('references reject local URLs, credentials, limits and non-HTTP protocols',()=>{
  assert.deepEqual(normalizeReferences({text:'本文',urls:['https://example.com/a#b','https://example.com/a']}),{text:'本文',urls:['https://example.com/a']});
  for(const url of ['file:///etc/passwd','http://127.0.0.1/a','http://[::1]/','http://localhost/a','https://x.local/a','https://a:b@example.com','https://example.com:444','https://example.com?token=secret'])assert.throws(()=>normalizeReferences({text:'',urls:[url]}),/INVALID_REFERENCE/);
@@ -38,7 +38,7 @@ test('source request uses the documented responseFormat without conflicting lega
  const config=request.generationConfig;
  assert.equal(config.responseFormat?.text.mimeType,'APPLICATION_JSON');
  assert.equal(config.responseFormat.text.schema.properties.voice.enum,VOICES);
- assert.deepEqual(config.responseFormat.text.schema.required,['title','summary','voice','voiceReason','motion','sources','rows']);
+ assert.deepEqual(config.responseFormat.text.schema.required,['title','summary','voice','voiceReason','motion','sources','rows','visualStyle']);
  for(const key of ['responseMimeType','responseSchema','responseJsonSchema','_responseJsonSchema'])assert.equal(Object.hasOwn(config,key),false);
 });
 test('UI HTTP save/import carries storyboard into actual scene visuals, without synthesis or approval',async t=>{

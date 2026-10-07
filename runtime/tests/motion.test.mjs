@@ -4,6 +4,23 @@ import {normalizeMotion,sceneDirection,motionFrame,fitText,pointSchedule,normali
 import {normalizePresentation,normalizeDesign,VIDEO_TEMPLATES,presentationMotion} from '../designs.mjs';
 
 const motion={version:1,style:'cinematic',intensity:'standard'};
+test('new template geometries differ and reserve captions for every supported point count',async()=>{
+ const {templateGeometry}=await import('../motion.mjs');
+ assert.equal(typeof templateGeometry,'function');
+ const shapes=[];
+ for(const layout of ['poster','gallery','rail','stack'])for(const hasImage of [true,false])for(const pointCount of [0,1,3,6]){
+  const geometry=templateGeometry(layout,{hasImage,pointCount});
+  assert.deepEqual(geometry,templateGeometry(layout,{hasImage,pointCount}));
+  assert.equal(geometry.points.length,pointCount);
+  const boxes=[geometry.heading,...geometry.points,...(geometry.image?[geometry.image]:[])];
+  for(const b of boxes){assert.ok(Object.values(b).every(Number.isFinite));assert.ok(b.w>0&&b.h>0);assert.ok(b.x>=85&&b.x+b.w<=1835);assert.ok(b.y>=150&&b.y+b.h<=865);}
+  const overlaps=(a,b)=>a.x<b.x+b.w&&b.x<a.x+a.w&&a.y<b.y+b.h&&b.y<a.y+a.h;
+  for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++)assert.equal(overlaps(boxes[i],boxes[j]),false,layout+' text/image regions overlap');
+  if(hasImage&&pointCount===3)shapes.push(JSON.stringify(geometry));
+ }
+ assert.equal(new Set(shapes).size,4);
+ for(const args of [['unknown',{}],['rail',{pointCount:7}],['rail',{pointCount:-1}],['rail',{pointCount:1.5}],['rail',{hasImage:'yes'}]])assert.throws(()=>templateGeometry(...args),/INVALID_TEMPLATE_GEOMETRY/);
+});
 test('image focus accepts bounded declarative coordinates and plain labels only',()=>{
  const focus={x:.2,y:.75,zoom:1.8,label:'図の注目部分'};
  assert.deepEqual(normalizeImageFocus(focus),focus);assert.equal(IMAGE_FOCUS_SCHEMA.additionalProperties,false);
