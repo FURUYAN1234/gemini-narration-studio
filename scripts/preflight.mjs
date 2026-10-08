@@ -9,6 +9,13 @@ export function allowedFile(relative) {
   if(/(^|\/)(\.env[^/]*|\.npmrc|job\.json|production\.json|active-project\.json|video-receipt\.json|credentials[^/]*|auth\.json)$/.test(relative))return false;
   return /^(package(-lock)?\.json|\.gitignore|start_narration_studio\.bat|launch\.mjs|README\.md|THIRD_PARTY_NOTICES\.md|scripts\/(bootstrap\.ps1|[^/]+\.mjs)|tests\/[^/]+\.test\.mjs|docs\/(deploy\.md|publication\.md|note-draft\.md|releases\/v\d+\.\d+\.\d+\.md|screenshots\/[A-Za-z0-9_-]+\.(png|jpg|jpeg|webp))|runtime\/[^/]+\.(mjs|tsx)|runtime\/tests\/[^/]+\.test\.mjs|runtime\/ui\/(app\.mjs|index\.html|style\.css)|runtime\/vendor\/[A-Za-z0-9_.\/-]+)$/.test(relative);
 }
+export function validateDependencyAudit(result) {
+  const counts=result?.metadata?.vulnerabilities;
+  if(result?.error||!counts||!result.vulnerabilities||typeof result.vulnerabilities!=='object'||Array.isArray(result.vulnerabilities))throw new Error('DEPENDENCY_AUDIT_UNAVAILABLE');
+  for(const key of ['info','low','moderate','high','critical','total'])if(!Number.isInteger(counts[key])||counts[key]<0)throw new Error('DEPENDENCY_AUDIT_INVALID');
+  if(Object.values(counts).some(value=>value!==0)||Object.keys(result.vulnerabilities).length)throw new Error('DEPENDENCY_AUDIT_VULNERABILITIES');
+  return counts;
+}
 export async function audit(root,{tracked=false}={}) {
   let count=0,samples=0;const sampleIds=new Set();
   const hasGit=await stat(path.join(root,'.git')).then(()=>true,error=>{if(error.code==='ENOENT')return false;throw error;});
@@ -50,6 +57,15 @@ export async function audit(root,{tracked=false}={}) {
   return {count,samples,presetCoverage:SAMPLE_SETTINGS.length};
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
-  const result=await audit(path.resolve(fileURLToPath(new URL('..',import.meta.url))));
+  const root=path.resolve(fileURLToPath(new URL('..',import.meta.url)));
+  const result=await audit(root);
+  let dependencyResult;
+  try {
+    const command=process.platform==='win32'?'cmd.exe':'npm';
+    const args=process.platform==='win32'?['/d','/s','/c','npm audit --json --ignore-scripts']:['audit','--json','--ignore-scripts'];
+    dependencyResult=JSON.parse(execFileSync(command,args,{cwd:root,encoding:'utf8',windowsHide:true,timeout:180000,stdio:['ignore','pipe','pipe']}));
+  }catch{throw new Error('DEPENDENCY_AUDIT_FAILED');}
+  validateDependencyAudit(dependencyResult);
+  console.log('STANDALONE_DEPENDENCY_AUDIT_OK total=0');
   console.log('STANDALONE_RELEASE_PREFLIGHT_OK '+JSON.stringify(result));
 }

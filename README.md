@@ -1,4 +1,4 @@
-# Gemini Narration Studio / Gemini ナレーション・スタジオ v1.2.0
+# Gemini Narration Studio / Gemini ナレーション・スタジオ v1.2.1
 
 A Windows x64 local app for turning materials and scripts into narrated, subtitled MP4 videos. Review Japanese readings, create Gemini speech, check each cut's image and audio, then export locally. Distribution currently uses a private GitHub repository; access requires an invitation.
 
@@ -40,19 +40,23 @@ Compare twelve layouts below the materials/script section. The four additions ad
 
 ![New template examples / 追加テンプレートの実画面](docs/screenshots/templates.jpg)
 
-Select a preview and save the design. Comparing/selecting templates uses no generation API. New layouts retain their structure during motion rendering and reveal points over time. Existing readings/audio remain available. Sealed projects allow preview browsing; create a separate revision to change the finished video.
+Select a preview; moving to the next step saves the design. Comparing/selecting templates uses no generation API. New layouts retain their structure during motion rendering and reveal points over time. Existing readings/audio remain available. Sealed projects allow preview browsing; create a separate revision to change the finished video.
 
-見本を選び「このデザインに決定する」で保存します。比較・選択では生成APIを使いません。新しい構成は動きを有効にしても維持され、要点を順に表示します。保存済みの読み・音声は再利用できます。最終確定済みの制作では見本の比較だけが可能で、動画を変更するには修正版を作ります。
+見本を選ぶと、次のSTEPへ進む際に保存します。比較・選択では生成APIを使いません。新しい構成は動きを有効にしても維持され、要点を順に表示します。保存済みの読み・音声は再利用できます。最終確定済みの制作では見本の比較だけが可能で、動画を変更するには修正版を作ります。
 
 ## Materials and planning / 素材と構成案
 
 Add images, PDF, UTF-8 TXT, audio, video, reference text or public URLs, then describe the video. Planning sends these inputs and instructions to Gemini 3.5 Flash once: up to 12 MB and 20 files combined, plus 10 URLs. URL Context must report successful retrieval before a plan is accepted. Login-only pages and recursive crawling are unsupported. Failures do not automatically retry or delete existing scripts/audio.
 
-画像・PDF・UTF-8 TXT・音声・動画、参考本文、公開URLを追加し、目的を書きます。構成作成では入力と指示をGemini 3.5 Flashへ1回送信します。合計12MB・20ファイル、URL10件までです。URL Contextの取得成功記録がなければ構成案を適用しません。ログインが必要なページやリンク先の自動探索には対応せず、自動再試行や既存台本・音声の削除も行いません。
+画像・PDF・UTF-8 TXT・音声・動画、参考本文、公開URLを追加します。資料があれば制作指示は空欄でも使えます。構成作成では入力と指示をGemini 3.5 Flashへ1回送信します。合計12MB・20ファイル、URL10件までです。URL Contextの取得成功記録がなければ構成案を適用しません。ログインが必要なページやリンク先の自動探索には対応せず、自動再試行や既存台本・音声の削除も行いません。
 
-The plan includes captions, hiragana readings, headings, points, source attribution, image assignments/focus and title/voice proposals. Choose automatic or manual title/voice selection; titles remain editable. Check source summaries and each cut's references. Each cut also has a context, detail or summary purpose and a shared visual-style proposal carried into planned image prompts. These explanatory-video principles draw on [Director Skills](https://github.com/kangarooking/director-skills). Timing follows actual synthesized speech. Planning does not generate images, synthesize speech or approve the final video. Older saved projects remain readable. Text-only drafting does not send attached file bodies.
+The plan includes captions, hiragana readings, headings, points, source attribution, image assignments/focus and title/voice proposals. Choose automatic or manual title/voice selection; titles remain editable. Check source summaries and each cut's references. Each cut also has a context, detail or summary purpose and a shared visual-style proposal carried into planned image prompts. These explanatory-video principles draw on [Director Skills](https://github.com/kangarooking/director-skills). Timing follows actual synthesized speech. Planning does not generate images, synthesize speech or approve the final video. Older saved projects remain readable. Generate a draft above the script editor, review/edit it, or explicitly regenerate below it. Automatic direction is ON for new projects: the same drafting request returns a title, one of the twelve validated templates and motion settings, with a layout thumbnail. Switching OFF opens manual adjustments; apply and close them without a provider call. The final STEP01 button saves the script and direction and proceeds to voice selection. Existing scripts can be used; missing readings/direction are disclosed as one preparation request. Regenerated scripts replace the accepted cuts without duplication and reuse exactly unchanged speech audio. A URL-only entry in the script box is treated as a reference, never as narration.
 
-字幕・ひらがなの読み・見出し・要点・出典・画像の割り当てと注目位置・タイトル・声を提案します。タイトルと声は自動／手動を選べ、タイトルは手修正できます。資料要約と各カットの出典を確認してください。各カットに全体像・詳細・要約の役割と共通の視覚方針を提案し、配色・外見・図の表記を生成予定の画像指示へ反映します。[Director Skills](https://github.com/kangarooking/director-skills)の素材分析・分鏡・一貫性の考え方を解説動画に合わせています。時間は実音声に合わせます。構成作成は画像・音声の生成や最終確認を代行せず、既存の制作も開けます。文章だけの台本作成では添付ファイル本体を送りません。
+字幕・ひらがなの読み・見出し・要点・出典・画像の割り当てと注目位置・タイトル・声を提案します。タイトルと声は自動／手動を選べ、タイトルは手修正できます。資料要約と各カットの出典を確認してください。各カットに全体像・詳細・要約の役割と共通の視覚方針を提案し、配色・外見・図の表記を生成予定の画像指示へ反映します。[Director Skills](https://github.com/kangarooking/director-skills)の素材分析・分鏡・一貫性の考え方を解説動画に合わせています。時間は実音声に合わせます。構成作成は画像・音声の生成や最終確認を代行せず、既存の制作も開けます。台本欄の上で案を生成し、確認・修正後、必要なら下のボタンで明示的に再生成します。新規制作は自動演出がONで、同じ台本生成の1回でタイトル・12種からのテンプレート選択・動きを返し、見本を表示します。OFFで手動調整を開き、「調整を反映して閉じる」でAPIなしで保存できます。01末尾のボタンは台本と演出を保存して声選びへ進みます。既存台本も使え、読みや自動演出が未準備なら1回の準備処理を明示します。再生成した台本はカットを重複させず取り込み、同じ字幕・読みの音声は保持します。台本欄にURLだけを貼った場合も、読み上げ用の文章ではなく参考資料として扱います。
+
+![Script preparation and next step / 台本準備から声選びへ](docs/screenshots/workflow.jpg)
+
+![Manual template preview; unsaved UI verification, no API generation / 手動のテンプレート見本（未保存の画面検証・API生成なし）](docs/screenshots/manual-direction.jpg)
 
 ### Supplied and generated artwork / 提供画像と生成画像
 
@@ -60,13 +64,19 @@ Provided-only mode prohibits image generation. Mixed mode selects relevant image
 
 提供素材のみでは画像を生成しません。混合モードは関連する画像を選び、不足したカットに生成案を用意します。資料をすべて映す必要はありません。指示と参照画像（最大3枚）を確認して、明示操作で1枚ずつ生成します。画像だけの変更は台本・音声を再利用し、失敗時も完成済み素材を残して自動再試行しません。注目位置とラベルで指定箇所へ寄れます。差し替え時は古い注目位置を解除するので、人物名や説明も確認してください。見出し・要点はAPIなしで編集できます。人物の新しい動作や背景除去は生成しません。
 
+### Script input / 台本入力
+
+Choose an AI draft, manual input/paste, or an AI rewrite of the current script. Manual mode hides the AI instructions and sending controls. A reference alone or a theme is enough for a new draft; choose “Let AI choose the theme” explicitly to leave both unspecified. The result field accepts corrections, editing, clearing, new typing and pasting. Saving a draft and adopting it for the next step use no generation API. In step 3, enter missing readings yourself or explicitly prepare them with one API request, then confirm the readings before creating audio. A rejected optional image or presentation proposal does not discard validated narration. Requests and validated results are saved on the server; an unsaved-result warning offers a local save retry without another generation.
+
+AIで新しく作る、自分で入力・貼り付ける、入力した台本をAIで整える、のいずれかを選びます。手入力ではAI指示欄と送信操作を隠します。新規AI作成は資料だけ・テーマだけでも可能で、何も指定しない場合は「テーマからAIに任せる」を明示して選びます。結果欄で修正・編集・全削除・新規手入力・貼り付けができます。入力・下書き保存・「この台本を採用して声選びへ」では生成APIを使いません。①の編集本文が採用済みカットを置き換え、同じ台本を二度採用しても追記しません。読みが未準備なら③で手入力するか、「未確認の読みをAIで準備（API 1回）」を選び、確認後に読みを確定して音声を作ります。画像・演出案だけが条件に合わない場合も、有効な台本を保持して未適用の項目を表示します。入力と検証済み結果はサーバーに保存し、保存失敗時は未保存の結果を表示して、追加生成なしで保存し直せます。
+
 ## Voice and reading review / 声と読みの確認
 
-Prepare written captions and corresponding hiragana pronunciation, then choose the voice and pitch. The app bundles 180 samples: 30 voices across two models and three pitch settings. Comparison uses no API request. Pitch is a speaking-style instruction, not a precise semitone adjustment. Review every cut's image, caption and reading before approving pronunciation and creating speech; listen to the actual result before final confirmation. Corrections may use the API and regenerate only affected assets. Local hints do not prove correct pronunciation. Final confirmation seals the reviewed inputs and renders locally.
+Prepare written captions and corresponding hiragana pronunciation, then choose the voice and pitch. The app bundles 180 samples: 30 voices across two models and three pitch settings. Comparison uses no API request. Pitch is a speaking-style instruction, not a precise semitone adjustment. Review each cut's image, caption and reading in STEP03, then use the narration action. It creates missing speech and optional BGM and advances to STEP04 for listening and video generation. It never records listening, seals the project or renders automatically; final confirmation follows actual review. Corrections may use the API and regenerate only affected assets. Local hints do not prove correct pronunciation. Final confirmation seals the reviewed inputs and renders locally.
 
-通常表記の字幕と対応するひらがなの読みを整え、声とピッチを選びます。全30声×2モデル×3ピッチの180サンプルを同梱し、比較ではAPIを使いません。ピッチは話し方への指示で、正確な半音指定ではありません。全カットの画像・字幕・読みを見直し、読みを確定してから音声を作り、実音声を聴いて最終確認してください。修正はAPIを使う場合があり、必要な素材だけを作り直します。確認候補の表示は読みの正解を保証しません。最終確認で内容を固定してローカルで描画します。
+通常表記の字幕と対応するひらがなの読みを整え、声とピッチを選びます。全30声×2モデル×3ピッチの180サンプルを同梱し、比較ではAPIを使いません。ピッチは話し方への指示で、正確な半音指定ではありません。③で画像・字幕・読みを見直し、ナレーション作成で必要な音声と任意のBGMを作って④の試聴・動画生成へ進みます。試聴済みの記録・最終確定・動画生成は自動で行いません。実音声とBGMを確認後、「確認して動画を生成」を押してください。修正はAPIを使う場合があり、必要な素材だけを作り直します。確認候補の表示は読みの正解を保証しません。最終確認で内容を固定してローカルで描画します。
 
-![Actual reading review / 実アプリの読み確認画面](docs/screenshots/reading.jpg)
+![Cut pause before overall corrections / 全体への修正指示より前にカット間を設定](docs/screenshots/music-controls.jpg)
 
 ### Using Codex / Codexから使う
 
@@ -76,15 +86,20 @@ The personal `gemini-video-narration` Skill reuses an existing session or starts
 
 ## Motion / 画面の動き
 
-Choose cinema (zoom/depth), typography (large text/transitions), editorial (lines/points) or quiet slides, with gentle, standard or bold motion. Save the choice. New projects start with cinema; old projects retain their previous display until changed. Selected colors are reused, and the four new templates preserve their structure. Backgrounds, images and text animate locally without speech/image regeneration, extra models or external animation services. This does not create people's actions or 3D geometry. The silent preview supports play/pause and reduced-motion preferences; it is not the final video. Subtitle/point timing is estimated from speech pauses and reading length. AI designs may propose colors, placement and motion; an explicitly saved quiet-slide choice remains in force. Sealed videos require a revision for changes.
+Choose cinema (zoom/depth), typography (large text/transitions), editorial (lines/points) or quiet slides, with gentle, standard or bold motion. Moving to the next step saves the choice. New projects start with cinema; old projects retain their previous display until changed. Selected colors are reused, and the four new templates preserve their structure. Backgrounds, images and text animate locally without speech/image regeneration, extra models or external animation services. This does not create people's actions or 3D geometry. The silent preview supports play/pause and reduced-motion preferences; it is not the final video. Subtitle/point timing is estimated from speech pauses and reading length. AI designs may propose colors, placement and motion; an explicitly saved quiet-slide choice remains in force. Sealed videos require a revision for changes.
 
-シネマ（寄りと奥行き）、タイポグラフィ（大きな文字と展開）、図解（線と要点）、静かなスライドから選び、控えめ・標準・大きくの強さを保存します。新規制作はシネマ、既存制作は変更するまで従来の表示です。配色を引き継ぎ、新しい4種類は構成を維持します。背景・画像・文字をこのPCで動かし、演出変更だけでは音声・画像を再生成せず、追加モデルや外部の動画サービスも使いません。人物の動作や3D形状の生成は含みません。見本は音声なしの簡易表示で再生・停止と動きを減らす設定に対応し、完成動画そのものではありません。字幕・要点の時間は音声の間と読みの長さからの推定です。AIデザインは配色・配置・動きを提案できますが、保存した静かなスライド設定は維持します。確定済み動画の変更には修正版を使います。
+シネマ（寄りと奥行き）、タイポグラフィ（大きな文字と展開）、図解（線と要点）、静かなスライドから選び、控えめ・標準・大きくの強さを選び、次のSTEPへ進む際に保存します。新規制作はシネマ、既存制作は変更するまで従来の表示です。配色を引き継ぎ、新しい4種類は構成を維持します。背景・画像・文字をこのPCで動かし、演出変更だけでは音声・画像を再生成せず、追加モデルや外部の動画サービスも使いません。人物の動作や3D形状の生成は含みません。見本は音声なしの簡易表示で再生・停止と動きを減らす設定に対応し、完成動画そのものではありません。字幕・要点の時間は音声の間と読みの長さからの推定です。AIデザインは配色・配置・動きを提案できますが、保存した静かなスライド設定は維持します。確定済み動画の変更には修正版を使います。
+
+Cut transitions offer 13 families / 35 shape and direction variants. AI can propose the sequence and its surfaces in the existing script/design request: the next cut's image or the chosen background, accent or heading color. Local rendering avoids repeated solid tones, keeps images aligned through tile/clock effects, reserves subtitle space and preserves speech timing. Older plans vary images and palette colors without an extra API call. Quiet slides disable these effects; short cuts suppress them. Finished videos remain unchanged until a separate revision is rendered.
+
+カットの切替は13系統・方向や形の違いを含めて35種類です。AIが既存の台本・デザイン設計の応答で、内容や繰り返しを考慮し、次のカットの実画像・背景色・アクセント色・文字色から切替案を選べます。描画時に同じ単色の連続を避け、タイルや時計形でも画像の向きと位置を保ち、字幕領域と音声の時間を変えません。旧データも追加のAPI呼び出しなしで画像と配色を使い分けます。「静かなスライド」では無効、短いカットでは抑制します。完成済み動画は修正版を別途生成するまで変わりません。
 
 ## Music, title and credits / BGM・タイトル・クレジット
 
-After narration, explicitly request one Lyria 3.5 generation matching the script and speech duration. Style instructions are optional; the prompt asks for instrumental music, but listen to verify no vocals. Your key needs Lyria access. Choose a level or remove music. The renderer crossfades short tracks, ducks during speech and fades at the beginning/end; long tracks end with the video. Errors do not switch services or automatically retry. Script/audio changes make old music unconfirmed; review and reuse with the no-API action where applicable, or create a revision after sealing. New cut pauses default to 0.8 seconds; older projects retain their saved duration. Pause/level changes do not regenerate speech/music. Existing BGM appears before folded recreation controls.
 
-音声作成後、Lyria 3.5を1回使って台本・音声尺に合うBGMを作れます。曲調は任意指定で、空欄なら自動です。歌なしを指示しますが、実際に歌声がないことは試聴して確認してください。Lyriaの利用権限が必要です。音量を選ぶかBGMなしに戻せます。短い曲はクロスフェードでつなぎ、ナレーション中に減音し、開始・終了をフェードします。長い曲は動画尺で終わります。他社切り替えや自動再課金はありません。台本・音声が変わると古いBGMでの確定を止め、確認後にAPIなしで再利用するか、確定済みなら修正版を作ります。カット間は新規制作で0.8秒、既存では保存値を維持し、余白・音量変更では再生成しません。作成済みBGMを先に表示し、再作成は下に折りたたみます。
+New projects enable BGM by default. Set the cut pause after cut review and before overall correction instructions; the BGM switch remains above narration creation. The narration button first creates speech, then requests one Lyria 3.5 track if BGM is enabled and missing or stale. Switching BGM alone makes no generation request; OFF preserves the saved track and excludes it from the video. Style instructions are optional; the prompt asks for instrumental music, but listen to verify no vocals. Your key needs Lyria access. Choose a level or remove music. The renderer crossfades short tracks, ducks during speech and fades at the beginning/end; long tracks end with the video. Errors do not switch services or automatically retry. Script/audio changes make old music unconfirmed; review and reuse with the no-API action where applicable, or create a revision after sealing. New cut pauses default to 0.8 seconds; older projects retain their saved duration. Pause/level changes do not regenerate speech/music. Existing BGM appears before folded recreation controls.
+
+新規制作はBGMがONです。カット確認の後、全体への修正指示の前にカット間の余白を設定します。BGMスイッチはナレーション作成の上にあります。作成ボタンで音声を作り、ONでBGMが未作成・変更済みなら、続けてLyria 3.5を1回使います。切替だけでは生成せず、OFFでは保存済みの曲を保持して動画から外します。曲調は任意指定で、空欄なら自動です。歌なしを指示しますが、実際に歌声がないことは試聴して確認してください。Lyriaの利用権限が必要です。音量を選ぶかBGMなしに戻せます。短い曲はクロスフェードでつなぎ、ナレーション中に減音し、開始・終了をフェードします。長い曲は動画尺で終わります。他社切り替えや自動再課金はありません。台本・音声が変わると古いBGMでの確定を止め、確認後にAPIなしで再利用するか、確定済みなら修正版を作ります。カット間は新規制作で0.8秒、既存では保存値を維持し、余白・音量変更では再生成しません。作成済みBGMを先に表示し、再作成は下に折りたたみます。
 
 The opening-title/ending section stores title text, its hiragana reading, ending name, URL, author and duration without an API call. Approve the title's reading and synthesize only that speech; body audio is reused. Ending credits align subtly lower-right. The author mark uses `@creation-year/author`; the saved year remains unchanged on later exports/revisions. Recheck title audio, credits and any BGM reuse before sealing.
 

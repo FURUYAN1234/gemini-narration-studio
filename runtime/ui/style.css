@@ -95,3 +95,11 @@
 .storyboard-card small{overflow-wrap:anywhere}.manual-design{margin:24px 0}.manual-design>summary{cursor:pointer;font-weight:600;padding:16px 0}
 
 .voice-proposal{font-size:.875em;color:var(--muted);line-height:1.8;margin:16px 0;padding-left:14px;border-left:2px solid var(--border)}.voice-proposal strong{display:block;color:var(--fg);font-size:1em}.voice-proposal span{display:block;margin-top:4px}#music-create{margin-top:20px;padding-top:18px;border-top:1px solid var(--border)}#music-create>button{width:100%;margin-top:16px}#music-player{max-width:100%;margin-top:12px}.new-video-action{margin:28px 0 36px;padding-top:24px;border-top:1px solid var(--border)}.new-video-action>button{min-height:48px;width:100%}
+
+.music-switch{display:flex;align-items:center;gap:12px;font-weight:700}.music-switch input{appearance:none;width:48px;height:28px;border-radius:16px;background:#56616a;position:relative;cursor:pointer}.music-switch input:checked{background:var(--accent,#1f92b5)}.music-switch input::after{content:"";position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;background:white}.music-switch input:checked::after{left:24px}.music-switch input:focus-visible{outline:2px solid currentColor;outline-offset:3px}
+
+.script-authoring{padding:24px;margin:24px 0;border:1px solid var(--border);border-radius:14px;background:var(--panel)}.script-authoring h3{margin-top:0}.script-send{margin:16px 0}.script-send>button{flex:1;min-height:48px}.script-authoring #script-input{min-height:200px}.script-authoring #clear-script{margin-top:8px}@media(max-width:600px){.script-authoring{padding:16px}.script-send>button{width:100%}}
+
+.script-confirm{margin-top:16px;padding:16px;border:1px solid var(--accent);border-radius:10px}.script-confirm[hidden]{display:none}
+
+.action-guidance{font-size:14px;line-height:1.8;color:var(--fg);margin:14px 0}#ai-script-controls{border:0;padding:0;margin:20px 0;min-width:0}#ai-script-controls[hidden]{display:none}#ai-script-controls legend{font-weight:700;margin-bottom:12px}.reading-preparation{margin:20px 0}#retry-confirm{padding:16px;border:1px solid var(--border);border-radius:8px}

@@ -1,13 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import {options,existingStudio} from '../launch.mjs';
-import {allowedFile,audit} from '../scripts/preflight.mjs';
+import {options,existingStudio,runtimeIdentity} from '../launch.mjs';
+import {allowedFile,audit,validateDependencyAudit} from '../scripts/preflight.mjs';
 import {mkdtemp,mkdir,writeFile,rm,readFile} from 'node:fs/promises';
 import {execFileSync} from 'node:child_process';
 import os from 'node:os';
 import {createServer} from 'node:http';
 import {fileURLToPath} from 'node:url';
+
+test('release dependency audit fails closed on vulnerabilities or unavailable results',()=>{
+ const counts={info:0,low:0,moderate:0,high:0,critical:0,total:0};
+ assert.deepEqual(validateDependencyAudit({metadata:{vulnerabilities:counts},vulnerabilities:{}}),counts);
+ for(const input of [null,{}, {error:{code:'NETWORK'}}, {metadata:{vulnerabilities:counts},vulnerabilities:3}, {metadata:{vulnerabilities:counts},vulnerabilities:[]}, {metadata:{vulnerabilities:{...counts,high:1,total:1}},vulnerabilities:{ws:{severity:'high'}}}, {metadata:{vulnerabilities:counts},vulnerabilities:{zip:{}}}, {metadata:{vulnerabilities:{...counts,total:'0'}},vulnerabilities:{}}]) assert.throws(()=>validateDependencyAudit(input),/DEPENDENCY_AUDIT/);
+});
 test('portable launch keeps persistent data outside replaceable release copy',()=>{
   const config=options(['--no-browser'],'C:/Users/Test User');
   assert.equal(config.openBrowser,false);assert.equal(config.port,6181);
@@ -77,9 +83,26 @@ Write-Output 'BOOTSTRAP_BOUNDARIES_OK'
  }finally{assert.equal(path.dirname(root),os.tmpdir());await rm(root,{recursive:true,force:true});}
 });
 test('reuse only exact matching standalone studio; reject another data directory',async()=>{
-  const server=createServer((req,res)=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify({app:'gemini-narration-studio',output:path.resolve('a')}));});
+  const identity={buildId:'same',protocol:1};const server=createServer((req,res)=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify({app:'gemini-narration-studio',output:path.resolve('a'),...identity}));});
   await new Promise(r=>server.listen(0,'127.0.0.1',r));
-  try {assert.equal(await existingStudio(server.address().port,'a'),true);await assert.rejects(existingStudio(server.address().port,'b'),/OTHER_PROJECT/);}finally{await new Promise(r=>server.close(r));}
+  try {assert.equal(await existingStudio(server.address().port,'a',identity),true);await assert.rejects(existingStudio(server.address().port,'b',identity),/OTHER_PROJECT/);}finally{await new Promise(r=>server.close(r));}
+});
+test('same data directory cannot silently reuse a different runtime build',async()=>{
+ const server=createServer((req,res)=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify({app:'gemini-narration-studio',output:path.resolve('a'),buildId:'old',protocol:1}));});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));
+ try{await assert.rejects(existingStudio(server.address().port,'a',{buildId:'new',protocol:1}),/RUNTIME_MISMATCH/);}
+ finally{await new Promise(r=>server.close(r));}
+});
+
+test('runtime identity is independent of root and changes with executable content, not tests',async t=>{
+ const first=await mkdtemp(path.join(os.tmpdir(),'studio-build-a-')),second=await mkdtemp(path.join(os.tmpdir(),'studio-build-b-'));t.after(()=>rm(first,{recursive:true,force:true}));t.after(()=>rm(second,{recursive:true,force:true}));
+ for(const root of [first,second]){await mkdir(path.join(root,'runtime/tests'),{recursive:true});for(const [file,text]of [['launch.mjs','launch'],['package-lock.json','{}'],['runtime/server.mjs','server'],['runtime/tests/test.mjs','test']])await writeFile(path.join(root,file),text);}
+ const initial=await runtimeIdentity(first);assert.deepEqual(await runtimeIdentity(second),initial);await writeFile(path.join(second,'runtime/tests/test.mjs'),'changed test');assert.deepEqual(await runtimeIdentity(second),initial);await writeFile(path.join(second,'runtime/server.mjs'),'changed executable');assert.notEqual((await runtimeIdentity(second)).buildId,initial.buildId);
+});
+
+test('launcher rejects legacy protocol and other applications while preserving a busy matching studio',async()=>{
+ let state={app:'gemini-narration-studio',output:path.resolve('a'),buildId:'same',protocol:1,busy:true};const server=createServer((req,res)=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify(state));});await new Promise(r=>server.listen(0,'127.0.0.1',r));
+ try{const port=server.address().port,identity={buildId:'same',protocol:1};assert.equal(await existingStudio(port,'a',identity),true);assert.equal(state.busy,true);delete state.protocol;await assert.rejects(existingStudio(port,'a',identity),/RUNTIME_MISMATCH/);state.app='other-app';assert.equal(await existingStudio(port,'a',identity),false);}finally{await new Promise(r=>server.close(r));}
 });
 test('release audit rejects private state or installed packages forcibly staged in Git',async()=>{
   const root=await mkdtemp(path.join(os.tmpdir(),'narration-release-test-'));

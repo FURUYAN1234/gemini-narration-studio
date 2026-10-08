@@ -1,6 +1,6 @@
 # Third-party components
 
-- Remotion 4.0.428: [official license](https://github.com/remotion-dev/remotion/blob/main/LICENSE.md). Installed through npm; its original license stays in node_modules. Its license conditions apply independently to the user and organization.
+- Remotion 4.0.534: [official license](https://github.com/remotion-dev/remotion/blob/main/LICENSE.md). Installed through npm; its original license stays in node_modules. Its license conditions apply independently to the user and organization.
 - React / React DOM 19.2.3: MIT. Original licenses accompany the installed packages.
 - reveal.js 5.2.1 themes: MIT; bundled `runtime/vendor/reveal-LICENSE.txt` and upstream provenance in `sources.json`.
 - Noto Sans JP: SIL Open Font License; bundled `runtime/vendor/NotoSansJP-OFL.txt`.

@@ -14,9 +14,9 @@ const brief={scriptMode:'ai',assetMode:'mixed',script:'',instructions:'説明動
 const output={visualStyle:'白地に青い図',title:'制作',summary:'制作の流れ',voice:'Kore',voiceReason:'解説',motion:{version:1,style:'editorial',intensity:'standard'},sources:[{id:'text',summary:'制作の説明'}],rows:[{purpose:'detail',caption:'制作します。',speech:'せいさくします。',title:'制作',points:[],imageFile:'',imagePrompt:'漫画制作の机とペン。文字なし。',imageReason:'工程を示す素材がない',sourceIds:['text']}]};
 test('mixed plans allow missing artwork; supplied-only plans cannot request paid images',async()=>{
  const bundle=await collectSources(brief,[],()=>{});const plan=normalizeSourcePlan(output,bundle,['Kore']);assert.ok(plan.storyboard.scenes[0].imagePrompt.includes(output.rows[0].imagePrompt));assert.ok(plan.storyboard.scenes[0].imagePrompt.includes(output.visualStyle));
- assert.throws(()=>normalizeSourcePlan(output,{...bundle,assetMode:'provided'},['Kore']),/IMAGE_GENERATION_NOT_ALLOWED/);
+ const rejected=normalizeSourcePlan(output,{...bundle,assetMode:'provided'},['Kore']);assert.equal(rejected.storyboard,undefined);assert.equal(rejected.warnings[0].code,'IMAGE_GENERATION_NOT_ALLOWED');
  const conflicting=structuredClone(output);conflicting.rows[0].imageFile=file;
- assert.throws(()=>normalizeSourcePlan(conflicting,{...bundle,sources:[...bundle.sources,{id:'asset-0',file,kind:'image/png'}]},['Kore']));
+ assert.throws(()=>normalizeSourcePlan(conflicting,{...bundle,sources:[...bundle.sources,{id:'asset-0',file,kind:'image/png'}]},['Kore']),/SOURCE_NOT_ANALYZED/);
 });
 test('image generation validates references before one call and rejects malformed image output without retry',async()=>{
  let calls=0;const request=async()=>{calls++;return {candidates:[{finishReason:'STOP',content:{parts:[{inlineData:{mimeType:'image/png',data:Buffer.from([137,80,78,71,13,10,26,10]).toString('base64')}}]}}]};};
@@ -43,7 +43,7 @@ test('music parsing, config and timing fail closed; fades and ducking stay withi
 test('breathing space changes the video/music timeline without regenerating current music',async t=>{
  for(const value of [-1,4,NaN,'0.8'])assert.throws(()=>normalizePause(value),/INVALID_CUT_PAUSE/);
  const current={title:'制作',rows},timeline=musicTimeline({...current,pauseSeconds:.8});assert.equal(timeline.durationInFrames,324);assert.equal(musicSignature({...current,pauseSeconds:.8}),musicSignature(current));
- const dir=await mkdtemp(path.join(tmpdir(),'cut-pause-'));t.after(()=>rm(dir,{recursive:true,force:true}));const p=await ProductionInputs.open(dir),hash=p.finalInputsHash();await p.savePause(.8);assert.notEqual(hash,p.finalInputsHash());assert.equal((await ProductionInputs.open(dir)).status().pauseSeconds,.8);p.value.finalization={};await assert.rejects(p.savePause(.5),/VIDEO_FINALIZED/);
+ const dir=await mkdtemp(path.join(tmpdir(),'cut-pause-'));t.after(()=>rm(dir,{recursive:true,force:true}));const p=await ProductionInputs.open(dir);await p.savePause(.5);const hash=p.finalInputsHash();await p.savePause(.8);assert.notEqual(hash,p.finalInputsHash());assert.equal((await ProductionInputs.open(dir)).status().pauseSeconds,.8);p.value.finalization={};await assert.rejects(p.savePause(.5),/VIDEO_FINALIZED/);
 });
 test('all supplied sources are analyzed but only relevant images need to appear',async()=>{
  const png=Buffer.from([137,80,78,71,13,10,26,10]);const bundle=await collectSources(brief,[{name:'one.png',file,size:8},{name:'two.png',file:'b'.repeat(64)+'.png',size:8}],async()=>png);
@@ -68,7 +68,7 @@ test('BGM is persisted, sealed, and rejected when narration or settings change',
  const current={title:'漫画',rows},music={file:p.status().assets[0].file,signature:musicSignature(current),direction:'明るく',model:'lyria-3.5',durationSeconds:30,level:.16};const before=p.finalInputsHash();await p.saveMusic(music);assert.notEqual(p.finalInputsHash(),before);p.assertMusicCurrent(current);
  const reopened=await ProductionInputs.open(dir);assert.deepEqual(reopened.status().music,music);assert.throws(()=>reopened.assertMusicCurrent({...current,title:'変更'}),/STALE_MUSIC/);
  await p.saveMusic({...music,level:.08});assert.notEqual(p.finalInputsHash(),reopened.finalInputsHash());p.value.finalization={revision:'a'.repeat(64),inputsHash:p.finalInputsHash()};await assert.rejects(p.saveMusic(null),/VIDEO_FINALIZED/);
- await reopened.saveMusic(null);assert.equal(reopened.status().music,undefined);reopened.assertMusicCurrent({...current,title:'変更'});
+ await reopened.saveMusic(null);assert.equal(reopened.status().music,undefined);assert.throws(()=>reopened.assertMusicCurrent(current),/MUSIC_REQUIRED/);await reopened.saveMusicEnabled(false);reopened.assertMusicCurrent({...current,title:'変更'});
 });
 test('pending generated image blocks confirmation even when no image was supplied',async t=>{
  const dir=await mkdtemp(path.join(tmpdir(),'pending-art-'));t.after(()=>rm(dir,{recursive:true,force:true}));const p=await ProductionInputs.open(dir),plan=normalizeSourcePlan(output,await collectSources(brief,[],()=>{}),['Kore']);await p.saveBrief({...brief,...plan});

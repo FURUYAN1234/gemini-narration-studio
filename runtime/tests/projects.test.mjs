@@ -11,7 +11,7 @@ async function fixture(t){
  const dir=await mkdtemp(path.join(tmpdir(),'studio-projects-'));t.after(()=>rm(dir,{recursive:true,force:true}));
  const wav=Buffer.alloc(48);wav.write('RIFF');wav.writeUInt32LE(40,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(24000,24);wav.writeUInt32LE(48000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(4,40);
  const session=await NarrationSession.open({outputDir:dir,provider:async()=>wav});session.setKey('test-project-key');await session.setTitle('Completed project');await session.appendRow({id:'one',caption:'字幕。',speech:'よみ。'});await session.approve('one',session.revision());await session.generate(['one']);await session.markListened('one',session.revision());
- const production=await ProductionInputs.open(dir);await production.finalize(session.status());
+ const production=await ProductionInputs.open(dir);await production.saveMusicEnabled(false);await production.finalize(session.status());
  const original=await readFile(path.join(dir,'job.json')),seal=await readFile(path.join(dir,'production.json'));
  let service=await startServer({session,port:0,videoRendererRoot:dir,downloadsDir:path.join(dir,'downloads')});t.after(()=>service.close());
  const status=async()=> (await fetch(service.url+'/api/status')).json();

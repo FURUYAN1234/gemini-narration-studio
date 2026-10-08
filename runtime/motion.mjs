@@ -1,9 +1,72 @@
 // Declarative, offline choreography shared by rendering and the UI preview.
 // No scripts, URLs, provider calls or nondeterministic clocks enter a render.
-export const MOTION_SCHEMA={type:'object',additionalProperties:false,properties:{version:{type:'integer',enum:[1]},style:{type:'string',enum:['cinematic','kinetic','editorial']},intensity:{type:'string',enum:['subtle','standard','bold']}},required:['version','style','intensity']};
+export const TRANSITION_VARIANTS=Object.freeze({wipe:4,diagonal:4,split:2,doors:2,blinds:2,checker:2,iris:5,diamond:1,ellipse:2,clock:2,stairs:4,tiles:4,fade:1});
+export const TRANSITION_FAMILIES=Object.freeze(Object.keys(TRANSITION_VARIANTS));
+export const TRANSITION_TONES=Object.freeze(['image','background','accent','heading']);
+export const TRANSITION_INSTRUCTION='motion.transitionsに場面境界の順で切替を提案できます（最大30）。種類は'+TRANSITION_FAMILIES.join('/')+'。台本の意味、全体像から詳細への移動、要点の区切り、結びに合う切替を判断してください。同じ種類の連続や派手な効果の連発で退屈・散漫にせず、説明を読む静止時間を残します。静かな内容はfade/iris/ellipse、比較や手順はsplit/doors/blinds、場面の大きな変化はdiagonal/clock/tilesなどを使い分け、無理に全種類を使いません。motion.transitionTonesも同じ場面境界順で最大30件選べます。imageは次のカットに採用した実画像、background/accent/headingは選択中の背景色/アクセント色/文字色です。台本と配色の調和に合わせ、アクセント色一色の連発や明るい色の点滅を避けます。画像がない境界ではbackgroundを選び、静かな内容はimage/backgroundを中心にします。方向と時間は描画側が安全に決定します。';
+export const MOTION_SCHEMA={type:'object',additionalProperties:false,properties:{version:{type:'integer',enum:[1]},style:{type:'string',enum:['cinematic','kinetic','editorial']},intensity:{type:'string',enum:['subtle','standard','bold']},transitions:{type:'array',minItems:1,maxItems:30,items:{type:'string',enum:TRANSITION_FAMILIES}},transitionTones:{type:'array',minItems:1,maxItems:30,items:{type:'string',enum:TRANSITION_TONES}}},required:['version','style','intensity']};
 export function normalizeMotion(input){
- if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).length!==3||input.version!==1||!MOTION_SCHEMA.properties.style.enum.includes(input.style)||!MOTION_SCHEMA.properties.intensity.enum.includes(input.intensity))throw new Error('INVALID_MOTION');
- return {version:1,style:input.style,intensity:input.intensity};
+ if(!input||typeof input!=='object'||Array.isArray(input)||!MOTION_SCHEMA.required.every(k=>Object.hasOwn(input,k))||Object.keys(input).some(k=>!Object.hasOwn(MOTION_SCHEMA.properties,k))||input.version!==1||!MOTION_SCHEMA.properties.style.enum.includes(input.style)||!MOTION_SCHEMA.properties.intensity.enum.includes(input.intensity))throw new Error('INVALID_MOTION');
+ for(const [key,catalogue] of [['transitions',TRANSITION_FAMILIES],['transitionTones',TRANSITION_TONES]])if(Object.hasOwn(input,key)&&(!Array.isArray(input[key])||!input[key].length||input[key].length>30||input[key].some(t=>!catalogue.includes(t))))throw new Error('INVALID_MOTION');
+ return {version:1,style:input.style,intensity:input.intensity,...(input.transitions?{transitions:[...input.transitions]}:{}),...(input.transitionTones?{transitionTones:[...input.transitionTones]}:{})};
+}
+// One choice per boundary, shared by the outgoing and incoming cuts. AI may
+// propose families; older projects use a deterministic, nonrepeating deck.
+export function transitionPlan({rows,motion}){
+ const m=normalizeMotion(motion);
+ if(!Array.isArray(rows))throw new Error('INVALID_TRANSITION');
+ const style=MOTION_SCHEMA.properties.style.enum.indexOf(m.style);
+ const pools={cinematic:['iris','diagonal','ellipse','wipe','diamond','split','fade','stairs','doors','clock','blinds','tiles','checker'],kinetic:['diagonal','tiles','split','clock','wipe','stairs','checker','diamond','doors','iris','blinds','ellipse','fade'],editorial:['blinds','split','stairs','doors','wipe','ellipse','fade','checker','iris','diagonal','diamond','tiles','clock']};
+ const pool=m.intensity==='subtle'?['fade','iris','ellipse','wipe','split','doors']:pools[m.style],counts={};
+ return Array.from({length:Math.max(0,rows.length-1)},(_,i)=>i).reduce((plan,i)=>{
+  let family=m.transitions?.[i]||pool[i%pool.length];
+  if(family===plan.at(-1)?.family)family=pool.find((t,j)=>j>=i%pool.length&&t!==family)||pool.find(t=>t!==family);
+  const variant=((counts[family]||0)+style)%TRANSITION_VARIANTS[family];counts[family]=(counts[family]||0)+1;
+  const hasImage=!!rows[i+1]?.image,tones=[...(hasImage?['image']:[]),'background','accent',...(m.intensity==='bold'?['heading']:[])];
+  let tone=m.transitionTones?.[i]||tones[i%tones.length];if(tone==='image'&&!hasImage)tone='background';
+  const previous=plan.at(-1);if(tone===previous?.tone&&(tone!=='image'||rows[i]?.image===rows[i+1]?.image))tone=tones.find(t=>t!==tone)||'background';
+  plan.push({family,variant,tone});return plan;
+ },[]);
+}
+export function transitionSurface(choice,{palette,image}={}){
+ if(!TRANSITION_TONES.includes(choice?.tone)||!palette||!['background','accent','heading'].every(k=>/^#[a-f\d]{6}$/i.test(palette[k])))throw new Error('INVALID_TRANSITION');
+ if(image!==undefined&&(typeof image!=='string'||!/^cuts\/[a-z\d_-]+\.(?:png|jpe?g|webp|gif)$/i.test(image)))throw new Error('INVALID_TRANSITION');
+ return choice.tone==='image'?{color:palette.background,...(image?{image}:{})}:{color:palette[choice.tone]};
+}
+export function transitionFrame({frame,frames,fps,motion}){
+ const m=normalizeMotion(motion);
+ if(!Number.isFinite(frame)||!Number.isInteger(frames)||frames<1||!Number.isFinite(fps)||fps<=0)throw new Error('INVALID_MOTION_TIMING');
+ if(frames<8)return {incoming:0,outgoing:0};
+ const duration=Math.max(1,Math.min(fps*({subtle:.28,standard:.4,bold:.5}[m.intensity]),(frames-1)*.12));
+ return {incoming:1-ease(frame/duration),outgoing:ease((frame-(frames-1-duration))/duration)};
+}
+// Native CSS masks, bounded to at most 24 tiles; the caller clips these layers
+// above the subtitle lane. Full/empty endpoints are exact for every variant.
+export function transitionLayers(choice,coverage,color){
+ const {family,variant}=choice||{};
+ if(!TRANSITION_FAMILIES.includes(family)||!Number.isInteger(variant)||variant<0||variant>=TRANSITION_VARIANTS[family]||!Number.isFinite(coverage)||coverage<0||coverage>1||!/^#[a-f\d]{6}$/i.test(color))throw new Error('INVALID_TRANSITION');
+ if(coverage===0)return [];if(coverage===1)return [{inset:0,background:color}];
+ const c=coverage,p=c*100,base={inset:0,background:color},clip=clipPath=>({...base,clipPath});
+ const rect=(x,y,w,h)=>({left:x+'%',top:y+'%',width:w+'%',height:h+'%',background:color});
+ if(family==='fade')return [{...base,opacity:c}];
+ if(family==='wipe')return [clip(['inset(0 '+(100-p)+'% 0 0)','inset(0 0 0 '+(100-p)+'%)','inset(0 0 '+(100-p)+'% 0)','inset('+(100-p)+'% 0 0 0)'][variant])];
+ if(family==='diagonal'){
+  const q=p*2;const points=[[[-1,-1],[q,-1],[-1,q]],[[101,-1],[101-q,-1],[101,q]],[[101,101],[101-q,101],[101,101-q]],[[-1,101],[q,101],[-1,101-q]]][variant];
+  return [clip('polygon('+points.map(([x,y])=>x+'% '+y+'%').join(',')+')')];
+ }
+ if(family==='split')return [clip(variant===0?`inset(0 ${(100-p)/2}% 0 ${(100-p)/2}%)`:`inset(${(100-p)/2}% 0 ${(100-p)/2}% 0)`)];
+ if(family==='doors')return variant===0?[rect(0,0,p/2,100),rect(100-p/2,0,p/2,100)]:[rect(0,0,100,p/2),rect(0,100-p/2,100,p/2)];
+ if(family==='blinds')return Array.from({length:10},(_,i)=>variant===0?rect(i*10,0,p/10,100):rect(0,i*10,100,p/10));
+ if(family==='iris')return [clip(`circle(${c*(variant===0?110:210)}% at ${['50% 50%','0% 0%','100% 0%','100% 100%','0% 100%'][variant]})`)];
+ if(family==='ellipse')return [clip(`ellipse(${p*(variant===0?1.1:.7)}% ${p*(variant===0?.7:1.1)}% at 50% 50%)`)];
+ if(family==='diamond')return [clip(`polygon(50% ${50-p}%,${50+p}% 50%,50% ${50+p}%,${50-p}% 50%)`)];
+ if(family==='clock')return [{inset:0,background:`conic-gradient(from -90deg,${color} ${c*360}deg,transparent 0deg)`,transform:variant?'scaleX(-1)':'none'}];
+ if(family==='stairs')return Array.from({length:10},(_,i)=>{const q=clamp(c*1.3-(variant%2?9-i:i)/9*.3)*100;return variant<2?rect(0,i*10,q,10.1):rect(i*10,0,10.1,q);});
+ return Array.from({length:24},(_,i)=>{
+  const x=i%6,y=Math.floor(i/6),lag=family==='checker'?(x+y+variant)%2*.25:([x/5,1-x/5,y/3,1-y/3][variant])*.35;
+  const q=clamp(c*(1+(family==='checker'?.25:.35))-lag);
+  return rect(x*100/6+(1-q)*100/12,y*25+(1-q)*12.5,q*100/6+.02,q*25+.02);
+ });
 }
 export const IMAGE_FOCUS_SCHEMA={type:'object',additionalProperties:false,properties:{x:{type:'number',minimum:0,maximum:1},y:{type:'number',minimum:0,maximum:1},zoom:{type:'number',minimum:1,maximum:2},label:{type:'string',maxLength:80}},required:['x','y','zoom','label']};
 export function normalizeImageFocus(input){

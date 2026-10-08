@@ -1,7 +1,8 @@
 import path from 'node:path';
 import os from 'node:os';
 import {fileURLToPath, pathToFileURL} from 'node:url';
-import {readFile, mkdir, access} from 'node:fs/promises';
+import {readFile, mkdir, access,readdir} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {createRequire} from 'node:module';
 
@@ -44,16 +45,25 @@ export async function ensureSetup(root=appRoot) {
   // The renderer's own cache must be present; no dependency on another app.
   await access(path.join(root,'node_modules','.remotion','chrome-headless-shell'));
 }
-export async function existingStudio(port,output) {
+export async function runtimeIdentity(root=appRoot){
+ const files=['launch.mjs','package-lock.json'];
+ async function walk(dir,prefix){for(const entry of await readdir(dir,{withFileTypes:true})){const name=prefix+entry.name;if(entry.isDirectory()){if(entry.name!=='tests')await walk(path.join(dir,entry.name),name+'/');}else if(/\.(mjs|tsx|html|css|json)$/.test(name))files.push(name);}}
+ await walk(path.join(root,'runtime'),'runtime/');const hash=createHash('sha256');
+ for(const file of files.sort())hash.update(file+'\0'+createHash('sha256').update(await readFile(path.join(root,file))).digest('hex')+'\n');
+ return {buildId:hash.digest('hex'),protocol:1};
+}
+export async function existingStudio(port,output,identity) {
   try {
     const response=await fetch('http://127.0.0.1:'+port+'/api/launcher-status',{signal:AbortSignal.timeout(1200)});
     if(!response.ok)return false;
     const state=await response.json();
     if(state.app!=='gemini-narration-studio')return false;
     if(path.resolve(state.output)!==path.resolve(output))throw new Error('STUDIO_ALREADY_RUNNING_WITH_OTHER_PROJECT');
+    identity??=await runtimeIdentity();
+    if(state.buildId!==identity.buildId||state.protocol!==identity.protocol)throw new Error('STUDIO_RUNTIME_MISMATCH');
     return true;
   } catch(error) {
-    if(error.message==='STUDIO_ALREADY_RUNNING_WITH_OTHER_PROJECT')throw error;
+    if(['STUDIO_ALREADY_RUNNING_WITH_OTHER_PROJECT','STUDIO_RUNTIME_MISMATCH'].includes(error.message))throw error;
     return false;
   }
 }
@@ -67,7 +77,8 @@ export async function launch(args=process.argv.slice(2)) {
   const config=options(args);
   process.chdir(appRoot);
   if(config.setupOnly){await ensureSetup();console.log('NARRATION_STUDIO_SETUP_READY');return;}
-  if(await existingStudio(config.port,config.output)) {
+  const identity=await runtimeIdentity();
+  if(await existingStudio(config.port,config.output,identity)) {
     const url='http://127.0.0.1:'+config.port;
     console.log('NARRATION_STUDIO_REUSED '+url); if(config.openBrowser)openLocalBrowser(url); return;
   }
@@ -79,7 +90,7 @@ export async function launch(args=process.argv.slice(2)) {
   const {NarrationSession}=await import('./runtime/core.mjs');
   const {startServer}=await import('./runtime/server.mjs');
   const session=await NarrationSession.open({outputDir:config.output});
-  const service=await startServer({session,port:config.port,sampleDir:path.join(config.output,'voice-samples'),videoRendererRoot:appRoot,launcherStatus:{app:'gemini-narration-studio',version:JSON.parse(await readFile(path.join(appRoot,'package.json'),'utf8')).version,output:config.output}});
+  const service=await startServer({session,port:config.port,sampleDir:path.join(config.output,'voice-samples'),videoRendererRoot:appRoot,launcherStatus:{app:'gemini-narration-studio',version:JSON.parse(await readFile(path.join(appRoot,'package.json'),'utf8')).version,output:config.output,...identity}});
   console.log('NARRATION_STUDIO_READY '+service.url);
   console.log('制作データ: '+config.output);
   if(config.openBrowser)openLocalBrowser(service.url);

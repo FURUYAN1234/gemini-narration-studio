@@ -37,7 +37,7 @@ try{
     const visual=scenes[row.id]||{};if(visual.imageFocus)row.imageFocus=visual.imageFocus;row.title=typeof visual.title==='string'?visual.title.slice(0,200):row.scene||data.title;
     row.points=Array.isArray(visual.points)?visual.points.filter(v=>typeof v==='string').slice(0,6).map(v=>v.slice(0,160)):[];
   }
-  const music=production.status().music;if(music){await writeFile(path.join(publicDir,'cuts',music.file),await production.readAsset(music.file));data.music={src:'cuts/'+music.file,durationSeconds:music.durationSeconds,level:music.level};}
+  const music=production.effectiveMusic();if(music){await writeFile(path.join(publicDir,'cuts',music.file),await production.readAsset(music.file));data.music={src:'cuts/'+music.file,durationSeconds:music.durationSeconds,level:music.level};}
   await writeFile(path.join(publicDir,'video-data.json'),JSON.stringify({data,theme}));
   for(const name of ['presentation.tsx','motion-presentation.tsx','motion.mjs','music.mjs','font-loader.mjs','subtitles.mjs'])await copyFile(path.join(here,name),path.join(work,name));
   for(const name of ['NotoSansJP.ttf','NotoSansJP-OFL.txt','reveal-LICENSE.txt'])await copyFile(path.join(here,'vendor',name),path.join(publicDir,'narration',name));

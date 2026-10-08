@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp, readFile, readdir, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {NarrationSession, applyDictionary, inspectReading, decodeAudio, buildRequest} from '../core.mjs';
+import {NarrationSession, applyDictionary, inspectReading, decodeAudio, buildRequest,parseGoogleJson} from '../core.mjs';
 import {startServer} from '../server.mjs';
 import {prepareReviewedAudio} from '../client.mjs';
 import {ProductionInputs} from '../production.mjs';
@@ -12,6 +12,34 @@ import {atomicWrite} from '../atomic-write.mjs';
 import {loadLocalFont} from '../font-loader.mjs';
 
 const row = {id:'intro', caption:'APIで動画を作ります。', speech:'エー・ピー・アイで動画を作ります。'};
+
+test('JSON response parsing distinguishes envelope text failures without exposing response content',()=>{
+ const response=parts=>({candidates:[{finishReason:'STOP',content:{parts}}]});
+ assert.deepEqual(parseGoogleJson(response([{thought:true,text:'private thought'},{text:'{"rows":'},{text:'[]}'}])),{rows:[]});
+ for(const value of ['```json\n{"rows":[]}\n```','```\n{"rows":[]}\n```'])assert.deepEqual(parseGoogleJson(response([{text:value}])),{rows:[]});
+ for(const value of ['', 'private text that is not JSON', 'prefix ```json\n{}\n```', '```json\n{}\n```\n```json\n{}\n```'])assert.throws(()=>parseGoogleJson(response([{text:value}])),e=>{assert.match(e.message,/PROVIDER_(INVALID_RESPONSE|EMPTY_TEXT)/);assert.match(e.providerDiagnostic,/textParts=1; characters=\d+; markdownFence=(true|false)/);assert.ok(!e.providerDiagnostic.includes('private'));return true;});
+ assert.throws(()=>parseGoogleJson({candidates:[{finishReason:'MAX_TOKENS',content:{parts:[{text:'{}'}]}}]}),/PROVIDER_INCOMPLETE_TEXT/);
+});
+
+test('a complete JSON object survives only an exact repeated trailing fragment, without repairing or choosing data',()=>{
+ const response=(text,finishReason='STOP')=>({candidates:[{finishReason,content:{parts:[{text}]}}]});
+ for(const result of [{rows:[{caption:'別の入力。',speech:'べつのにゅうりょく。'}],template:'editorial'},{rows:[{caption:'記号 } と \\" を含む。'}],title:'短い結び'}]){
+  const json=JSON.stringify(result),tail=json.slice(json.lastIndexOf(':')+2);
+  assert.deepEqual(parseGoogleJson(response(json+'\n'+tail+'\n')),result);
+  assert.deepEqual(parseGoogleJson(response(json)),result);
+ }
+ for(const text of ['{"rows":[]}\n{"rows":[1]}','{"rows":[]}\nother text','{"rows":[}', '{"rows":[]','prefix {"rows":[]}', '{"rows":[]}\n[1]'])assert.throws(()=>parseGoogleJson(response(text)),/PROVIDER_INVALID_RESPONSE/);
+ assert.throws(()=>parseGoogleJson(response('{"rows":[]}\n}', 'MAX_TOKENS')),/PROVIDER_INCOMPLETE_TEXT/);
+});
+test('manual adoption is local, persists missing readings, and is idempotent',async t=>{
+ const dir=await mkdtemp(path.join(tmpdir(),'studio-adoption-'));t.after(()=>rm(dir,{recursive:true,force:true}));
+ const session=await NarrationSession.open({outputDir:dir,draftProvider:()=>{throw Error('must not call provider');}});
+ await session.adoptScript('最初の本文。\n次の本文。',{expectedRevision:session.revision()});
+ assert.equal(session.status().rows.length,2);assert.equal(session.status().rows[0].speech,'');
+ await assert.rejects(session.approve(session.status().rows[0].id,session.revision()),/READING_PREPARATION_REQUIRED/);
+ await session.adoptScript('最初の本文。\n次の本文。',{expectedRevision:session.revision()});assert.equal(session.status().rows.length,2);
+ const reopened=await NarrationSession.open({outputDir:dir});assert.equal(reopened.status().rows[0].readingState,'pending');assert.equal(reopened.status().rows[0].reviewed,false);
+});
 test('font loading blocks render until ready and cancels on failure without rendering blank glyphs',async()=>{
   const events=[];let finish;
   const options={FontFace:class {load(){events.push('load');return new Promise(resolve=>finish=resolve);}},fonts:{add(){events.push('add');}},url:'/assets/font.ttf',family:'NarrationJapanese',delayRender:()=>{events.push('delay');return 7;},continueRender:h=>{assert.equal(h,7);events.push('continue');},cancelRender:()=>events.push('cancel')};
@@ -37,7 +65,7 @@ async function setup(t, provider) {
   const dir=await mkdtemp(path.join(tmpdir(),'narration-test-'));
   t.after(()=>rm(dir,{recursive:true,force:true}));
   const s=await NarrationSession.open({outputDir:dir, provider});
-  await s.replaceJob({title:'回帰テスト',rows:[row]});return {s,dir};
+  await (await ProductionInputs.open(dir)).saveMusicEnabled(false);await s.replaceJob({title:'回帰テスト',rows:[row]});return {s,dir};
 }
 test('dictionary handles longest matches, treats terms literally and preserves captions',()=>{
   assert.equal(applyDictionary('AI API A+B',[{term:'AI',reading:'エーアイ'},{term:'API',reading:'エーピーアイ'},{term:'A+B',reading:'たす'}]),'エーアイ エーピーアイ たす');
@@ -174,4 +202,26 @@ test('pre-theme reviewed export migrates without re-synthesis; stale export neve
   await s.setTitle('Changed after export');
   for(let i=0;i<2;i++)await assert.rejects(prepareReviewedAudio({sourceDir:dir,publicDir:path.join(dir,'public')}),/STALE_AUDIO_MANIFEST/);
   assert.equal(await readFile(file,'utf8'),original);
+});
+
+test('reference intake: source planning accepts a URL without instructions and rejects empty or unread URLs without retry',async t=>{
+ const dir=await mkdtemp(path.join(tmpdir(),'studio-reference-'));t.after(()=>rm(dir,{recursive:true,force:true}));
+ const session=await NarrationSession.open({outputDir:dir});session.setKey('test-only-key');let calls=0,retrieved=true;
+ const url='https://example.com/article';
+ const result={visualStyle:'白地に青い文字',title:'資料の説明',summary:'資料を解説',voice:'Kore',voiceReason:'明瞭な説明',motion:{version:1,style:'editorial',intensity:'standard'},sources:[{id:'url-0',summary:'参考資料'}],rows:[{purpose:'detail',caption:'資料を説明します。',speech:'しりょうをせつめいします。',title:'資料',points:[],imageFile:'',sourceIds:['url-0']}]};
+ t.mock.method(globalThis,'fetch',async()=>{calls++;return new Response(JSON.stringify({candidates:[{finishReason:'STOP',urlContextMetadata:{urlMetadata:[{retrievedUrl:url,urlRetrievalStatus:retrieved?'URL_RETRIEVAL_STATUS_SUCCESS':'URL_RETRIEVAL_STATUS_ERROR'}]},content:{parts:[{text:JSON.stringify(result)}]}}]}),{status:200,headers:{'Content-Type':'application/json'}});});
+ const brief={scriptMode:'ai',assetMode:'provided',instructions:'',script:'',references:{text:'',urls:[url]}};
+ assert.equal((await session.planSources(brief,[],()=>{})).script,result.rows[0].caption);assert.equal(calls,1);
+ await assert.rejects(session.planSources({...brief,references:{text:'',urls:[]}},[],()=>{}),/REFERENCE_REQUIRED/);assert.equal(calls,1);
+ retrieved=false;await assert.rejects(session.planSources(brief,[],()=>{}),/SOURCE_URL_NOT_RETRIEVED/);assert.equal(calls,2);
+});
+
+test('script authoring: AI theme is a typed opt-in, supplies instructions once, and never rewrites an existing script implicitly',async t=>{
+ const dir=await mkdtemp(path.join(tmpdir(),'studio-authoring-'));t.after(()=>rm(dir,{recursive:true,force:true}));let calls=0,received;
+ const session=await NarrationSession.open({outputDir:dir,draftProvider:async input=>{calls++;received=input.brief;return {rows:[{caption:'AIが選んだテーマ。',speech:'えーあいがえらんだてーま。'}]};}});session.setKey('test-only-key');
+ const brief={scriptMode:'ai',assetMode:'ai',instructions:'',script:''};await assert.rejects(session.draftScript(brief),/EMPTY_INSTRUCTIONS/);await assert.rejects(session.draftScript({...brief,themeAuto:'yes'}),/INVALID_THEME_PREFERENCE/);assert.equal(calls,0);
+ await session.draftScript({...brief,themeAuto:true});assert.equal(calls,1);assert.ok(received.instructions);assert.equal(received.themeAuto,true);assert.equal(session.status().rows.length,0);
+ await assert.rejects(session.draftScript({...brief,scriptMode:'existing',themeAuto:true,script:'手入力の台本。'}),/EMPTY_INSTRUCTIONS/);assert.equal(calls,1);
+ const production=await ProductionInputs.open(dir);await production.saveBrief({...brief,themeAuto:true,scriptEdited:true});const saved=(await ProductionInputs.open(dir)).status().brief;assert.equal(saved.themeAuto,true);assert.equal(saved.scriptEdited,true);assert.equal(saved.script,'');
+ await assert.rejects(production.saveBrief({...brief,scriptEdited:'yes'}),/INVALID_SCRIPT_EDIT_PREFERENCE/);
 });

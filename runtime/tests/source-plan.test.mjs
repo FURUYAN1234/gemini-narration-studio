@@ -9,6 +9,21 @@ import {NarrationSession,VOICES,classifyGoogleFailure,redactProviderDiagnostic,p
 import {startServer} from '../server.mjs';
 const file='a'.repeat(64)+'.png',brief={scriptMode:'ai',assetMode:'provided',script:'',instructions:'説明動画',references:{text:'中央の丸が入口です。',urls:[]}};
 const focus={x:.5,y:.4,zoom:1.6,label:'入口'},output={visualStyle:'白地に青い図',title:'入口から始めよう',summary:'入口の説明',voice:'Kore',voiceReason:'落ち着いた説明',motion:{version:1,style:'editorial',intensity:'standard'},sources:[{id:'text',summary:'入口は中央の丸。'}],rows:[{purpose:'detail',caption:'入口は中央です。',speech:'いりぐちはちゅうおうです。',title:'中央から',points:['入口'],imageFile:'',sourceIds:['text']}]};
+test('optional image failure retains grounded narration and line citations without applying the visual plan',async()=>{
+ const bundle=await collectSources(brief,[],()=>{}),bad=structuredClone(output);bad.rows[0].imageFocus=focus;
+ const draft=normalizeSourcePlan(bad,bundle,VOICES);
+ assert.equal(draft.script,output.rows[0].caption);assert.equal(draft.readings[0].speech,output.rows[0].speech);
+ assert.equal(draft.storyboard,undefined);assert.equal(draft.visualPlanStatus,'needs-review');assert.equal(draft.warnings[0].code,'INVALID_STORYBOARD_IMAGE');
+ assert.deepEqual(draft.sourceBindings[0].sourceIds,['text']);
+});
+test('source planning selects a validated template in the same response; missing or invented choices are rejected and quiet motion is allowed',async()=>{
+ const automatic={...brief,autoDirection:true},bundle=await collectSources(automatic,[],()=>{}),request=buildSourcePlanRequest({brief:automatic,bundle,voices:VOICES});
+ assert.ok(request.generationConfig.responseFormat.text.schema.required.includes('template'));
+ assert.equal(normalizeSourcePlan(output,bundle,VOICES).warnings[0].code,'INVALID_AUTOMATIC_DIRECTION');
+ assert.equal(normalizeSourcePlan({...output,template:'unknown'},bundle,VOICES).storyboard,undefined);
+ const planned=normalizeSourcePlan({...output,template:'blueprint',motion:null},bundle,VOICES);assert.equal(planned.direction.template,'blueprint');assert.equal(planned.storyboard.template,'blueprint');assert.equal(planned.direction.motion,null);
+ const manual={...brief,autoDirection:false},manualBundle=await collectSources(manual,[],()=>{});assert.equal(normalizeSourcePlan(output,manualBundle,VOICES).direction,undefined);
+});
 test('references reject local URLs, credentials, limits and non-HTTP protocols',()=>{
  assert.deepEqual(normalizeReferences({text:'本文',urls:['https://example.com/a#b','https://example.com/a']}),{text:'本文',urls:['https://example.com/a']});
  for(const url of ['file:///etc/passwd','http://127.0.0.1/a','http://[::1]/','http://localhost/a','https://x.local/a','https://a:b@example.com','https://example.com:444','https://example.com?token=secret'])assert.throws(()=>normalizeReferences({text:'',urls:[url]}),/INVALID_REFERENCE/);
@@ -25,7 +40,7 @@ test('request sends actual bounded material contents, no file system paths or ex
 });
 test('source plan rejects invented citations, missing retrieval evidence, stale readings, unknown images/voices',async()=>{
  const bundle=await collectSources(brief,[],()=>{});const valid=normalizeSourcePlan(output,bundle,VOICES);assert.equal(valid.storyboard.title,output.title);assert.equal(valid.readings[0].speech,output.rows[0].speech);
- for(const mutate of [r=>r.voice='Unknown',r=>r.rows[0].sourceIds=['made-up'],r=>r.rows[0].imageFile=file,r=>r.rows[0].speech='漢字',r=>r.sources=[],r=>r.rows[0].imageFocus=focus]){const changed=structuredClone(output);mutate(changed);assert.throws(()=>normalizeSourcePlan(changed,bundle,VOICES));}
+ for(const mutate of [r=>r.rows[0].sourceIds=['made-up'],r=>delete r.rows[0].sourceIds,r=>r.rows[0].sourceIds=[],r=>r.rows[0].speech='漢字',r=>r.sources=[]]){const changed=structuredClone(output);mutate(changed);assert.throws(()=>normalizeSourcePlan(changed,bundle,VOICES));}
  const url='https://example.com/',urlBundle={sources:[{id:'url-0',label:url,kind:'url'}],urls:[url]},r={...structuredClone(output),sources:[{id:'url-0',summary:'入口の説明'}]};r.rows[0].sourceIds=['url-0'];
  assert.throws(()=>normalizeSourcePlan(r,urlBundle,VOICES),/SOURCE_URL_NOT_RETRIEVED/);
  assert.throws(()=>normalizeSourcePlan(r,urlBundle,VOICES,{urlMetadata:[{retrievedUrl:url,urlRetrievalStatus:'URL_RETRIEVAL_STATUS_ERROR'}]}),/SOURCE_URL_NOT_RETRIEVED/);
@@ -47,11 +62,11 @@ test('UI HTTP save/import carries storyboard into actual scene visuals, without 
  const post=(route,input)=>fetch(service.url+'/api/'+route,{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':token},body:JSON.stringify(input)});
  assert.equal((await post('source-plan',{brief,consent:false,revision:session.revision()})).status,409);
  assert.equal((await post('source-plan',{brief,consent:true,revision:'stale'})).status,409);
- const result=normalizeSourcePlan(output,await collectSources(brief,[],()=>{}),VOICES);
- assert.equal((await post('production',{...brief,...result,titleMode:'auto',voiceMode:'manual'})).status,200);
+ const result=normalizeSourcePlan(output,await collectSources(brief,[],()=>{}),VOICES);await session.setPresentation({theme:'moon',mode:'template',template:'blueprint',motion:null});
+ assert.equal((await post('production',{...brief,...result,autoDirection:false,titleMode:'auto',voiceMode:'manual',productionRevision:(await (await fetch(service.url+'/api/status')).json()).productionRevision})).status,200);
  assert.equal((await post('append-script',{script:result.script})).status,200);
- const state=await(await fetch(service.url+'/api/status')).json(),row=state.rows.at(-1);
- assert.equal(row.cutVisual.title,'中央から');assert.equal(state.presentation.motion.style,'editorial');assert.equal(row.reviewed,false);assert.equal(row.audio,null);assert.equal(state.production.finalization,null);
+ const state=await(await fetch(service.url+'/api/status')).json(),row=state.rows.at(-1);assert.equal(state.presentation.motion,null);assert.equal(state.presentation.template,'blueprint');
+ assert.equal(row.cutVisual.title,'中央から');assert.equal(state.presentation.motion,null);assert.equal(row.reviewed,false);assert.equal(row.audio,null);assert.equal(state.production.finalization,null);
  assert.deepEqual((await ProductionInputs.open(dir)).status().brief.storyboard,result.storyboard);
  assert.equal((await post('append-script',{script:result.script})).status,200);assert.equal(session.status().rows.length,state.rows.length);
  session.setKey('test-only-key');const correction=await post('apply-review',{consent:true,expectedRevision:session.revision(),review:{version:1,sourceRevision:'',overall:'短く修正',cuts:[]}});const corrected=await correction.json();assert.equal(correction.status,200,JSON.stringify(corrected));assert.equal(corrected.production.brief.storyboard,undefined);assert.equal(session.status().rows.at(-1).caption,'入口を見ます。');
@@ -82,10 +97,22 @@ test('minimal generation diagnosis requires consent, sends no project content an
  await assert.rejects(s.probeGeneration(),/GENERATION_CONSENT_REQUIRED/);assert.equal(count,0);assert.deepEqual(await s.probeGeneration({consent:true}),{ready:true,generation:true,model:'gemini-3.5-flash'});assert.equal(count,1);assert.equal(s.revision(),revision);assert.equal(s.busy,false);assert.ok(!JSON.stringify(s.status()).includes('test-only-key'));
 });
 
-test('JSON generation retains the contract and local guards without provider schema constraints',async()=>{
+test('JSON mode retains the full output contract and mandatory local guards without rejected native schema variants',async()=>{
  for(const input of [buildDraftRequest({brief}),buildSourcePlanRequest({brief,bundle:await collectSources(brief,[],()=>{}),voices:VOICES})]){
   const before=JSON.stringify(input),prepared=prepareGooglePayload(input);
   assert.deepEqual(prepared.generationConfig.responseFormat,{text:{mimeType:'APPLICATION_JSON'}});
+  assert.equal(prepared.generationConfig.responseMimeType,undefined);
+  const contract=prepared.systemInstruction.parts.at(-1).text;
+  const schema=JSON.parse(contract.split('JSON contract: ')[1]);
+  assert.equal(prepared.generationConfig.responseSchema,undefined);
+  assert.ok(schema.required.includes('rows'));
+  assert.equal(schema.properties.rows.type,'array');
+  assert.equal(schema.properties.rows.minItems,1);
+  assert.ok(schema.properties.rows.items.required.includes('caption'));
+  assert.ok(schema.properties.rows.items.required.includes('speech'));
+  assert.equal(schema.properties.rows.items.properties.caption.type,'string');
+  if(input.generationConfig.responseFormat){assert.ok(schema.required.includes('sources'));assert.equal(schema.properties.sources.items.properties.id.type,'string');assert.deepEqual(schema.properties.voice.enum,VOICES);}
+  assert.match(contract,/data instance, not the schema/);
   assert.equal(prepared.generationConfig.maxOutputTokens,16384);
   assert.equal(Object.hasOwn(prepared.generationConfig,'responseJsonSchema'),false);
   assert.match(prepared.systemInstruction.parts.at(-1).text,/JSON contract:.*"caption".*"speech"/);
@@ -95,5 +122,17 @@ test('JSON generation retains the contract and local guards without provider sch
  const audio={model:'tts',input:'text'},image={generationConfig:{responseModalities:['IMAGE']}};
  assert.equal(prepareGooglePayload(audio),audio);assert.equal(prepareGooglePayload(image),image);
  const bundle=await collectSources(brief,[],()=>{});
- for(const change of [r=>r.voice='Unknown',r=>r.rows[0].sourceIds=['unknown'],r=>r.rows[0].speech='漢字',r=>r.motion.style='script']){const invalid=structuredClone(output);change(invalid);assert.throws(()=>normalizeSourcePlan(invalid,bundle,VOICES));}
+ for(const change of [r=>r.rows[0].sourceIds=['unknown'],r=>r.rows[0].speech='漢字']){const invalid=structuredClone(output);change(invalid);assert.throws(()=>normalizeSourcePlan(invalid,bundle,VOICES));}
+});
+
+test('malformed source output reports only structural facts and never private values',async()=>{
+ const bundle=await collectSources(brief,[],()=>{});
+ for(const invalid of [{},{rows:[],sources:[]},{rows:'private output',sources:[]},{rows:[{}],sources:'private output'}]){
+  assert.throws(()=>normalizeSourcePlan(invalid,bundle,VOICES),error=>{
+   assert.equal(error.message,'INVALID_STORYBOARD');
+   assert.match(error.providerDiagnostic,/rowsType=\w+; rowsCount=\d+; sourcesType=\w+/);
+   assert.ok(!error.providerDiagnostic.includes('private output'));return true;
+  });
+ }
+ assert.equal(normalizeSourcePlan(output,bundle,VOICES).script,output.rows[0].caption);
 });

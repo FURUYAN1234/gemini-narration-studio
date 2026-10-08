@@ -21,7 +21,7 @@ test('motion changes bind the final revision without charging or invalidating cu
  await s.setPresentation({...s.status().presentation,motion});await assert.rejects(prepareReviewedAudio({sourceDir:dir,publicDir:path.join(dir,'out')}),/STALE|FINAL/);
 });
 function wav(){const b=Buffer.alloc(48);b.write('RIFF');b.writeUInt32LE(40,4);b.write('WAVE',8);b.write('fmt ',12);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(24000,24);b.writeUInt32LE(48000,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(4,40);return b;}
-async function setup(t,designProvider){const dir=await mkdtemp(path.join(tmpdir(),'studio-design-'));t.after(()=>rm(dir,{recursive:true,force:true}));const s=await NarrationSession.open({outputDir:dir,provider:async()=>wav(),designProvider});s.setKey('test-design-key');await s.appendRow({id:'one',caption:'字幕。',speech:'よみ。'});await s.approve('one',s.revision());await s.generate(['one']);await s.markListened('one',s.revision());return {dir,s};}
+async function setup(t,designProvider){const dir=await mkdtemp(path.join(tmpdir(),'studio-design-'));t.after(()=>rm(dir,{recursive:true,force:true}));const s=await NarrationSession.open({outputDir:dir,provider:async()=>wav(),designProvider});await (await ProductionInputs.open(dir)).saveMusicEnabled(false);s.setKey('test-design-key');await s.appendRow({id:'one',caption:'字幕。',speech:'よみ。'});await s.approve('one',s.revision());await s.generate(['one']);await s.markListened('one',s.revision());return {dir,s};}
 
 test('twelve templates have distinct designs, nine layouts and readable validated palettes',()=>{
  assert.equal(VIDEO_TEMPLATES.length,12);assert.equal(new Set(VIDEO_TEMPLATES.map(t=>t.id)).size,12);assert.equal(new Set(VIDEO_TEMPLATES.map(t=>JSON.stringify(t.design))).size,12);assert.equal(new Set(VIDEO_TEMPLATES.map(t=>t.design.layout)).size,9);
@@ -35,7 +35,7 @@ test('declarative design rejects code, URLs, credential text, unreadable colors 
  assert.doesNotThrow(()=>normalizePresentation({theme:'moon',mode:'ai',instructions:'余白を広めに。青を少し明るく。'}));
 });
 test('template/theme changes persist without invalidating unchanged pronunciation or audio; legacy revision survives reopening',async t=>{
- const {s,dir}=await setup(t),original=s.status(),reopened=await NarrationSession.open({outputDir:dir});assert.equal(reopened.revision(),s.revision());assert.equal(presentationDesign(original.presentation),null);
+ const {s,dir}=await setup(t);await s.setPresentation({theme:'moon'});const original=s.status(),reopened=await NarrationSession.open({outputDir:dir});assert.equal(reopened.revision(),s.revision());assert.equal(presentationDesign(original.presentation),null);
  await s.setPresentation({theme:'moon',mode:'template',template:'blueprint'});await s.setTheme('white');const current=s.status();assert.equal(current.presentation.template,'blueprint');assert.equal(current.rows[0].audio.file,original.rows[0].audio.file);assert.equal(current.rows[0].audioCurrent,true);assert.equal(current.rows[0].reviewed,true);assert.equal(current.rows[0].listenedCurrent,true);assert.notEqual(current.revision,original.revision);
  assert.deepEqual((await NarrationSession.open({outputDir:dir})).status().presentation,current.presentation);
 });

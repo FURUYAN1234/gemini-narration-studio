@@ -24,6 +24,11 @@ export const VIDEO_TEMPLATES=[
  make('flow','流れ解説','左の素材と、縦につながる番号付きの要点。','rail','#f0f6f5','#294443','#123432','#14665b','line',64,'left',.38,8),
  make('briefing','ブリーフィング','上段に見出し、下段に要点カードと画像を配置。','stack','#17243b','#e7edf5','#ffffff','#e4bd73','band',68,'right',.32,12)
 ];
+export const AUTOMATIC_DIRECTION_SCHEMA={type:'object',additionalProperties:false,required:['title','template','motion'],properties:{title:{type:'string',maxLength:200},template:{type:'string',enum:VIDEO_TEMPLATES.map(t=>t.id)},motion:{anyOf:[MOTION_SCHEMA,{type:'null'}]}}};
+export function normalizeAutomaticDirection(input){
+ if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!['title','template','motion'].includes(k))||!VIDEO_TEMPLATES.some(t=>t.id===input.template)||!Object.hasOwn(input,'motion'))throw new Error('INVALID_AUTOMATIC_DIRECTION');
+ const title=safeText(input.title,200);if(!title||/[<>]/.test(title))throw new Error('INVALID_AUTOMATIC_DIRECTION');return {title,template:input.template,motion:input.motion===null?null:normalizeMotion(input.motion)};
+}
 const luminance=color=>{const rgb=[1,3,5].map(i=>parseInt(color.slice(i,i+2),16)/255).map(n=>n<=.04045?n/12.92:((n+.055)/1.055)**2.4);return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];};
 export function contrast(a,b){const first=luminance(a),second=luminance(b);return (Math.max(first,second)+.05)/(Math.min(first,second)+.05);}
 export function normalizeDesign(input){

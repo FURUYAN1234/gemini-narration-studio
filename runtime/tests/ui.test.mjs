@@ -1,15 +1,96 @@
 import test from 'node:test';
+import {scriptActionState,parseScriptParts} from '../script-flow.mjs';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {VOICE_GENDERS,VOICES,MODELS,SAMPLE_SETTINGS} from '../core.mjs';
 import {VIDEO_TEMPLATES} from '../designs.mjs';
 
-const appSource = await readFile(new URL('../ui/app.mjs', import.meta.url), 'utf8');
+const appSource = (await readFile(new URL('../ui/app.mjs', import.meta.url), 'utf8')).replace(/^import .*script-flow\.mjs';\r?\n/m,'');
 const html = await readFile(new URL('../ui/index.html', import.meta.url), 'utf8');
+test('saving an AI cut plan or changing strength retains its transitions; changing style clears the old plan',async()=>{
+ const motion={version:1,style:'cinematic',intensity:'standard',transitions:['iris','split'],transitionTones:['image','background']},ui=await setup({motion});
+ assert.equal(ui.get('apply-motion').disabled,true);
+ await ui.edit(ui.get('motion-intensity'),'bold');await ui.get('motion-intensity').emit('change');await ui.get('apply-direction').emit('click');
+ assert.deepEqual(ui.state().presentation.motion,{...motion,intensity:'bold'});
+ await ui.edit(ui.get('motion-style'),'editorial');await ui.get('motion-style').emit('change');await ui.get('apply-direction').emit('click');
+ assert.equal(ui.state().presentation.motion.transitions,undefined);
+ assert.equal(ui.state().presentation.motion.transitionTones,undefined);
+ assert.equal(ui.requests.some(r=>['draft','source-plan','generate'].includes(r.route)),false);
+});
+test('manual input hides AI controls and adoption never generates or approves readings',async()=>{
+ const ui=await setup({rows:[],autoConfirm:false});await ui.edit(ui.get('script-mode'),'existing');await ui.edit(ui.get('script-input'),'新しい手入力の台本。');
+ assert.equal(ui.get('ai-script-controls').hidden,true);await ui.get('plan-sources').emit('click');
+ assert.equal(ui.location.hash,'#connection');assert.equal(ui.requests.some(r=>['draft','source-plan','approve','generate'].includes(r.route)),false);assert.equal(ui.requests.filter(r=>r.route==='adopt-script').length,1);
+});
+
+test('a validated generated candidate survives a later stale save without another provider call or losing the prior saved brief',async()=>{
+ const ui=await setup({rows:[],productionErrorAt:2});await ui.edit(ui.get('production-instructions'),'手順を解説');await ui.sendScript({confirmOverwrite:true});await ui.poll();
+ assert.equal(ui.get('script-input').value,'AI draft result');assert.equal(ui.state().production.brief.script,'AI draft result');assert.equal(ui.state().production.brief.instructions,'手順を解説');assert.equal(ui.requests.filter(r=>r.route==='draft').length,1);assert.equal(ui.requests.some(r=>r.route==='adopt-script'||r.route==='generate'),false);assert.match(ui.get('source-status').textContent,/保存/);
+});
+
+test('draft generation stays for review, displays an actual catalog choice, then confirmation enters voice without a second generation',async()=>{
+ const ui=await setup({rows:[]});assert.equal(ui.get('auto-direction').checked,true);assert.equal(ui.get('direction-sample').hidden,true);await ui.edit(ui.get('production-instructions'),'手順を解説');await ui.get('generate-script').emit('click');
+ assert.equal(ui.state().rows.length,0);assert.equal(ui.location.hash,'');assert.equal(ui.get('script-input').value,'AI draft result');assert.equal(ui.get('direction-sample').hidden,false);assert.match(ui.get('direction-info').textContent,/ステップ講座/);assert.notEqual(ui.state().presentation.template,'steps');
+ // The lightweight UI harness does not parse anonymous HTML children; audit the
+ // static markup and exercise the chosen layout through the actual UI code.
+ const previewMarkup=html.slice(html.indexOf('id="direction-sample"'),html.indexOf('id="manual-direction"'));assert.match(previewMarkup,/<div class="preview-points"><span>[^<]+<\/span><span>[^<]+<\/span><\/div>/);assert.match(ui.get('direction-sample').attributes.class,/design-steps/);
+ assert.equal(ui.get('generate-script').hidden,true);assert.equal(ui.get('regenerate-script').hidden,false);await ui.get('plan-sources').emit('click');assert.equal(ui.location.hash,'#connection');assert.equal(ui.requests.filter(r=>r.route==='draft').length,1);assert.ok(ui.requests.find(r=>r.route==='adopt-script'));assert.equal(ui.state().presentation.template,'steps');assert.equal(ui.requests.some(r=>['approve','generate','finalize'].includes(r.route)),false);
+});
+test('manual direction expands, applies and closes without a provider call, and stays manual during regeneration',async()=>{
+ const ui=await setup({rows:[]});ui.get('auto-direction').checked=false;await ui.get('auto-direction').emit('change');assert.equal(ui.get('manual-direction').hidden,false);assert.equal(ui.get('manual-direction').open,true);
+ await ui.edit(ui.get('job-title'),'手動の題名');await ui.get('template-gallery').children.find(b=>b.dataset.template==='blueprint').emit('click');await ui.edit(ui.get('motion-style'),'off');await ui.get('motion-style').emit('change');await ui.get('apply-direction').emit('click');assert.equal(ui.get('manual-direction').open,false);assert.equal(ui.get('auto-direction').checked,false);assert.equal(ui.state().title,'手動の題名');assert.equal(ui.state().presentation.template,'blueprint');assert.equal(ui.state().presentation.motion,null);assert.equal(ui.requests.some(r=>['draft','source-plan','generate'].includes(r.route)),false);
+ await ui.edit(ui.get('script-input'),'既存の台本。');await ui.edit(ui.get('production-instructions'),'わかりやすく修正');await ui.sendScript({confirmOverwrite:true});assert.equal(ui.state().title,'手動の題名');assert.equal(ui.state().presentation.template,'blueprint');assert.equal(ui.state().presentation.motion,null);
+});
+test('narration completion advances to listening and never automatically seals, marks listening or renders',async()=>{
+ const ui=await setup({secondReviewed:false});await ui.get('confirm-script').emit('click');await ui.get('generate-all').emit('click');assert.equal(ui.location.hash,'#finish');assert.equal(ui.requests.filter(r=>r.route==='generate').length,1);assert.equal(ui.requests.some(r=>['listened','confirm-cut','finalize','render-video'].includes(r.route)),false);assert.equal(ui.state().rows.every(r=>!r.listenedCurrent),true);
+ assert.ok(html.indexOf('id="play-full"')>html.indexOf('id="finish"'));assert.ok(html.indexOf('id="confirm-full"')>html.indexOf('id="finish"'));assert.ok(html.indexOf('id="generate-script"')<html.indexOf('id="script-input"'));assert.ok(html.indexOf('id="regenerate-script"')<html.indexOf('id="script-input"'));
+});
+
+test('one planning action ends STEP01 and music/pause precede narration without an extra consent checkbox',()=>{
+ assert.equal([...html.matchAll(/id="plan-sources"/g)].length,1);
+ assert.ok(html.indexOf('id="script-input"')<html.indexOf('id="plan-sources"'));
+ assert.ok(html.indexOf('id="plan-sources"')<html.indexOf('id="connection"'));
+ assert.ok(html.indexOf('id="cut-pause"')<html.indexOf('id="review-overall"'));
+ assert.ok(html.indexOf('id="cut-pause"')<html.indexOf('id="generate-all"'));
+ assert.match(html,/<label class="consent"><input id="consent"/);
+ assert.match(html,/<div class="production-save">/);
+ assert.match(html,/<details class="text-only-alternative" hidden>/);
+});
+test('URL-only script input uses one source plan and enters voice selection without reading the URL aloud',async()=>{
+const result={script:'しくみをつたえます。',readings:[{caption:'しくみをつたえます。',speech:'しくみをつたえます。'}]},ui=await setup({sourcePlan:result,rows:[]});
+ await ui.edit(ui.get('script-input'),'https://example.com/article');assert.equal(ui.get('generate-script').disabled,true);assert.match(ui.get('script-send-state').textContent,/参考URL/);assert.equal(ui.requests.some(r=>['draft','source-plan'].includes(r.route)),false);
+ await ui.edit(ui.get('script-input'),'');await ui.edit(ui.get('source-urls'),'https://example.com/article');await ui.sendScript({confirmOverwrite:true});await ui.get('plan-sources').emit('click');
+ assert.equal(ui.requests.filter(r=>r.route==='source-plan').length,1);assert.equal(ui.state().rows[0].caption,result.script);assert.equal(ui.location.hash,'#connection');assert.equal(ui.requests.some(r=>r.route==='generate'),false);
+});
+test('failed URL-only planning keeps the input and stable button label without importing or retrying',async()=>{
+const ui=await setup({sourceError:'SOURCE_URL_NOT_RETRIEVED',rows:[]});await ui.edit(ui.get('source-urls'),'https://example.com/article');await ui.sendScript({confirmOverwrite:true});await ui.poll();assert.equal(ui.get('source-urls').value,'https://example.com/article');assert.equal(ui.requests.filter(r=>r.route==='source-plan').length,1);assert.equal(ui.requests.some(r=>['adopt-script','draft'].includes(r.route)),false);
+});
+test('a real existing script advances through the same button without a source generation',async()=>{
+ const ui=await setup({rows:[]});ui.get('auto-direction').checked=false;await ui.get('auto-direction').emit('change');await ui.edit(ui.get('script-input'),'せつめいします。');await ui.get('plan-sources').emit('click');assert.equal(ui.location.hash,'#connection');assert.equal(ui.state().rows[0].speech,'せつめいします。');assert.equal(ui.requests.some(r=>r.route==='source-plan'||r.route==='draft'||r.route==='generate'),false);
+});
+test('next step saves planning and chosen voice without approving readings or spending API calls',async()=>{
+ const ui=await setup({secondReviewed:false});await ui.edit(ui.get('production-instructions'),'短い解説');await ui.edit(ui.get('job-title'),'新しい題名');await ui.edit(ui.get('pitch'),'high');
+ await ui.get('apply-voice').emit('click');assert.equal(ui.location.hash,'#reading');assert.equal(ui.state().production.brief.instructions,'短い解説');assert.equal(ui.state().title,'新しい題名');assert.equal(ui.state().settings.pitch,'high');assert.equal(ui.state().rows[1].reviewed,false);
+ assert.equal(ui.requests.some(r=>['generate','approve','source-plan','draft'].includes(r.route)),false);
+});
+test('narration button saves and approves the exact visible reading then sends one explicit generation',async()=>{
+const ui=await setup({secondReviewed:false});await ui.edit(ui.textArea('one','speech'),'なおしたよみ。');assert.equal(ui.get('generate-all').disabled,true);await ui.get('confirm-script').emit('click');assert.equal(ui.requests.some(r=>r.route==='generate'),false);await ui.get('generate-all').emit('click');assert.equal(ui.state().rows[0].speech,'なおしたよみ。');assert.equal(ui.state().rows.every(r=>r.reviewed&&r.audioCurrent),true);assert.equal(ui.requests.filter(r=>r.route==='generate').length,1);assert.ok(ui.requests.findIndex(r=>r.route==='approve')<ui.requests.findIndex(r=>r.route==='generate'));
+});
+test('concurrent reading edit blocks narration without overwriting either draft or spending a generation',async()=>{
+ const ui=await setup({secondReviewed:false});await ui.edit(ui.textArea('one','speech'),'てもちのよみ。');ui.externalEdit('one',{speech:'ほかでほぞん。'});await ui.get('confirm-script').emit('click');
+ assert.equal(ui.textArea('one','speech').value,'てもちのよみ。');assert.equal(ui.state().rows[0].speech,'ほかでほぞん。');assert.equal(ui.requests.some(r=>['generate','row','approve'].includes(r.route)),false);
+});
+test('new BGM switch defaults on, toggling saves preference without provider calls',async()=>{
+ const ui=await setup({rows:[]});await ui.get('new-project').emit('click');assert.equal(ui.get('music-enabled').checked,true);
+ ui.get('music-enabled').checked=false;await ui.get('music-enabled').emit('change');assert.equal(ui.state().production.musicEnabled,false);assert.equal(ui.requests.some(r=>['generate','generate-music','source-plan','draft'].includes(r.route)),false);
+});
+test('editing already generated narration exposes one explicit regeneration action and keeps untouched audio',async()=>{
+const ui=await setup({rows:[{id:'one',caption:'字幕。',speech:'よみ。',reviewed:true,attempts:1,audio:{file:'old.wav'},audioCurrent:true,listenedCurrent:true},{id:'two',caption:'次。',speech:'つぎ。',reviewed:true,attempts:1,audio:{file:'two.wav'},audioCurrent:true,listenedCurrent:true}]});await ui.edit(ui.textArea('one','speech'),'なおしたよみ。');await ui.get('confirm-script').emit('click');assert.equal(ui.get('generate-all').disabled,true);await ui.get('retry-audio').emit('click');assert.equal(ui.requests.some(r=>r.route==='generate'),false);await ui.get('retry-confirm-send').emit('click');const calls=ui.requests.filter(r=>r.route==='generate');assert.equal(calls.length,1);assert.deepEqual(calls[0].input.ids,['one']);assert.equal(calls[0].input.regenerate,true);assert.equal(ui.state().rows[1].audio.file,'two.wav');
+});
 test('motion choice requires saving, uses only presentation endpoint, survives polling and refuses sealed edits',async()=>{
  const ui=await setup({rows:[{id:'one',caption:'字幕。',speech:'よみ。',reviewed:true,audio:{file:'one.wav'},audioCurrent:true,listenedCurrent:true}]});ui.get('motion-style').value='kinetic';await ui.get('motion-style').emit('change');await ui.poll();assert.equal(ui.get('motion-style').value,'kinetic');assert.equal(ui.get('apply-motion').disabled,false);
- await ui.get('apply-motion').emit('click');assert.equal(ui.state().presentation.motion.style,'kinetic');assert.equal(ui.get('apply-motion').disabled,true);assert.equal(ui.requests.some(r=>['generate','draft','design-draft'].includes(r.route)),false);
+ await ui.get('apply-direction').emit('click');assert.equal(ui.state().presentation.motion.style,'kinetic');assert.equal(ui.get('apply-motion').disabled,true);assert.equal(ui.requests.some(r=>['generate','draft','design-draft'].includes(r.route)),false);
  ui.get('motion-style').value='cinematic';await ui.get('motion-style').emit('change');ui.get('motion-style').value='kinetic';await ui.get('motion-style').emit('change');assert.equal(ui.get('apply-motion').disabled,true);assert.equal(ui.get('confirm-full').disabled,false);
  await ui.get('confirm-full').emit('click');assert.equal(ui.get('motion-style').disabled,true);assert.equal(ui.get('apply-motion').disabled,true);
 });
@@ -36,8 +117,9 @@ test('workflow interruption is available before reading approvals and saved paus
  assert.doesNotMatch(html,/<a href="#reading">全文確認へ進む<\/a>/);
 });
 
-test('API registration stays at the top; reading next only navigates to synthesis with a configured key',async()=>{
- const ui=await setup();ui.restart();await ui.poll();ui.get('consent').checked=false;await ui.get('consent').emit('change');assert.equal(ui.get('generation-next').hidden,true);assert.equal(ui.get('generate-all').disabled,true);assert.doesNotMatch(ui.get('generation-next').textContent,/APIキーを登録/);assert.equal(ui.get('api-settings').open,true);ui.get('api-key').value='not-a-real-key';await ui.get('key-form').emit('submit');assert.equal(ui.location.hash,'');assert.equal(ui.get('api-settings').open,false);assert.equal(ui.get('generation-next').hidden,false);assert.equal(ui.get('generate-all').disabled,true);await ui.get('generation-next').emit('click');assert.equal(ui.get('api-settings').open,false);assert.match(ui.get('message').textContent,/チェック/);ui.get('consent').checked=true;await ui.get('consent').emit('change');assert.equal(ui.get('generate-all').disabled,false);assert.equal(ui.requests.some(r=>r.route==='generate'),false);assert.equal(ui.state().rows.every(r=>r.reviewed),true);
+test('API registration alone enables explicit narration without a separate checkbox or automatic synthesis',async()=>{
+ const ui=await setup();ui.restart();await ui.poll();assert.equal(ui.get('generate-all').disabled,true);assert.equal(ui.get('generation-next').hidden,true);
+ ui.get('api-key').value='not-a-real-key';await ui.get('key-form').emit('submit');assert.equal(ui.get('api-settings').open,false);assert.equal(ui.get('generate-all').disabled,false);assert.equal(ui.get('generation-next').hidden,true);assert.equal(ui.requests.some(r=>r.route==='generate'),false);
 });
 for(const control of ['unconfirm-script'])test(control+' can undo idle reading confirmation without losing text/audio or local edits',async()=>{
  const ui=await setup({rows:[{id:'one',caption:'字幕。',speech:'よみ。',reviewed:true,attempts:1,audio:{file:'old.wav'},audioCurrent:true,listenedCurrent:true,cutConfirmed:false}]});const before=ui.state().rows[0];await ui.edit(ui.textArea('one','speech'),'保存前の修正');assert.equal(ui.get(control).disabled,false);await ui.get(control).emit('click');assert.equal(ui.state().rows[0].reviewed,false);assert.equal(ui.state().rows[0].speech,before.speech);assert.deepEqual(ui.state().rows[0].audio,before.audio);assert.equal(ui.textArea('one','speech').value,'保存前の修正');assert.equal(ui.get('consent').checked,false);assert.equal(ui.requests.filter(r=>r.route==='unapprove').length,1);assert.equal(ui.requests.some(r=>r.route==='cancel'||r.route==='generate'),false);assert.match(ui.get('cancel-status').textContent,/編集に戻れます/);
@@ -47,15 +129,14 @@ test('final seal hides reading undo/next actions and active synthesis keeps canc
  const active=await setup();active.externalBusy(true);await active.poll();assert.equal(active.get('unconfirm-script').disabled,true);assert.equal(active.get('cancel').disabled,false);assert.match(active.get('cancel').textContent,/処理を中止/);await active.get('cancel').emit('click');assert.equal(active.requests.filter(r=>r.route==='cancel').length,1);assert.equal(active.requests.some(r=>r.route==='unapprove'),false);
 });
 test('cancellation stays usable while the AI request promise itself is still pending',async()=>{
- let release;const draftWait=new Promise(r=>release=r),ui=await setup({draftWait});await ui.edit(ui.get('production-instructions'),'作成指示');const running=ui.get('draft-script').emit('click');await new Promise(r=>setImmediate(r));await ui.poll();assert.equal(ui.state().busy,true);assert.equal(ui.get('cancel').disabled,false);await ui.get('cancel').emit('click');assert.equal(ui.get('workflow-paused').hidden,true);release();await running;assert.equal(ui.get('workflow-paused').hidden,false);assert.equal(ui.requests.filter(r=>r.route==='cancel').length,1);assert.equal(ui.requests.some(r=>r.route==='unapprove'),false);
+ let release;const draftWait=new Promise(r=>release=r),ui=await setup({draftWait,rows:[]});await ui.edit(ui.get('production-instructions'),'作成指示');const running=ui.sendScript({confirmOverwrite:true});await new Promise(r=>setImmediate(r));await ui.poll();assert.equal(ui.state().busy,true);assert.equal(ui.get('cancel').disabled,false);await ui.get('cancel').emit('click');assert.equal(ui.get('workflow-paused').hidden,true);release();await running;assert.equal(ui.get('workflow-paused').hidden,false);assert.equal(ui.requests.filter(r=>r.route==='cancel').length,1);assert.equal(ui.requests.some(r=>r.route==='unapprove'),false);
 });
 
 test('AI hiragana readings survive local saving/polling and are passed into review without another provider request',async()=>{
- const ui=await setup();await ui.edit(ui.get('production-instructions'),'作りたい動画');await ui.get('draft-script').emit('click');assert.equal(ui.get('append-script').textContent,'この台本で読み確認へ進む →');await ui.get('save-production').emit('click');await ui.poll();assert.deepEqual(ui.state().production.brief.readings,[{caption:'AI draft result',speech:'えーあいだいほん。'}]);await ui.get('append-script').emit('click');const request=ui.requests.find(r=>r.route==='append-script');assert.equal(request.input.readings[0].speech,'えーあいだいほん。');assert.equal(request.input.consent,false);assert.equal(ui.state().rows.at(-1).speech,'えーあいだいほん。');assert.equal(ui.requests.filter(r=>r.route==='draft').length,1);assert.equal(ui.requests.some(r=>r.route==='generate'),false);
+ const ui=await setup();await ui.edit(ui.get('production-instructions'),'作りたい動画');await ui.sendScript({confirmOverwrite:true});assert.equal(ui.get('append-script').textContent,'次へ：声を選ぶ →');await ui.get('save-production').emit('click');await ui.poll();assert.deepEqual(ui.state().production.brief.readings,[{caption:'AI draft result',speech:'えーあいだいほん。'}]);await ui.get('plan-sources').emit('click');const request=ui.requests.find(r=>r.route==='adopt-script');assert.equal(request.input.readings[0].speech,'えーあいだいほん。');assert.equal(request.input.consent,undefined);assert.equal(ui.state().rows.at(-1).speech,'えーあいだいほん。');assert.equal(ui.requests.filter(r=>r.route==='draft').length,1);assert.equal(ui.requests.some(r=>r.route==='generate'),false);
 });
 test('changed or pasted captions disclose one reading preparation request; missing key disables it and stale readings are not reused',async()=>{
- const ui=await setup();await ui.edit(ui.get('production-instructions'),'作成指示');await ui.get('draft-script').emit('click');await ui.edit(ui.get('script-input'),'変更した字幕。');assert.match(ui.get('append-script').textContent,/API利用/);assert.match(ui.get('reading-prep-info').textContent,/Googleへ1回/);await ui.get('append-script').emit('click');const request=ui.requests.find(r=>r.route==='append-script');assert.equal(request.input.consent,true);assert.equal(request.input.readings,undefined);
- await ui.edit(ui.get('script-input'),'さらに新しい字幕。');ui.restart();await ui.poll();assert.equal(ui.get('append-script').disabled,true);
+const ui=await setup();await ui.edit(ui.get('production-instructions'),'作成指示');await ui.sendScript({confirmOverwrite:true});await ui.edit(ui.get('script-input'),'変更した字幕。');await ui.get('plan-sources').emit('click');const request=ui.requests.find(r=>r.route==='adopt-script');assert.equal(request.input.readings,undefined);assert.equal(ui.state().rows[0].speech,'');assert.match(ui.get('prepare-readings').textContent,/API 1回/);ui.restart();await ui.poll();assert.equal(ui.get('prepare-readings').disabled,true);assert.equal(ui.requests.filter(r=>r.route==='draft').length,1);
 });
 test('reading hints are explained, deduplicated and collapsed while clean hiragana shows no hint list',async()=>{
  const ui=await setup({rows:[{id:'one',caption:'AIの画像。',speech:'AIの画像。',hints:[{term:'AI',kind:'latin'},{term:'AI',kind:'latin'},{term:'画像',kind:'kanji'}]}]});const detail=[...ui.get('rows').walk()].find(e=>e.attributes.class==='reading-hints');assert.equal(detail.open,false);assert.equal(detail.children[0].textContent,'読みの確認候補 2語');assert.match(detail.children[1].textContent,/判定した一覧ではありません/);
@@ -65,7 +146,7 @@ test('reading hints are explained, deduplicated and collapsed while clean hiraga
 test('local saving reports completion beside its separated control and reading navigation reuses loaded script',async()=>{
  const ui=await setup();assert.ok(!html.includes('取り込み済み台本の読み確認へ'));assert.match(html,/class="production-save"/);
  await ui.edit(ui.get('production-instructions'),'Keep these directions');await ui.get('save-production').emit('click');assert.match(ui.get('save-status').textContent,/保存しました/);assert.equal(ui.state().production.brief.instructions,'Keep these directions');
- await ui.get('append-script').emit('click');assert.equal(ui.location.hash,'#reading');assert.match(ui.get('script-status').textContent,/移動/);assert.equal(ui.requests.some(r=>r.route==='append-script'||r.route==='draft'||r.route==='generate'),false);
+ await ui.get('plan-sources').emit('click');assert.equal(ui.location.hash,'#connection');assert.match(ui.get('script-status').textContent,/声を選び/);assert.equal(ui.requests.some(r=>r.route==='draft'||r.route==='generate'),false);
  await ui.edit(ui.get('script-input'),'');assert.equal(ui.get('append-script').disabled,true);
 });
 test('saved project labels distinguish editing from finalized viewing and active video can be canceled without publishing',async()=>{
@@ -79,7 +160,7 @@ test('new video exits the completed-project lock and can decide a template/palet
  const original=ui.state();assert.equal(ui.get('new-project').disabled,false);assert.equal(ui.get('theme').disabled,false);
  ui.get('theme').value='black';await ui.get('theme').emit('change');await ui.poll();assert.equal(ui.get('theme').value,'black');assert.deepEqual(ui.state().presentation,original.presentation);assert.equal(ui.requests.some(r=>r.route==='presentation'),false);
  await ui.get('new-project').emit('click');assert.equal(ui.state().rows.length,0);assert.equal(ui.state().production.finalization,null);assert.equal(ui.get('job-title').disabled,false,ui.get('message').textContent);assert.equal(ui.get('theme').disabled,false);assert.equal(ui.get('consent').checked,false);
- await ui.get('template-gallery').children.find(b=>b.dataset.template==='blueprint').emit('click');assert.equal(ui.get('apply-design').disabled,false);await ui.get('apply-design').emit('click');
+ ui.get('auto-direction').checked=false;await ui.get('auto-direction').emit('change');await ui.get('template-gallery').children.find(b=>b.dataset.template==='blueprint').emit('click');assert.equal(ui.get('apply-design').disabled,false);await ui.get('apply-direction').emit('click');
  ui.get('theme').value='white';await ui.get('theme').emit('change');assert.equal(ui.state().presentation.template,'blueprint');assert.equal(ui.state().presentation.theme,'white');assert.equal(ui.requests.some(r=>r.route==='generate'||r.route==='design-draft'),false);
  ui.get('project-select').value='original';await ui.get('project-select').emit('change');assert.equal(ui.state().production.finalization.revision,original.production.finalization.revision);assert.equal(ui.get('apply-design').disabled,true);
 });
@@ -89,8 +170,8 @@ test('new/switch UI is disabled while edits are unsaved or generation is active'
  ui.externalVideo({running:true});await ui.poll();assert.equal(ui.get('new-project').disabled,true);assert.equal(ui.requests.some(r=>r.route==='new-project'),false);
 });
 
-test('planning action clearly creates script before narration/video and text-only path is an explicit alternative',()=>{
- assert.match(html,/素材から構成・台本を作る（API利用）/);assert.doesNotMatch(html,/素材から動画を組み立てる（API利用）/);assert.ok(html.indexOf('class="text-only-alternative"')<html.indexOf('id="draft-script"'));assert.match(html,/この段階では構成・台本/);
+test('planning action creates an editable script before narration/video through one unified input flow',()=>{
+ assert.match(html,/台本と演出を確定して声選びへ/);assert.doesNotMatch(html,/素材から動画を組み立てる（API利用）/);assert.ok(html.indexOf('class="text-only-alternative"')<html.indexOf('id="draft-script"'));assert.match(html,/この段階では構成・台本/);
 });
 test('material intake precedes script planning in visual and keyboard order',()=>{
  const ids=['asset-mode','material-files','material-list','script-mode','production-instructions','script-input','append-script','save-production'];
@@ -101,14 +182,14 @@ test('material intake precedes script planning in visual and keyboard order',()=
 });
 test('materials and AI planning precede optional design controls, and the bottom advertisement is removed',()=>{
  assert.ok(html.indexOf('id="material-files"')<html.indexOf('id="plan-sources"'));
- assert.ok(html.indexOf('id="plan-sources"')<html.indexOf('id="design-planning"'));
+ assert.ok(html.indexOf('id="design-planning"')<html.indexOf('id="plan-sources"'));
  assert.ok(!html.includes('PRESENTATION TEMPLATE'));assert.match(html,/テンプレートを使わず、AIで今回用に作る/);
 });
 test('template comparison is local; deciding saves renderer design while retaining unsaved sentence edits',async()=>{
  const ui=await setup();assert.equal(ui.get('template-gallery').children.length,12);
  await ui.edit(ui.textArea('one','speech'),'Unsaved pronunciation');const button=ui.get('template-gallery').children.find(b=>b.dataset.template==='blueprint');await button.emit('click');
  assert.equal(ui.requests.some(r=>r.route==='presentation'||r.route==='design-draft'),false);assert.equal(ui.get('generate-all').disabled,true);
- await ui.get('apply-design').emit('click');assert.equal(ui.state().presentation.template,'blueprint');assert.equal(ui.textArea('one','speech').value,'Unsaved pronunciation');assert.equal(ui.get('apply-design').disabled,true);
+ await ui.get('apply-direction').emit('click');assert.equal(ui.state().presentation.template,'blueprint');assert.equal(ui.textArea('one','speech').value,'Unsaved pronunciation');assert.equal(ui.get('apply-design').disabled,true);
  assert.equal(ui.requests.filter(r=>r.route==='presentation').length,1);assert.equal(ui.requests.some(r=>r.route==='generate'),false);
 });
 test('all added structures are selectable without API generation and preserve pending reading edits',async()=>{
@@ -116,7 +197,7 @@ test('all added structures are selectable without API generation and preserve pe
   const ui=await setup();await ui.edit(ui.textArea('one','speech'),'変更中の読み');
   const button=ui.get('template-gallery').children.find(b=>b.dataset.template===id);assert.ok(button,id);
   await button.emit('click');assert.equal(ui.requests.some(r=>['presentation','generate','design-draft'].includes(r.route)),false);
-  await ui.get('apply-design').emit('click');assert.equal(ui.state().presentation.template,id);
+  await ui.get('apply-direction').emit('click');assert.equal(ui.state().presentation.template,id);
   assert.equal(ui.textArea('one','speech').value,'変更中の読み');assert.equal(ui.requests.filter(r=>r.route==='presentation').length,1);
   assert.equal(ui.requests.some(r=>['generate','design-draft'].includes(r.route)),false);
  }
@@ -142,26 +223,19 @@ test('video generation shows only actual progress, publishes player/download aft
  ui.externalVideo({result:null,stage:'failed',error:'VIDEO_FONT_TIMEOUT',steps:['preparing','bundling','rendering']});await ui.poll();assert.match(ui.get('video-status').textContent,/日本語フォント.*時間切れ/);assert.equal(ui.get('video-result').hidden,true);assert.equal(ui.requests.filter(r=>r.route==='render-video').length,1);
 });
 
-test('registered API panel stops following scroll and applied voice is visibly decided without synthesis',async()=>{
- const ui=await setup();assert.equal(ui.get('api-connection').classList.contains('needs-key'),false);
- assert.equal(ui.get('apply-voice').disabled,true);assert.match(ui.get('apply-voice').textContent,/決定済み/);
- await ui.edit(ui.get('pitch'),'high');assert.equal(ui.get('apply-voice').disabled,false);
- await ui.get('settings-form').emit('submit');assert.equal(ui.get('apply-voice').disabled,true);
- assert.match(ui.get('voice-apply-state').textContent,/Kore.*高め.*決定済み/);
- assert.equal(ui.requests.some(r=>r.route==='generate'),false);
- await ui.edit(ui.get('pitch'),'low');await ui.edit(ui.get('pitch'),'high');
- assert.equal(ui.get('generate-all').disabled,false);assert.equal(ui.get('apply-voice').disabled,true);
- ui.restart();await ui.poll();assert.equal(ui.get('api-connection').classList.contains('needs-key'),true);
+test('initial voice remains a candidate and next step saves it without synthesis',async()=>{
+ const ui=await setup({voiceConfirmed:false});assert.match(ui.get('voice-apply-state').textContent,/候補/);assert.equal(ui.get('apply-voice').disabled,false);
+ await ui.edit(ui.get('pitch'),'high');assert.equal(ui.requests.some(r=>r.route==='settings'),false);await ui.get('apply-voice').emit('click');assert.equal(ui.location.hash,'#reading');assert.equal(ui.state().voiceConfirmed,true);assert.equal(ui.state().settings.pitch,'high');assert.match(ui.get('voice-apply-state').textContent,/保存した声：Kore/);assert.equal(ui.requests.some(r=>r.route==='generate'),false);
 });
 
 test('review shows only the next useful actions, keeps synthesis consent and places stale-audio repair inside its cut',async()=>{
- const ui=await setup({secondReviewed:true});assert.equal(ui.get('confirm-script').hidden,false);assert.equal(ui.get('confirm-script').disabled,true);
+ const ui=await setup({secondReviewed:true});assert.equal(ui.get('confirm-script').hidden,true);assert.equal(ui.get('confirm-script').disabled,true);
  assert.match(ui.get('review-save-state').textContent,/全文の読みは確定済み/);
  assert.equal(ui.get('play-full').hidden,true);assert.equal(ui.get('confirm-full').hidden,true);
  assert.equal(html.includes('id="audio-rows"'),false);assert.equal(html.includes('<details id="generation-tools"'),false);
  assert.equal([...ui.get('rows').walk()].some(e=>e.dataset.generate),false);
  ui.get('consent').checked=false;await ui.get('consent').emit('change');
- assert.equal(ui.get('generate-all').disabled,true);assert.match(ui.get('generation-state').textContent,/Google.*同意/);
+ assert.equal(ui.get('generate-all').disabled,true);assert.match(ui.get('generation-state').textContent,/Google.*API/);
  const repaired=await setup({rows:[{id:'one',caption:'字幕。',speech:'よみ。',reviewed:true,attempts:1,audio:{file:'old.wav'},audioCurrent:false,listenedCurrent:false}],confirmResult:false});
  const regenerate=[...repaired.get('rows').walk()].find(e=>e.dataset.generate==='one');assert.ok(regenerate);
  await regenerate.emit('click');assert.equal(repaired.requests.some(r=>r.route==='generate'),false);
@@ -169,7 +243,7 @@ test('review shows only the next useful actions, keeps synthesis consent and pla
 });
 
 test('generated narration leaves all cuts editable until one final review, with no individual cut buttons',async()=>{
- const ui=await setup({secondReviewed:true});await ui.get('generate-all').emit('click');assert.equal(ui.state().rows.every(r=>r.audioCurrent),true);assert.equal(ui.get('generation-tools').hidden,true);assert.equal(ui.get('confirm-full').disabled,false);assert.equal([...ui.get('rows').walk()].some(e=>e.dataset.confirmCut||e.dataset.editCut),false);assert.equal(ui.textArea('one','speech').disabled,false);assert.equal(ui.requests.some(r=>r.route==='confirm-cut'||r.route==='finalize'),false);
+ const ui=await setup({secondReviewed:true});await ui.get('generate-all').emit('click');assert.equal(ui.state().rows.every(r=>r.audioCurrent),true);assert.equal(ui.get('generation-tools').hidden,true);assert.equal(ui.get('confirm-full').disabled,false);assert.equal(ui.location.hash,'#finish');assert.equal([...ui.get('rows').walk()].some(e=>e.dataset.confirmCut||e.dataset.editCut),false);assert.equal(ui.textArea('one','speech').disabled,false);assert.equal(ui.requests.some(r=>r.route==='confirm-cut'||r.route==='finalize'),false);
 });
 
 test('voice preset fills editable voice/style without synthesis or changing model and preserves row drafts',async()=>{
@@ -188,15 +262,17 @@ test('voice preset fills editable voice/style without synthesis or changing mode
 test('cached voice sample plays locally without key or consent; pitch selection makes no provider request',async()=>{const ui=await setup();ui.restart();await ui.poll();assert.equal(ui.get('preview-voice').hidden,true);await ui.get('sample-audio').play();assert.equal(ui.get('sample-audio').src,'/samples/sample-kore.wav');assert.equal(ui.get('sample-audio').played,true);assert.equal(ui.requests.some(r=>r.route==='preview'),false);await ui.edit(ui.get('pitch'),'low');assert.equal(ui.get('preview-voice').disabled,true);assert.equal(ui.requests.some(r=>r.route==='settings'||r.route==='generate'),false);});
 test('one voice menu selects its saved sample without a second menu, key, consent or provider request',async()=>{const ui=await setup();ui.restart();await ui.poll();await ui.edit(ui.get('voice'),'Puck');await ui.get('voice').emit('change');assert.equal(ui.get('voice').value,'Puck');assert.equal(ui.get('sample-audio').src,'/samples/sample-puck.wav');assert.equal(ui.get('preview-voice').disabled,false);assert.equal(ui.requests.some(r=>r.route==='settings'||r.route==='generate'||r.route==='preview'),false);assert.equal(/id="sample-library"/.test(html),false);});
 test('brief modes, instructions and script drafts survive polling and unrelated saves',async()=>{const ui=await setup();await ui.edit(ui.get('script-mode'),'mixed');await ui.edit(ui.get('asset-mode'),'ai');await ui.edit(ui.get('production-instructions'),'Make an explanatory video');await ui.edit(ui.get('script-input'),'My existing script');await ui.edit(ui.get('job-title'),'New title');await ui.get('save-title').emit('click');await ui.poll();assert.equal(ui.get('script-input').value,'My existing script');await ui.get('save-production').emit('click');assert.equal(ui.state().production.brief.assetMode,'ai');assert.equal(ui.state().production.brief.instructions,'Make an explanatory video');assert.equal(ui.requests.some(r=>r.route==='draft'||r.route==='generate'),false);});
-test('explicit disclosed AI draft action carries consent once, fills editable input and never appends or synthesizes',async()=>{const ui=await setup();assert.equal(ui.get('draft-script').disabled,true);assert.ok(!html.includes('id="draft-consent"'));await ui.edit(ui.get('production-instructions'),'Write a brief narration');assert.equal(ui.get('draft-script').disabled,false);await ui.get('draft-script').emit('click');assert.equal(ui.get('script-input').value,'AI draft result');assert.equal(ui.state().rows.length,2);const calls=ui.requests.filter(r=>r.route==='draft');assert.equal(calls.length,1);assert.equal(calls[0].input.consent,true);assert.match(ui.get('draft-status').textContent,/作成しました/);assert.equal(ui.requests.some(r=>r.route==='generate'),false);ui.restart();await ui.poll();assert.equal(ui.get('draft-script').disabled,true);assert.equal(ui.get('draft-key-link').hidden,false);});
-test('pasted script becomes visibly editable immediately while preserving unsaved production instructions',async()=>{const ui=await setup();await ui.edit(ui.get('script-input'),'Pasted script');await ui.edit(ui.get('production-instructions'),'Keep this direction');await ui.get('append-script').emit('click');assert.equal(ui.state().rows.length,3);assert.equal(ui.textArea('added','speech').value,'Pasted script');assert.equal(ui.get('production-instructions').value,'Keep this direction');});
+test('explicit disclosed AI draft action carries consent once, fills editable input and never appends or synthesizes',async()=>{
+const ui=await setup({rows:[]});assert.equal(ui.get('generate-script').disabled,true);await ui.edit(ui.get('production-instructions'),'Write a brief narration');await ui.sendScript({confirmOverwrite:true});assert.equal(ui.get('script-input').value,'AI draft result');assert.equal(ui.state().rows.length,0);const calls=ui.requests.filter(r=>r.route==='draft');assert.equal(calls.length,1);assert.equal(calls[0].input.consent,true);assert.match(ui.get('source-status').textContent,/保存しました/);assert.equal(ui.requests.some(r=>['generate','approve','adopt-script'].includes(r.route)),false);ui.restart();await ui.poll();assert.equal(ui.get('regenerate-script').disabled,true);
+});
+test('pasted script becomes visibly editable immediately while preserving unsaved production instructions',async()=>{const ui=await setup();await ui.edit(ui.get('script-input'),'Pasted script');await ui.edit(ui.get('production-instructions'),'Keep this direction');await ui.get('plan-sources').emit('click');assert.equal(ui.state().rows.length,1);assert.equal(ui.textArea('adopted-0','speech').value,'');assert.equal(ui.get('production-instructions').value,'Keep this direction');assert.equal(ui.requests.some(r=>r.route==='draft'),false);});
 test('registered key folds the entry UI, can be reopened, and is cleared without losing drafts',async()=>{const ui=await setup();assert.equal(ui.get('api-settings').open,false);assert.equal(ui.get('key-state').textContent,'キー登録済み');ui.get('api-settings').open=true;await ui.poll();assert.equal(ui.get('api-settings').open,true);await ui.edit(ui.textArea('one','speech'),'Unsaved narration');ui.get('api-key').value='test-only-key';await ui.get('key-form').emit('submit');assert.equal(ui.get('api-key').value,'');assert.equal(ui.get('api-settings').open,false);await ui.get('clear-key').emit('click');assert.equal(ui.get('api-settings').open,true);assert.equal(ui.textArea('one','speech').value,'Unsaved narration');});
 test('voice order presents preset voices first and other voices alphabetically',async()=>{const ui=await setup({voices:['Zephyr','Aoede','Kore','Achernar','Charon','Puck']});assert.deepEqual(ui.get('voice').children.map(c=>c.attributes.value),['Puck','Charon','Kore','Aoede','Achernar','Zephyr']);});
 test('workflow and keyboard DOM order start with planning and keep title in the first section',()=>{const sections=[...html.matchAll(/<section class="panel" id="([^"]+)"/g)].map(m=>m[1]);assert.deepEqual(sections,['planning','connection','reading','finish']);assert.ok(html.indexOf('id="job-title"')<html.indexOf('id="connection"'));});
-test('API entry is a single top connection panel; script paste replaces JSON import and inline API links',async()=>{assert.ok(html.indexOf('id="api-settings"')<html.indexOf('class="hero"'));assert.equal([...html.matchAll(/id="api-key"/g)].length,1);assert.equal([...html.matchAll(/id="key-state"/g)].length,1);assert.match(html,/<p id="draft-key-link"/);assert.doesNotMatch(html,/id="import-file"|台本JSON/);assert.match(html,/コピー＆ペースト/);const ui=await setup();assert.equal(ui.get('api-settings').open,false);ui.restart();await ui.poll();assert.equal(ui.get('api-settings').open,true);});
+test('API entry is a single top connection panel; script paste replaces JSON import and inline API links',async()=>{assert.ok(html.indexOf('id="api-settings"')<html.indexOf('class="hero"'));assert.equal([...html.matchAll(/id="api-key"/g)].length,1);assert.equal([...html.matchAll(/id="key-state"/g)].length,1);assert.match(html,/<p id="draft-key-link"/);assert.doesNotMatch(html,/id="import-file"|台本JSON/);assert.match(html,/貼り付け/);const ui=await setup();assert.equal(ui.get('api-settings').open,false);ui.restart();await ui.poll();assert.equal(ui.get('api-settings').open,true);});
 test('combined presets choose model automatically, include overview, and expose free inputs only in customize mode',async()=>{const ui=await setup();const options=[...ui.get('voice-preset').walk()].filter(e=>e.tagName==='option');assert.equal(options.length,5);assert.ok(options.some(o=>o.textContent.includes('明るく親しみやすい')));ui.get('voice-preset').value='gemini-3.8-flash-lite-tts::Puck';await ui.get('voice-preset').emit('change');assert.equal(ui.get('model').value,'gemini-3.8-flash-lite-tts');assert.equal(ui.get('voice').value,'Puck');assert.equal(ui.get('custom-settings').hidden,true);assert.match(ui.get('model-info').textContent,/Flash-Lite/);assert.equal(ui.requests.some(r=>r.route==='preview'||r.route==='settings'),false);ui.get('voice-preset').value='custom';await ui.get('voice-preset').emit('change');assert.equal(ui.get('custom-settings').hidden,false);await ui.edit(ui.get('style'),'Whisper gently at a slow pace');assert.equal(ui.get('voice-preset').value,'custom');});
-test('pitch, sample playback and final apply follow the decision sequence without early save',()=>{assert.ok(html.indexOf('id="pitch"')<html.indexOf('id="sample-audio"'));assert.ok(html.indexOf('id="sample-audio"')<html.indexOf('form="settings-form"'));});
-test('loaded and AI accepted scripts reuse rows instead of a second import',async()=>{const ui=await setup();assert.equal(ui.get('script-input').value,'Caption one\nCaption two');await ui.get('append-script').emit('click');assert.equal(ui.requests.some(r=>r.route==='append-script'),false);await ui.edit(ui.get('script-input'),'New AI result');await ui.get('append-script').emit('click');await ui.get('append-script').emit('click');assert.equal(ui.requests.filter(r=>r.route==='append-script').length,1);assert.equal(ui.state().rows.length,3);});
+test('pitch, sample playback and final apply follow the decision sequence without early save',()=>{assert.ok(html.indexOf('id="pitch"')<html.indexOf('id="sample-audio"'));assert.ok(html.indexOf('id="sample-audio"')<html.indexOf('id="apply-voice"'));});
+test('loaded and AI accepted scripts reuse rows instead of a second import',async()=>{const ui=await setup();await ui.get('plan-sources').emit('click');assert.equal(ui.state().rows.length,2);await ui.edit(ui.get('script-input'),'New AI result');await ui.get('plan-sources').emit('click');await ui.get('plan-sources').emit('click');assert.equal(ui.state().rows.length,1);assert.equal(ui.requests.filter(r=>r.route==='adopt-script').length,3);assert.equal(ui.requests.some(r=>['draft','generate'].includes(r.route)),false);});
 test('sentence pairs preserve exact text, save both sides and invalidate only edited review',async()=>{const ui=await setup({rows:[{id:'one',caption:'最初の文。 次の文！\n最後です。',speech:'さいしょのぶん。 つぎのぶん！\nさいごです。',reviewed:true}]});const fields=[...ui.get('rows').walk()].filter(e=>e.tagName==='textarea'&&/字幕|読み上げ文/.test(e.attributes['aria-label']||''));assert.equal(fields.length,6);assert.equal(fields.filter((_,i)=>i%2===0).map(e=>e.value).join(''),ui.state().rows[0].caption);assert.equal(fields.filter((_,i)=>i%2===1).map(e=>e.value).join(''),ui.state().rows[0].speech);await ui.edit(fields[3],'なおしたよみ！\n');assert.equal(ui.get('generate-all').disabled,true);const save=[...ui.get('rows').walk()].find(e=>e.textContent==='変更を保存');await save.emit('click');assert.equal(ui.state().rows[0].caption,'最初の文。 次の文！\n最後です。');assert.equal(ui.state().rows[0].speech,'さいしょのぶん。 なおしたよみ！\nさいごです。');assert.equal(ui.state().rows[0].reviewed,false);assert.equal([...ui.get('rows').walk()].some(e=>e.dataset.generate),false);assert.equal(html.includes('id="audio-rows"'),false);});
 test('unequal sentence counts retain extra text with an explicit alignment notice',async()=>{const ui=await setup({rows:[{caption:'一文。二文。',speech:'いちぶんだけ。'}]});const fields=[...ui.get('rows').walk()].filter(e=>e.tagName==='textarea'&&/字幕|読み上げ文/.test(e.attributes['aria-label']||''));assert.equal(fields.length,4);assert.equal(fields[2].value,'二文。');assert.equal(fields[3].value,'');assert.ok([...ui.get('rows').walk()].some(e=>e.textContent.includes('文数が違います')));});
 test('complete samples hide preparation and missing configurations are prepared once across both models',async()=>{const ui=await setup({samples:[]});ui.get('bank-consent').checked=true;await ui.get('bank-consent').emit('change');await ui.get('prepare-samples').emit('click');assert.equal(ui.requests.filter(r=>r.route==='prepare-samples').length,1);assert.equal(ui.state().samples.length,12);assert.equal(new Set(ui.state().samples.map(s=>s.settings.model)).size,2);assert.equal(new Set(ui.state().samples.map(s=>s.settings.pitch||'standard')).size,3);assert.equal(ui.get('bank-tools').hidden,true);assert.match(ui.get('sample-progress').textContent,/12 \/ 12/);assert.equal(ui.get('prepare-samples').disabled,true);await ui.poll();assert.equal(ui.requests.filter(r=>r.route==='prepare-samples').length,1);assert.equal(ui.state().rows.length,2);});
@@ -277,15 +353,15 @@ class Element {
   play(){this.played=true;return Promise.resolve();}
   pause(){this.paused=true;}
   focus(options){this.focusOptions=options;this.focused=true;}
-  append(...children) { this.children.push(...children); }
-  replaceChildren(...children) { this.children = children; }
+  append(...children) {for(const child of children)child.parent=this;this.children.push(...children);}
+  replaceChildren(...children) { this.children=[];this.append(...children); }
   addEventListener(name, listener) {
     const list = this.listeners.get(name) || [];
     list.push(listener);
     this.listeners.set(name, list);
   }
   async emit(name) {
-    if (name === 'click') assert.equal(this.disabled, false, 'A user cannot click a disabled control');
+    if (name === 'click'){assert.equal(this.disabled,false,'A user cannot click a disabled control');for(let p=this;p;p=p.parent)assert.equal(!!p.hidden,false,'A user cannot click a hidden control or hidden ancestor');}
     for (const listener of this.listeners.get(name) || []) await listener({preventDefault() {}});
   }
   *walk() {
@@ -296,14 +372,33 @@ class Element {
 
 test('source planning applies automatic title/voice, preserves manual choices, keeps real proposal for review',async()=>{
  const sourcePlan={script:'入口です。',readings:[{caption:'入口です。',speech:'いりぐちです。'}],storyboard:{title:'AIのタイトル',summary:'資料の構成',voice:'Puck',voiceReason:'明るい説明',sources:[{id:'text',label:'本文',status:'provided',summary:'入口'}],scenes:[{caption:'入口です。',title:'入口',points:['最初の一歩'],imageFile:'',sourceIds:['text']}],motion:{version:1,style:'editorial',intensity:'standard'}}};
- for(const mode of ['auto','manual']){const ui=await setup({sourcePlan,rows:[]});await ui.edit(ui.get('source-text'),'資料本文');await ui.edit(ui.get('production-instructions'),'短い説明動画');await ui.edit(ui.get('title-mode'),mode);await ui.edit(ui.get('voice-mode'),mode);await ui.get('plan-sources').emit('click');assert.equal(ui.requests.filter(r=>r.route==='source-plan').length,1);assert.equal(ui.state().title,mode==='auto'?'AIのタイトル':'Original title');assert.equal(ui.state().settings.voice,mode==='auto'?'Puck':'Kore');assert.equal(ui.state().production.brief.storyboard.title,'AIのタイトル');assert.equal(ui.requests.some(r=>['approve','generate','finalize'].includes(r.route)),false);assert.equal(ui.get('storyboard-preview').hidden,false);const voice=[...ui.get('storyboard-preview').walk()].find(e=>e.attributes.class==='voice-proposal');assert.equal(voice.children[0].textContent,'声の提案：Puck');assert.equal(voice.children[1].textContent,'明るい説明');await ui.edit(ui.get('script-input'),'書き換え。');await ui.get('save-production').emit('click');assert.equal(ui.state().production.brief.storyboard,undefined);}
+ for(const mode of ['auto','manual']){const ui=await setup({sourcePlan,rows:[]});await ui.edit(ui.get('source-text'),'資料本文');await ui.edit(ui.get('production-instructions'),'短い説明動画');ui.get('auto-direction').checked=mode==='auto';await ui.get('auto-direction').emit('change');await ui.edit(ui.get('voice-mode'),mode);await ui.get('generate-script').emit('click');assert.equal(ui.requests.filter(r=>r.route==='source-plan').length,1);assert.equal(ui.state().title,'Original title');assert.equal(ui.state().settings.voice,'Kore');assert.equal(ui.state().production.brief.storyboard.title,'AIのタイトル');assert.equal(ui.requests.some(r=>['approve','generate','finalize'].includes(r.route)),false);assert.equal(ui.get('storyboard-preview').hidden,false);const voice=[...ui.get('storyboard-preview').walk()].find(e=>e.attributes.class==='voice-proposal');assert.equal(voice.children[0].textContent,'声の提案：Puck');assert.equal(voice.children[1].textContent,'明るい説明');await ui.edit(ui.get('script-input'),'書き換え。');await ui.get('save-production').emit('click');assert.equal(ui.state().production.brief.storyboard,undefined);}
 });
-test('failed source request preserves existing script and title without automatic paid retry',async()=>{const ui=await setup({sourceError:'SOURCE_URL_NOT_RETRIEVED'});await ui.edit(ui.get('script-input'),'保存する台本。');await ui.edit(ui.get('production-instructions'),'説明動画');await ui.get('plan-sources').emit('click');assert.equal(ui.get('script-input').value,'保存する台本。');assert.equal(ui.state().title,'Original title');assert.equal(ui.requests.filter(r=>r.route==='source-plan').length,1);assert.match(ui.get('source-status').textContent,/取得成功を確認できません/);});
+test('failed source request preserves existing script and title without automatic paid retry',async()=>{const ui=await setup({sourceError:'SOURCE_URL_NOT_RETRIEVED'});await ui.edit(ui.get('source-urls'),'https://example.com/reference');await ui.edit(ui.get('script-input'),'保持する台本。');await ui.edit(ui.get('production-instructions'),'説明動画');await ui.sendScript({confirmOverwrite:true});assert.equal(ui.get('script-input').value,'保持する台本。');assert.equal(ui.state().title,'Original title');assert.equal(ui.requests.filter(r=>r.route==='source-plan').length,1);assert.match(ui.get('source-status').textContent,/取得成功を確認できません/);});
+test('reference-only inputs enable the single planning action without extra instructions',async()=>{
+ for(const [id,value] of [['source-urls','https://example.com/article'],['source-text','参考資料の本文']]){
+  const ui=await setup({rows:[]});
+  assert.equal(ui.get('generate-script').disabled,true);
+  await ui.edit(ui.get(id),value);
+  assert.equal(ui.get('production-instructions').value,'');
+  assert.equal(ui.get('generate-script').disabled,false);
+ }
+ const empty=await setup({rows:[]});await empty.edit(empty.get('source-urls'),' \n ');
+ assert.equal(empty.get('generate-script').disabled,true);
+ empty.restart();await empty.poll();assert.equal(empty.get('generate-script').disabled,true);
+});
 
-async function setup({sourcePlan,sourceError,rows,samples,assets=[],previewError,rowError,draftWait,pausedStep,confirmResult=true,secondReviewed = true,voices=['Kore','Puck']} = {}) {
+async function setup({motion,autoConfirm=false,voiceConfirmed=true,productionErrorAt=0,sourcePlan,sourceError,rows,samples,assets=[],previewError,rowError,draftWait,pausedStep,confirmResult=true,secondReviewed = true,voices=['Kore','Puck']} = {}) {
   const elements = new Map();let anonymous=0;
-  for(const [,tag,attributes] of html.matchAll(/<([\w-]+)([^>]*)>/g)){const id=attributes.match(/\bid="([^"]+)"/)?.[1];if(!id&&!attributes.includes('data-cancel')&&!attributes.includes('data-revise-step'))continue;const element=new Element(tag);for(const [,name,value]of attributes.matchAll(/\b(data-[\w-]+)(?:="([^"]*)")?/g))element.setAttribute(name,value||'');elements.set(id||'anonymous-'+ ++anonymous,element);}
-  const all = () => [...elements.values()].flatMap(element => [...element.walk()]);
+  const tree=new Element('root'),stack=[tree],voids=new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']);
+  for(const [token,closing,tag,attributes] of html.matchAll(/<(\/?)([\w-]+)([^>]*)>/g)){
+   if(closing){for(let i=stack.length-1;i>0;i--)if(stack[i].tagName===tag){stack.length=i;break;}continue;}
+   const node=new Element(tag),id=attributes.match(/\bid="([^"]+)"/)?.[1];
+   for(const [,name,value]of attributes.matchAll(/\b(data-[\w-]+)(?:="([^"]*)")?/g))node.setAttribute(name,value||'');
+   node.hidden=/\bhidden(?:\s|>|=|$)/.test(attributes);node.disabled=/\bdisabled(?:\s|>|=|$)/.test(attributes);node.checked=/\bchecked(?:\s|>|=|$)/.test(attributes);
+   if(id)node.setAttribute('id',id);stack.at(-1).append(node);if(id||attributes.includes('data-cancel')||attributes.includes('data-revise-step'))elements.set(id||'anonymous-'+ ++anonymous,node);if(!voids.has(tag)&&!token.endsWith('/>'))stack.push(node);
+  }
+  const all = () => [...new Set([...elements.values()].flatMap(element => [...element.walk()]))];
   const matches = (element, selector) => {
     if(selector==='audio,video')return ['audio','video'].includes(element.tagName);
     const match = selector.match(/^\[data-([\w-]+)(?:="([^"]*)")?\]$/);
@@ -322,8 +417,8 @@ async function setup({sourcePlan,sourceError,rows,samples,assets=[],previewError
     title: 'Original title', revision: 'revision-0', instanceId: 'instance-1', sessionId: 'fixture-session',
     keyConfigured: true, busy: false, error: null, progress: null,video:{available:true,running:false,stage:'idle',progress:0,result:null,error:null},
     settings: {model: 'gemini-3.8-flash-tts', voice: 'Kore', style: 'Original style'},
-    presentation: {theme: 'moon'}, dictionary: [], voices,voiceGenders:VOICE_GENDERS,
-    production:{brief:{scriptMode:'existing',assetMode:'mixed',instructions:'',script:''},assets:[]},samples:[{id:'sample-kore',file:'sample-kore.wav',settings:{model:'gemini-3.8-flash-tts',voice:'Kore',style:'Original style'},durationSeconds:1},{id:'sample-puck',file:'sample-puck.wav',settings:{model:'gemini-3.8-flash-tts',voice:'Puck',style:'明るく親しみやすい日本語で、聞き取りやすく話す。'},durationSeconds:2}],
+    presentation: {theme: 'moon',...(motion?{motion}:{})}, dictionary: [], voices,voiceGenders:VOICE_GENDERS,
+    voiceConfirmed,production:{brief:{scriptMode:'ai',assetMode:'mixed',instructions:'',script:''},assets:[]},samples:[{id:'sample-kore',file:'sample-kore.wav',settings:{model:'gemini-3.8-flash-tts',voice:'Kore',style:'Original style'},durationSeconds:1},{id:'sample-puck',file:'sample-puck.wav',settings:{model:'gemini-3.8-flash-tts',voice:'Puck',style:'明るく親しみやすい日本語で、聞き取りやすく話す。'},durationSeconds:2}],
     rows: ['one', 'two'].map(id => ({id, caption: 'Caption ' + id, speech: 'Speech ' + id, scene: '', reviewed: id === 'one' || secondReviewed, attempts: 0, hints: [], audio: null, audioCurrent: false, listenedCurrent: false})),
   };
   state.projectId='original';state.projects=[{id:'original',title:state.title}];const savedProjects=new Map();
@@ -345,13 +440,13 @@ async function setup({sourcePlan,sourceError,rows,samples,assets=[],previewError
     if(route==='new-project'||route==='project'||route==='revision-project'){
       savedProjects.set(state.projectId,structuredClone(state));const id=route==='new-project'?'new-project':route==='revision-project'?'revision-project':input.id;
       const list=state.projects,keyConfigured=state.keyConfigured,samples=state.samples;
-      if(route==='new-project'){list.push({id,title:'新しい動画'});state={...structuredClone(state),title:'新しい動画',sessionId:'new-session',projectId:id,rows:[],dictionary:[],presentation:{theme:'moon'},production:{brief:{scriptMode:'existing',assetMode:'mixed',instructions:'',script:''},assets:[],finalization:null},video:{available:true,running:false,stage:'idle',result:null},projects:list};}
+      if(route==='new-project'){list.push({id,title:'新しい動画'});state={...structuredClone(state),title:'新しい動画',sessionId:'new-session',projectId:id,rows:[],dictionary:[],presentation:{theme:'moon'},voiceConfirmed:false,production:{musicEnabled:true,voiceConfirmation:null,brief:{scriptMode:'existing',assetMode:'mixed',instructions:'',script:''},assets:[],finalization:null},video:{available:true,running:false,stage:'idle',result:null},projects:list};}
       else if(route==='revision-project'){list.push({id,title:state.title+'（修正版）'});state={...structuredClone(state),projectId:id,sessionId:'revision-session',production:{...structuredClone(state.production),finalization:null,cutConfirmations:[]},projects:list,video:{available:true,running:false,stage:'idle',result:null}};for(const row of state.rows)row.cutConfirmed=false;}else state={...structuredClone(savedProjects.get(id)),projects:list,keyConfigured,samples};
       token='fixture-token-project-'+id;state.instanceId='instance-project-'+id;
     }
     else if (route === 'key') state.keyConfigured = !input.clear;
     else if (route === 'title') state.title = input.title;
-    else if (route === 'settings') state.settings = input;
+    else if (route === 'settings') {const {candidate,...settings}=input;state.settings=settings;state.voiceConfirmed=candidate!==true;}
     else if(route==='presentation')state.presentation=input.presentation||{...state.presentation,theme:input.theme};
     else if(route==='design-draft'){if(!input.consent)return reply({error:'GENERATION_CONSENT_REQUIRED'},false);state.presentation={theme:state.presentation.theme,mode:'ai',instructions:input.instructions,design:{...VIDEO_TEMPLATES[0].design,name:'AI design'}};}
     else if(route==='generate'){if(!input.consent)return reply({error:'GENERATION_CONSENT_REQUIRED'},false);for(const id of input.ids){const row=state.rows.find(r=>r.id===id);if(!row.reviewed)return reply({error:'READING_REVIEW_REQUIRED'},false);if(row.attempts&&!input.regenerate)return reply({error:'REGENERATION_CONFIRM_REQUIRED'},false);}for(const id of input.ids){const row=state.rows.find(r=>r.id===id);Object.assign(row,{attempts:row.attempts+1,audio:{file:id+'.wav'},audioCurrent:true,listenedCurrent:false,cutConfirmed:false});}}
@@ -362,12 +457,14 @@ async function setup({sourcePlan,sourceError,rows,samples,assets=[],previewError
     else if(route==='cancel'){state.busy=false;if(state.video.running)state.video={...state.video,running:false,canceling:false,stage:'canceled',error:'VIDEO_RENDER_CANCELED',result:null};}
     else if(route==='apply-review'){if(!input.consent)return reply({error:'GENERATION_CONSENT_REQUIRED'},false);const ids=input.id?[input.id]:input.review.cuts.map(c=>c.rowId);for(const id of ids){const row=state.rows.find(r=>r.id===id);Object.assign(row,{caption:'修正後。',speech:'しゅうせいご。',reviewed:false,audioCurrent:false,cutConfirmed:false});}state.production.review={...input.review,overall:input.id?input.review.overall:'',cuts:input.review.cuts.filter(c=>!ids.includes(c.rowId))};state.correctionResult={ids,images:0,textChanged:ids.length};}
     else if(route==='review'){if(input.expectedRevision!==state.revision)return reply({error:'STALE_REVISION'},false);state.production.review=input.review;}
-    else if (route === 'production') state.production.brief=input;
-    else if (route === 'append-script') state.rows.push({id:'added',caption:input.script,speech:input.readings?.[0]?.speech||input.script,reviewed:false,attempts:0,hints:[]});
+    else if(route==='music-preference')state.production.musicEnabled=input.enabled;
+    else if (route === 'production') {if(productionErrorAt&&requests.filter(r=>r.route==='production').length===productionErrorAt)return reply({error:'STALE_REVISION'},false);state.production.brief=input;}
+    else if(route==='adopt-script'){state.rows=input.script.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map((caption,i)=>({id:'adopted-'+i,caption,speech:input.readings?.[i]?.speech||(/^[ぁ-ゖー。！？、\s]+$/.test(caption)?caption:''),readingState:input.readings?'ready':'pending',reviewed:false,attempts:0,hints:[],audioCurrent:false}));}
+    else if (route === 'append-script') {const rows=[{id:'added',caption:input.script,speech:input.readings?.[0]?.speech||input.script,reviewed:false,attempts:0,hints:[]}];if(input.replace)state.rows=rows;else state.rows.push(...rows);}
     else if (route === 'preview') {if(previewError&&requests.filter(r=>r.route==='preview').length===previewError)return reply({error:'PROVIDER_RATE_LIMIT'},false);const id='sample-'+state.samples.length;state.samples.push({id,file:id+'.wav',settings:input.settings,durationSeconds:5});return reply({sample:id});}
     else if(route==='prepare-samples'){const configs=SAMPLE_SETTINGS.filter(c=>voices.includes(c.voice));const missing=configs.filter(c=>!state.samples.some(s=>s.settings.model===c.model&&s.settings.voice===c.voice&&s.settings.style===c.style&&(s.settings.pitch||'standard')===(c.pitch||'standard')));state.sampleProgress={running:false,total:missing.length,completed:0};for(const config of missing){if(previewError&&state.sampleProgress.completed+1===previewError){state.error='PROVIDER_RATE_LIMIT';break;}const id='sample-'+state.samples.length;state.samples.push({id,file:id+'.wav',settings:config,durationSeconds:5});state.sampleProgress.completed++;}return reply({started:true,total:missing.length});}
-    else if(route==='source-plan'){if(sourceError)return reply({error:sourceError},false);assert.equal(input.consent,true);return reply(sourcePlan);}
-    else if (route === 'draft') {if(draftWait){state.busy=true;await draftWait;state.busy=false;return reply({error:'CANCELED'},false);}return reply({script:'AI draft result',readings:[{caption:'AI draft result',speech:'えーあいだいほん。'}]});}
+    else if(route==='source-plan'){if(sourceError)return reply({error:sourceError},false);assert.equal(input.consent,true);const result={...sourcePlan,...(input.brief.autoDirection?{direction:sourcePlan?.direction||{title:sourcePlan?.storyboard?.title||'AIのタイトル',template:'steps',motion:{version:1,style:'editorial',intensity:'standard'}}}:{}),saved:true};state.production.brief={...input.brief,script:result.script,readings:result.readings,storyboard:result.storyboard,direction:result.direction,scriptEdited:true};state.production.authoring={version:1,lastAttempt:{sequence:input.sequence,result}};return reply(result);}
+    else if (route === 'draft') {if(draftWait){state.busy=true;await draftWait;state.busy=false;return reply({error:'CANCELED'},false);}const script=input.brief.autoDirection&&input.brief.scriptMode==='existing'&&input.brief.script?input.brief.script:'AI draft result';const result={script,readings:[{caption:script,speech:script==='AI draft result'?'えーあいだいほん。':script}],...(input.brief.autoDirection?{direction:{title:'AIのタイトル',template:'steps',motion:{version:1,style:'editorial',intensity:'standard'}}}:{}),saved:true};state.production.brief={...input.brief,script,readings:result.readings,direction:result.direction,scriptEdited:true};state.production.authoring={version:1,lastAttempt:{sequence:input.sequence,result}};return reply(result);}
     else if (route === 'approve') {
       if (input.revision !== state.revision) return reply({error: 'STALE_REVISION'}, false);
       state.rows.find(row => row.id === input.id).reviewed = true;
@@ -378,7 +475,7 @@ async function setup({sourcePlan,sourceError,rows,samples,assets=[],previewError
     return reply(state);
   };
   const storage=new Map(pausedStep?[['narration-paused:original',pausedStep]]:[]);
-  const context = vm.createContext({document, fetch, setInterval: callback => {intervals.push(callback);}, window: {sessionStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},location:{hash:''},confirm: message => {confirmations.push(message);return confirmResult;}}, crypto: {randomUUID: () => 'fixture-id'}});
+  const context = vm.createContext({scriptActionState,parseScriptParts,document, fetch, setInterval: callback => {intervals.push(callback);}, window: {sessionStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},location:{hash:''},confirm: message => {confirmations.push(message);return confirmResult;}}, crypto: {randomUUID: () => 'fixture-id'}});
   await vm.runInContext('(async () => {\n' + appSource + '\n})()', context, {filename: 'ui/app.mjs'});
   const get = id => {assert.ok(elements.has(id), 'UI element exists: ' + id); return elements.get(id);};
   const row = id => [...get('rows').walk()].find(element => element.dataset.approve === id);
@@ -386,11 +483,19 @@ async function setup({sourcePlan,sourceError,rows,samples,assets=[],previewError
     const index = state.rows.findIndex(row => row.id === id) + 1;
     return [...get('rows').walk()].find(element => element.attributes['aria-label'] === `${index}場面・1文目の${kind === 'caption' ? '字幕' : '読み上げ文'}`);
   };
-  const edit = async (element, value) => {assert.equal(element.disabled,false,'A user cannot edit a disabled field');element.value = value; await element.emit('input');};
+  const edit = async (element, value) => {
+    let hidden=[];for(let p=element;p;p=p.parent)if(p.hidden)hidden.push(p.attributes.id);
+    if(hidden.includes('connection')){const link=all().find(e=>e.dataset.goStep==='connection');await link.emit('click');}
+    if(hidden.includes('custom-settings')){get('voice-preset').value='custom';await get('voice-preset').emit('change');}
+    if(hidden.includes('manual-direction')){get('auto-direction').checked=false;await get('auto-direction').emit('change');}
+    for(let p=element;p;p=p.parent)assert.equal(!!p.hidden,false,'A user cannot edit a hidden field or hidden ancestor');
+    assert.equal(element.disabled,false,'A user cannot edit a disabled field');element.value = value; await element.emit('input');};
   get('consent').checked = true;
   await get('consent').emit('change');
+  // Drive the same explicit in-page decision as a user; individual tests can pause before it.
+  for(const element of elements.values()){const emit=element.emit.bind(element);element.emit=async(name,...args)=>{await emit(name,...args);if(name==='click'&&autoConfirm&&element!==get('confirm-script-action')&&element!==get('cancel-script-action')&&!get('script-confirm').hidden)await get(confirmResult?'confirm-script-action':'cancel-script-action').emit('click');};}
   return {
-    get, row, textArea, edit, requests, confirmations, location:context.window.location,
+    get, row, textArea, edit, requests, confirmations, location:context.window.location,sendScript:async({confirmOverwrite=false}={})=>{const button=get('generate-script').hidden?get('regenerate-script'):get('generate-script');await button.emit('click');if(!get('script-confirm').hidden)await get(confirmOverwrite?'confirm-script-action':'cancel-script-action').emit('click');},
     observeScroll: callback => {context.window.scrollTo=callback;},
     state: () => structuredClone(state),
     poll: async () => {assert.equal(intervals.length, 1); await intervals[0]();},
@@ -398,7 +503,7 @@ async function setup({sourcePlan,sourceError,rows,samples,assets=[],previewError
     externalEdit: (id,input) => {Object.assign(state.rows.find(r=>r.id===id),input,{reviewed:false});state.revision='revision-'+ ++revision;},
     updateAssets: assets=>{state.production.assets=assets;},
     externalVideo:value=>{state.video={...state.video,...value};},
-    externalBusy:value=>{state.busy=value;},
+    externalRevision:()=>{state.revision='revision-'+ ++revision;},externalBusy:value=>{state.busy=value;},externalFinalize:()=>{state.production.finalization={revision:state.revision,inputsHash:'fixture-hash'};},
     externalMusic:(music,current=true)=>{state.production.music=music;state.musicCurrent=current;},
     externalCutInfo: (id,value)=>Object.assign(state.rows.find(r=>r.id===id),value),
   };
@@ -459,8 +564,8 @@ for (const first of ['title', 'settings']) {
     await ui.poll();
     assert.equal(ui.get('job-title').value, 'Draft title');
     assert.equal(ui.get('style').value, 'Draft style');
-    assert.equal(ui.get('generate-all').disabled, true);
-    assert.equal(ui.state().title, first === 'title' ? 'Draft title' : 'Original title');
+    assert.equal(ui.get('generate-all').disabled, first==='title');
+    assert.equal(ui.state().title, 'Draft title');
     assert.equal(ui.state().settings.style, first === 'settings' ? 'Draft style' : 'Original style');
     if (first === 'title') await ui.get('settings-form').emit('submit');
     else await ui.get('save-title').emit('click');
@@ -491,7 +596,7 @@ test('instance change refreshes bootstrap token without losing the unsaved readi
 });
 
 test('batch correction sends pending instructions once, preserves untouched audio, and requires fresh reading before rebuilding changed audio',async()=>{
- const rows=[{id:'one',caption:'字幕。',speech:'よみ。',reviewed:true,attempts:1,audio:{file:'one.wav'},audioCurrent:true},{id:'two',caption:'次。',speech:'つぎ。',reviewed:true,attempts:1,audio:{file:'two.wav'},audioCurrent:true}];const ui=await setup({rows});const note=[...ui.get('rows').walk()].find(e=>e.attributes['aria-label']==='1カットへの修正指示');await ui.edit(note,'説明を短くする');assert.equal(ui.get('confirm-full').disabled,true);await ui.get('apply-review').emit('click');await ui.poll();assert.match(ui.get('review-request-state').textContent,/01カットを修正しました/);assert.equal(ui.requests.filter(r=>r.route==='apply-review').length,1);assert.equal(ui.requests.find(r=>r.route==='apply-review').input.consent,true);assert.equal(ui.state().rows[0].audioCurrent,false);assert.equal(ui.state().rows[1].audio.file,'two.wav');assert.equal(ui.state().rows[1].audioCurrent,true);assert.equal(ui.requests.some(r=>['generate','approve','finalize'].includes(r.route)),false);assert.equal(ui.get('generate-all').disabled,true);await ui.get('confirm-script').emit('click');assert.equal(ui.get('generate-all').disabled,false);await ui.get('generate-all').emit('click');const call=ui.requests.find(r=>r.route==='generate');assert.deepEqual(call.input.ids,['one']);assert.equal(call.input.regenerate,true);assert.equal(ui.state().rows[1].audio.file,'two.wav');
+ const rows=[{id:'one',caption:'字幕。',speech:'よみ。',reviewed:true,attempts:1,audio:{file:'one.wav'},audioCurrent:true},{id:'two',caption:'次。',speech:'つぎ。',reviewed:true,attempts:1,audio:{file:'two.wav'},audioCurrent:true}];const ui=await setup({rows});const note=[...ui.get('rows').walk()].find(e=>e.attributes['aria-label']==='1カットへの修正指示');await ui.edit(note,'説明を短くする');assert.equal(ui.get('confirm-full').disabled,true);await ui.get('apply-review').emit('click');await ui.poll();assert.match(ui.get('review-request-state').textContent,/01カットを修正しました/);assert.equal(ui.requests.filter(r=>r.route==='apply-review').length,1);assert.equal(ui.requests.find(r=>r.route==='apply-review').input.consent,true);assert.equal(ui.state().rows[0].audioCurrent,false);assert.equal(ui.state().rows[1].audio.file,'two.wav');assert.equal(ui.state().rows[1].audioCurrent,true);assert.equal(ui.requests.some(r=>['generate','approve','finalize'].includes(r.route)),false);assert.equal(ui.get('generate-all').disabled,true);await ui.get('confirm-script').emit('click');assert.equal(ui.get('generate-all').disabled,true);await ui.get('retry-audio').emit('click');await ui.get('retry-confirm-send').emit('click');const call=ui.requests.find(r=>r.route==='generate');assert.deepEqual(call.input.ids,['one']);assert.equal(call.input.regenerate,true);assert.equal(ui.state().rows[1].audio.file,'two.wav');
 });
 test('individual correction applies only that cut and preserves other pending instructions; missing key cannot submit',async()=>{
  const ui=await setup();for(const n of [1,2])await ui.edit([...ui.get('rows').walk()].find(e=>e.attributes['aria-label']===n+'カットへの修正指示'),'直す');await ui.edit(ui.get('review-overall'),'全体を見直す');await [...ui.get('rows').walk()].find(e=>e.dataset.applyReview==='one').emit('click');assert.equal(ui.requests.find(r=>r.route==='apply-review').input.id,'one');assert.equal(ui.get('review-overall').value,'全体を見直す');assert.equal([...ui.get('rows').walk()].find(e=>e.attributes['aria-label']==='2カットへの修正指示').value,'直す');ui.restart();await ui.poll();assert.equal(ui.get('apply-review').disabled,true);assert.equal([...ui.get('rows').walk()].find(e=>e.dataset.applyReview==='two').disabled,true);
@@ -524,4 +629,66 @@ test('existing BGM precedes optional recreation, missing BGM opens creation, pol
  ui.externalMusic({file:'a'.repeat(64)+'.mp3',durationSeconds:30,level:.24});await ui.poll();assert.equal(ui.get('music-create').open,false);assert.equal(ui.get('music-result').hidden,false);
  ui.get('music-create').open=true;await ui.poll();assert.equal(ui.get('music-create').open,true);
  ui.externalMusic(undefined);await ui.poll();assert.equal(ui.get('music-create').open,true);assert.equal(ui.get('music-result').hidden,true);assert.equal(ui.requests.some(r=>r.route==='generate-music'),false);
+});
+
+test('reference intake: URL or text alone enables generation while empty, busy and missing-key states remain blocked',async()=>{
+ const button=html.includes('id="generate-script"')?'generate-script':'plan-sources';
+ for(const [id,value]of [['source-urls','https://example.com/article'],['source-text','資料の内容です。']]){
+  const ui=await setup({rows:[]});assert.equal(ui.get(button).disabled,true);
+  await ui.edit(ui.get(id),value);assert.equal(ui.get('production-instructions').value,'');assert.equal(ui.get(button).disabled,false);
+  ui.externalBusy(true);await ui.poll();assert.equal(ui.get(button).disabled,true);
+  ui.externalBusy(false);await ui.poll();assert.equal(ui.get(button).disabled,false);
+  ui.restart();await ui.poll();assert.equal(ui.get(button).disabled,true);
+ }
+ const empty=await setup({rows:[]});await empty.edit(empty.get('source-urls'),' \n ');assert.equal(empty.get(button).disabled,true);
+});
+test('reference intake: new projects clear saved references and resuming the original restores its own inputs',async()=>{
+ const ui=await setup();await ui.edit(ui.get('source-urls'),'https://example.com/saved');await ui.edit(ui.get('source-text'),'保存した資料');
+ await ui.get('save-production').emit('click');await ui.get('new-project').emit('click');
+ assert.equal(ui.get('source-urls').value,'');assert.equal(ui.get('source-text').value,'');assert.equal(ui.get('production-instructions').value,'');
+ assert.equal(ui.requests.some(r=>['source-plan','generate','draft'].includes(r.route)),false);
+ ui.get('project-select').value='original';await ui.get('project-select').emit('change');
+ assert.equal(ui.get('source-urls').value,'https://example.com/saved');assert.equal(ui.get('source-text').value,'保存した資料');
+});
+test('reference intake: browser autocomplete cannot supply previous planning text as initial values',()=>{
+ for(const id of ['source-text','source-urls','production-instructions','script-input']){
+  const tag=html.match(new RegExp('<textarea[^>]*id="'+id+'"[^>]*>'))?.[0];assert.ok(tag);assert.match(tag,/autocomplete="off"/);
+ }
+});
+
+test('script authoring: explicit AI theme enables exactly one draft without automatic import or narration',async()=>{
+ const ui=await setup({rows:[]}),button=html.includes('id="generate-script"')?'generate-script':'plan-sources';
+ await ui.edit(ui.get('script-mode'),'ai');assert.equal(ui.get(button).disabled,true);
+ ui.get('theme-auto').checked=true;await ui.get('theme-auto').emit('change');assert.equal(ui.get(button).disabled,false);
+ await ui.get(button).emit('click');const calls=ui.requests.filter(r=>['draft','source-plan'].includes(r.route));assert.equal(calls.length,1);assert.equal(calls[0].route,'draft');assert.equal(calls[0].input.brief.themeAuto,true);assert.equal(calls[0].input.consent,true);
+ assert.ok(ui.get('script-input').value);assert.equal(ui.get('script-input').disabled,false);assert.equal(ui.requests.some(r=>['append-script','generate','render-video'].includes(r.route)),false);
+});
+test('script authoring: result supports direct typing, editing, confirmed clearing and saving empty without resurrecting loaded rows',async()=>{
+ const ui=await setup(),original=ui.state().rows;await ui.edit(ui.get('script-input'),'自分で入力した台本。');await ui.edit(ui.get('script-input'),'編集した台本。');
+ assert.equal(ui.requests.some(r=>['draft','source-plan','generate'].includes(r.route)),false);
+ await ui.get('clear-script').emit('click');await ui.get('confirm-script-action').emit('click');assert.equal(ui.get('script-input').value,'');assert.equal(ui.get('append-script').disabled,true);
+ await ui.get('save-production').emit('click');await ui.poll();assert.equal(ui.get('script-input').value,'');assert.equal(ui.state().production.brief.scriptEdited,true);assert.deepEqual(ui.state().rows,original);
+ await ui.edit(ui.get('script-input'),'新しく入力した台本。');assert.equal(ui.get('script-input').value,'新しく入力した台本。');assert.equal(ui.requests.some(r=>['draft','source-plan','generate','append-script'].includes(r.route)),false);
+});
+test('script authoring: canceled clearing preserves the draft and finalized/busy inputs cannot be cleared',async()=>{
+ const ui=await setup({confirmResult:false}),before=ui.get('script-input').value;await ui.get('clear-script').emit('click');assert.equal(ui.get('script-input').value,before);assert.equal(ui.requests.some(r=>['draft','source-plan','production'].includes(r.route)),false);
+ ui.externalBusy(true);await ui.poll();assert.equal(ui.get('clear-script').disabled,true);assert.equal(ui.get('theme-auto').disabled,true);ui.externalBusy(false);ui.externalFinalize();await ui.poll();assert.equal(ui.get('clear-script').disabled,true);assert.equal(ui.get('theme-auto').disabled,true);
+});
+test('script authoring: canceled regeneration keeps manual text and sends nothing',async()=>{
+ const ui=await setup({rows:[],confirmResult:false}),button=html.includes('id="regenerate-script"')?'regenerate-script':'plan-sources';await ui.edit(ui.get('script-mode'),'ai');await ui.edit(ui.get('production-instructions'),'短い説明');await ui.edit(ui.get('script-input'),'編集中の台本。');await ui.get(button).emit('click');
+ assert.equal(ui.get('script-input').value,'編集中の台本。');assert.equal(ui.requests.some(r=>['draft','source-plan','production'].includes(r.route)),false);
+});
+test('script authoring: input, send and editable result share one ordered block instead of an alternative disclosure',()=>{
+ const button=html.includes('id="generate-script"')?'generate-script':'plan-sources',start=html.indexOf('class="script-authoring"'),end=html.indexOf('id="clear-script"');assert.ok(start>=0);assert.ok(start<html.indexOf('id="production-instructions"'));assert.ok(html.indexOf('id="production-instructions"')<html.indexOf('id="'+button+'"'));assert.ok(html.indexOf('id="'+button+'"')<html.indexOf('id="script-input"'));assert.ok(end>html.indexOf('id="script-input"'));assert.match(html,/<details class="text-only-alternative" hidden>/);
+});
+
+test('script authoring: a specified theme uses the same send action and editing remains available without a key',async()=>{const ui=await setup({rows:[]}),button=html.includes('id="generate-script"')?'generate-script':'plan-sources';await ui.edit(ui.get('script-mode'),'ai');await ui.edit(ui.get('production-instructions'),'身近な道具の使い方');await ui.get(button).emit('click');const calls=ui.requests.filter(r=>['draft','source-plan'].includes(r.route));assert.equal(calls.length,1);assert.equal(calls[0].route,'draft');assert.equal(calls[0].input.brief.instructions,'身近な道具の使い方');ui.restart();await ui.poll();await ui.edit(ui.get('script-input'),'直接入力した台本。');assert.equal(ui.get('script-input').disabled,false);assert.equal(ui.get(button).disabled,true);assert.equal(ui.requests.filter(r=>['draft','source-plan'].includes(r.route)).length,1);});
+
+test('script authoring: in-page clearing requires an explicit decision and cancellation preserves the typed result',async()=>{const ui=await setup({autoConfirm:false});await ui.edit(ui.get('script-input'),'直接入力した台本。');await ui.get('clear-script').emit('click');assert.equal(ui.get('script-confirm').hidden,false);assert.equal(ui.get('script-input').value,'直接入力した台本。');await ui.get('cancel-script-action').emit('click');assert.equal(ui.get('script-input').value,'直接入力した台本。');await ui.get('clear-script').emit('click');await ui.get('confirm-script-action').emit('click');assert.equal(ui.get('script-input').value,'');assert.equal(ui.get('script-confirm').hidden,true);assert.equal(ui.requests.some(r=>['draft','source-plan','generate','production'].includes(r.route)),false);});
+test('script authoring: changing the input after an overwrite decision blocks the stale send without a provider call',async()=>{const ui=await setup({autoConfirm:false,rows:[]}),button=html.includes('id="regenerate-script"')?'regenerate-script':'plan-sources';await ui.edit(ui.get('script-mode'),'ai');await ui.edit(ui.get('production-instructions'),'説明動画');await ui.edit(ui.get('script-input'),'最初の台本。');await ui.get(button).emit('click');assert.equal(ui.get('script-confirm').hidden,false);assert.equal(ui.requests.some(r=>['draft','source-plan','production'].includes(r.route)),false);await ui.edit(ui.get('script-input'),'後から編集した台本。');await ui.get('confirm-script-action').emit('click');assert.equal(ui.get('script-input').value,'後から編集した台本。');assert.equal(ui.requests.some(r=>['draft','source-plan','production'].includes(r.route)),false);assert.match(ui.get('script-edit-status').textContent,/台本が更新|STALE_REVISION/);});
+
+test('audio retry confirmation rejects a changed revision without generating',async()=>{
+ const ui=await setup({rows:[{id:'one',caption:'字幕。',speech:'よみ。',reviewed:true,attempts:1,audioCurrent:false}]});
+ await ui.get('retry-audio').emit('click');ui.externalRevision();await ui.poll();
+ await ui.get('retry-confirm-send').emit('click');assert.equal(ui.requests.some(r=>r.route==='generate'),false);
 });

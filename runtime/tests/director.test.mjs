@@ -16,7 +16,7 @@ test('normal source planning enforces a shared visual style and typed shot purpo
 test('director output fails closed for missing style/purpose, executable fields and oversized generated prompts',async()=>{
  const bundle=await collectSources(brief,[],()=>{});
  for(const edit of [r=>delete r.visualStyle,r=>delete r.rows[0].purpose,r=>r.rows[0].purpose='run-shell',r=>r.visualStyle={script:'run'},r=>r.visualStyle='x'.repeat(401),r=>r.rows[0].imagePrompt='x'.repeat(3000)]){
-  const changed=structuredClone(result);edit(changed);assert.throws(()=>normalizeSourcePlan(changed,bundle,['Kore']),/DIRECTOR|INVALID/);
+  const changed=structuredClone(result);edit(changed);const draft=normalizeSourcePlan(changed,bundle,['Kore']);assert.equal(draft.storyboard,undefined);assert.equal(draft.visualPlanStatus,'needs-review');assert.equal(draft.script,result.rows[0].caption);
  }
  const legacy=structuredClone(normalizeSourcePlan(result,bundle,['Kore']).storyboard);delete legacy.visualStyle;delete legacy.scenes[0].purpose;
  assert.doesNotThrow(()=>normalizeStoryboard(legacy,result.rows[0].caption));

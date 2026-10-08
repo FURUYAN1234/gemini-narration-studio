@@ -1,12 +1,26 @@
 import React,{useEffect,useState} from 'react';
 import {AbsoluteFill,Audio,Img,staticFile,useCurrentFrame,delayRender,continueRender,cancelRender} from 'remotion';
-import {ease,clamp,fitText,motionFrame,sceneDirection,pointSchedule,focusFrame} from './motion.mjs';
+import {ease,clamp,fitText,motionFrame,sceneDirection,pointSchedule,focusFrame,transitionPlan,transitionFrame,transitionLayers,transitionSurface} from './motion.mjs';
 import {captionAtFrame} from './subtitles.mjs';
 import type {Slide,PresentationData,Design,Theme} from './presentation';
 
-type Motion={version:1;style:'cinematic'|'kinetic'|'editorial';intensity:'subtle'|'standard'|'bold'};
+type Motion={version:1;style:'cinematic'|'kinetic'|'editorial';intensity:'subtle'|'standard'|'bold';transitions?:string[];transitionTones?:string[]};
 type Box={x:number;y:number;w:number;h:number};
 const positioned=(b:Box):React.CSSProperties=>({position:'absolute',left:b.x,top:b.y,width:b.w,height:b.h,boxSizing:'border-box'});
+
+// The common boundary wraps every layout. Bookends keep their own quiet fade;
+// AI boundary indices refer to body cuts, not an inserted opening title.
+export const TransitionMask=({choice,coverage,color,image}:{choice:{family:string;variant:number};coverage:number;color:string;image?:string})=><div aria-hidden="true" style={{position:'absolute',inset:0,bottom:185,overflow:'hidden',pointerEvents:'none'}}>{transitionLayers(choice,coverage,color).map((style:React.CSSProperties,i:number)=>{
+ const clock=choice.family==='clock'&&String(style.background).startsWith('conic-gradient'),x=parseFloat(String(style.left||0))*19.2,y=parseFloat(String(style.top||0))*8.95;
+ return <div key={i} style={{position:'absolute',...style,...(image?{overflow:'hidden',background:color,...(clock?{maskImage:String(style.background).replace(color,'#ffffff')}: {})}:{})}}>{image&&<Img src={staticFile(image)} style={{position:'absolute',left:-x,top:-y,width:1920,height:895,objectFit:'contain',...(style.transform==='scaleX(-1)'?{transform:'scaleX(-1)'}:{})}}/>}</div>;
+})}</div>;
+export const CutTransition=({row,data,palette,children}:{row:Slide;data:PresentationData;palette:Design|Theme;children:React.ReactNode})=>{
+ const frame=Math.min(useCurrentFrame(),row.frames-1);
+ if(!data.motion)return <>{children}</>;
+ const rows=data.rows.filter(r=>r.id!==data.bookends?.titleRowId),index=rows.findIndex(r=>r.id===row.id),plan=transitionPlan({rows,motion:data.motion}),state=transitionFrame({frame,frames:row.frames,fps:data.fps,motion:data.motion});
+ const incoming=index>0?plan[index-1]:data.bookends?{family:'fade',variant:0,tone:'background'}:null,outgoing=plan[index];
+ return <>{children}{incoming&&<TransitionMask choice={incoming} coverage={state.incoming} {...transitionSurface(incoming,{palette,image:row.image})}/>} {outgoing&&<TransitionMask choice={outgoing} coverage={state.outgoing} {...transitionSurface(outgoing,{palette,image:rows[index+1]?.image})}/>}</>;
+};
 
 // Every visual is driven by the render frame. No CSS animation or wall clock.
 const Backdrop=({d,m,frame,fps,index}:{d:Design;m:Motion;frame:number;fps:number;index:number})=>{
@@ -103,9 +117,6 @@ export const MotionSlide=({row,data,index,design,theme,motion:m}:{row:Slide;data
   <Headline text={title} box={headBox} frame={frame} fps={fps} frames={row.frames} color={d.heading} size={sequence?78:kinetic?174-56*stage:112} kinetic={kinetic}/>
   {points.length>0&&<div style={{opacity:stage}}><Points row={row} box={sequence?{x:110,y:390,w:hasImage?940:1700,h:440}:closing?{x:110,y:590,w:hasImage?1000:1650,h:260}:{x:textX,y:590,w:textW,h:265}} d={d} frame={frame} fps={fps} style={m.style}/></div>}
   {points.length===0&&<div style={{position:'absolute',left:headBox.x,top:Math.min(820,headBox.y+headBox.h+25),width:Math.min(headBox.w,520)*state.reveal,height:2,background:d.accent,opacity:.65}}/>}
-  {/* The visual wipe does not overlap audio or change the subtitle timeline. */}
-  {index>0&&<div style={{position:'absolute',inset:0,bottom:185,background:d.accent,transform:`translateX(${ease(frame/Math.max(1,Math.min(fps*.4,row.frames*.12)))*105}%)`,transformOrigin:'right center'}}/>}
-  {index<data.rows.length-1&&<div style={{position:'absolute',inset:0,bottom:185,background:d.accent,clipPath:`inset(0 ${(1-state.exit)*100}% 0 0)`,opacity:.96}}/>}
   <div style={{position:'absolute',bottom:0,left:0,right:0,height:185,background:d.background,borderTop:`1px solid ${d.accent}55`,padding:'24px 110px 26px',display:'flex',alignItems:'center',justifyContent:'center'}}>
    <div data-motion-text="caption" style={{color:d.foreground,fontSize:captionFit.size,lineHeight:1.35,textAlign:'center'}}>{captionFit.lines.map((line:string,i:number)=><div key={i} style={{whiteSpace:'pre'}}>{line.replace(/\r?\n$/,'')}</div>)}</div>
   </div>
