@@ -113,21 +113,35 @@ export function sceneDirection({row,index,count,motion}){
  const layout=index===0?'hero':index===count-1?'closing':points.length>=2?'sequence':row.image?'image':'statement';
  return {layout,side:index%2?'left':'right',style:motion.style};
 }
-const graphemes=text=>[...new Intl.Segmenter('ja',{granularity:'grapheme'}).segment(text)].map(s=>s.segment);
+const graphemeSegmenter=new Intl.Segmenter('ja',{granularity:'grapheme'}),wordSegmenter=new Intl.Segmenter('ja',{granularity:'word'});
+const graphemes=text=>[...graphemeSegmenter.segment(text)].map(s=>s.segment);
 const unit=char=>/^[\x20-\x7e]+$/.test(char)?(.6*char.length):1;
+const textUnits=text=>graphemes(text).reduce((sum,char)=>sum+unit(char),0);
+function wordChunks(text){
+ const chunks=[];let opening='';
+ for(const {segment}of wordSegmenter.segment(text)){
+  if(/^[\p{Ps}\p{Pi}]+$/u.test(segment)){opening+=segment;continue;}
+  const previous=chunks.at(-1),attached=/^(?:の|に|を|が|は|へ|と|で|や|も|な)$/.test(segment)||/^[\p{Pe}\p{Pf}、。，．！？!?：:；;％%]+$/u.test(segment)||previous&&/\d$/.test(previous)&&/^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]{1,2}$/u.test(segment);
+  if(attached&&previous&&!/[\r\n]$/.test(previous)&&!opening)chunks[chunks.length-1]+=segment;
+  else{chunks.push(opening+segment);opening='';}
+ }
+ if(opening)chunks.push(opening);return chunks;
+}
 export function fitText(text,{width,height,maxSize,lineHeight=1.2,balance=false}){
  if(typeof text!=='string'||![width,height,maxSize,lineHeight].every(n=>Number.isFinite(n)&&n>0))throw new Error('INVALID_MOTION_TEXT');
- const chars=graphemes(text);
+ const chunks=wordChunks(text).map(text=>({text,units:textUnits(text)})),total=textUnits(text);
  const wrap=size=>{
   const lines=[];let line='',units=0;
-  const maximum=width/size,total=chars.reduce((sum,c)=>sum+unit(c),0),limit=balance?Math.min(maximum,total/Math.max(1,Math.ceil(total/maximum))+.5):maximum;
-  for(const char of chars){const next=unit(char);if(line&&units+next>limit){
-   const phrase=[...line.matchAll(/[、。！？!?：: ]/gu)].at(-1),split=phrase&&phrase.index>=line.length*.4?phrase.index+1:line.length;
-   lines.push(line.slice(0,split));line=line.slice(split);units=graphemes(line).reduce((sum,c)=>sum+unit(c),0);
-  }line+=char;units+=next;if(char==='\n'){lines.push(line);line='';units=0;}}
+  const maximum=width/size,lineCount=Math.max(1,Math.ceil(total/maximum)),limit=balance?Math.min(maximum,total/lineCount+.5):maximum;
+  for(const chunk of chunks){
+   const pieces=chunk.units>maximum?graphemes(chunk.text).map(text=>({text,units:unit(text)})):[chunk];
+   for(const {text:piece,units:next}of pieces){const target=balance&&lines.length>=lineCount-1?maximum:limit;if(line&&units+next>target){lines.push(line);line='';units=0;}
+    line+=piece;units+=next;if(/[\r\n]$/.test(piece)){lines.push(line);line='';units=0;}
+   }
+  }
   if(line)lines.push(line);return lines;
  };
- let size=maxSize,lines=wrap(size);
+ let size=balance?Math.min(maxSize,Math.max(1,Math.floor(width/Math.max(1,...chunks.map(chunk=>chunk.units))))):maxSize,lines=wrap(size);
  while(lines.length*size*lineHeight>height&&size>1){size=Math.max(1,size-1);lines=wrap(size);}
  return {lines,size};
 }

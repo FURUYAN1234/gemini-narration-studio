@@ -1,4 +1,4 @@
-# Gemini Narration Studio / Gemini ナレーション・スタジオ v1.2.2
+# Gemini Narration Studio / Gemini ナレーション・スタジオ v1.2.3
 
 A Windows x64 local app for turning materials and scripts into narrated, subtitled MP4 videos. Review Japanese readings, create Gemini speech, check each cut's image and audio, then export locally. Distribution currently uses a private GitHub repository; access requires an invitation.
 
@@ -85,6 +85,10 @@ The personal `gemini-video-narration` Skill reuses an existing session or starts
 個人Skill `gemini-video-narration` は既存セッションを再利用し、必要時にアプリを起動してCodex内ブラウザーへ表示します。通常起動と同じ台本・音声・素材を使います。キーはチャットへ渡さずアプリに入力してください。制作の中断や前工程からの修正版作成ができ、元の完成済み制作は残ります。
 
 ## Motion / 画面の動き
+
+Headings wrap at Japanese and English word boundaries and adjust font size to fit the available area without omitting text.
+
+見出しは日本語・英語の語の区切りで改行し、全文を省略せず、表示領域に合わせて文字サイズを調整します。
 
 Choose cinema (zoom/depth), typography (large text/transitions), editorial (lines/points) or quiet slides, with gentle, standard or bold motion. Moving to the next step saves the choice. New projects start with cinema; old projects retain their previous display until changed. Selected colors are reused, and the four new templates preserve their structure. Backgrounds, images and text animate locally without speech/image regeneration, extra models or external animation services. This does not create people's actions or 3D geometry. The silent preview supports play/pause and reduced-motion preferences; it is not the final video. Subtitle/point timing is estimated from speech pauses and reading length. AI designs may propose colors, placement and motion; an explicitly saved quiet-slide choice remains in force. Sealed videos require a revision for changes.
 

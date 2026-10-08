@@ -1,6 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizeMotion,sceneDirection,motionFrame,fitText,pointSchedule,normalizeImageFocus,focusFrame,IMAGE_FOCUS_SCHEMA} from '../motion.mjs';
+test('headlines wrap at Japanese word boundaries and keep ordinary alternative titles readable',()=>{
+ assert.deepEqual(fitText('3つの小さな工夫',{width:800,height:300,maxSize:112,balance:true}).lines,['3つの','小さな工夫']);
+ for(const text of ['3つの小さな工夫','お気に入りの1冊','手軽な準備で楽しむ']){
+  const fit=fitText(text,{width:560,height:250,maxSize:118,balance:true});
+  assert.equal(fit.lines.join(''),text);
+  for(const word of [...new Intl.Segmenter('ja',{granularity:'word'}).segment(text)].filter(s=>s.isWordLike&&s.segment.length>1))assert.ok(fit.lines.some(line=>line.includes(word.segment)),word.segment+' split across lines');
+  assert.ok(fit.lines.every(line=>! /^[のにをがはへとでやもな]/.test(line)));
+  assert.ok(fit.lines.length*fit.size*1.2<=250);
+ }
+ const plain=fitText('静かな場所で読書を楽しむ',{width:900,height:540,maxSize:116});assert.equal(plain.lines.join(''),'静かな場所で読書を楽しむ');
+ const english=fitText('Creative presentation workflow',{width:560,height:250,maxSize:118,balance:true});assert.ok(english.lines.some(line=>line.includes('presentation')));
+ const punctuation=fitText('「使いやすい道具」を選ぶ。',{width:560,height:250,maxSize:118,balance:true});assert.equal(punctuation.lines.join(''),'「使いやすい道具」を選ぶ。');assert.ok(punctuation.lines.every(line=>! /^[」）。、]/.test(line)&&!/[「（]$/.test(line)));
+});
 import {normalizePresentation,normalizeDesign,VIDEO_TEMPLATES,presentationMotion} from '../designs.mjs';
 
 const motion={version:1,style:'cinematic',intensity:'standard'};
