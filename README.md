@@ -1,4 +1,4 @@
-# Gemini Narration Studio / Gemini ナレーション・スタジオ v1.2.4
+# Gemini Narration Studio / Gemini ナレーション・スタジオ v1.2.5
 
 A Windows x64 local app for turning materials and scripts into narrated, subtitled MP4 videos. Review Japanese readings, create Gemini speech, check each cut's image and audio, then export locally. Distribution currently uses a private GitHub repository; access requires an invitation.
 
@@ -50,9 +50,9 @@ Add images, PDF, UTF-8 TXT, audio, video, reference text or public URLs, then de
 
 画像・PDF・UTF-8 TXT・音声・動画、参考本文、公開URLを追加します。資料があれば制作指示は空欄でも使えます。構成作成では入力と指示をGemini 3.5 Flashへ1回送信します。合計12MB・20ファイル、URL10件までです。URL Contextの取得成功記録がなければ構成案を適用しません。ログインが必要なページやリンク先の自動探索には対応せず、自動再試行や既存台本・音声の削除も行いません。
 
-The plan includes captions, hiragana readings, headings, points, source attribution, image assignments/focus and title/voice proposals. Choose automatic or manual title/voice selection; titles remain editable. Check source summaries and each cut's references. Each cut also has a context, detail or summary purpose and a shared visual-style proposal carried into planned image prompts. These explanatory-video principles draw on [Director Skills](https://github.com/kangarooking/director-skills). Timing follows actual synthesized speech. Planning does not generate images, synthesize speech or approve the final video. Older saved projects remain readable. Generate a draft above the script editor, review/edit it, or explicitly regenerate below it. Automatic direction is ON for new projects: the same drafting request returns a title, one of the twelve validated templates and motion settings, with a layout thumbnail. Switching OFF opens manual adjustments; apply and close them without a provider call. The final STEP01 button saves the script and direction and proceeds to voice selection. Existing scripts can be used; missing readings/direction are disclosed as one preparation request. Regenerated scripts replace the accepted cuts without duplication and reuse exactly unchanged speech audio. A URL-only entry in the script box is treated as a reference, never as narration.
+The plan includes captions, hiragana readings, headings, points, source attribution, image assignments/focus and title/voice proposals. Choose automatic or manual title/voice selection; titles remain editable. Check source summaries and each cut's references. Each cut also has a context, detail or summary purpose and a shared visual-style proposal carried into planned image prompts. These explanatory-video principles draw on [Director Skills](https://github.com/kangarooking/director-skills). Timing follows actual synthesized speech. Planning does not generate images, synthesize speech or approve the final video. Older saved projects remain readable. Generate a draft above the script editor, review/edit it, or explicitly regenerate below it. Automatic direction is ON for new projects: the same drafting request returns a title, one of the twelve validated templates and motion settings, with a layout thumbnail. Switching OFF keeps manual adjustments open, including after saving, without a provider call. The final STEP01 button saves the script and direction and proceeds to voice selection. Existing scripts can be used; missing readings/direction are disclosed as one preparation request. Regenerated scripts replace the accepted cuts without duplication and reuse exactly unchanged speech audio. A URL-only entry in the script box is treated as a reference, never as narration.
 
-字幕・ひらがなの読み・見出し・要点・出典・画像の割り当てと注目位置・タイトル・声を提案します。タイトルと声は自動／手動を選べ、タイトルは手修正できます。資料要約と各カットの出典を確認してください。各カットに全体像・詳細・要約の役割と共通の視覚方針を提案し、配色・外見・図の表記を生成予定の画像指示へ反映します。[Director Skills](https://github.com/kangarooking/director-skills)の素材分析・分鏡・一貫性の考え方を解説動画に合わせています。時間は実音声に合わせます。構成作成は画像・音声の生成や最終確認を代行せず、既存の制作も開けます。台本欄の上で案を生成し、確認・修正後、必要なら下のボタンで明示的に再生成します。新規制作は自動演出がONで、同じ台本生成の1回でタイトル・12種からのテンプレート選択・動きを返し、見本を表示します。OFFで手動調整を開き、「調整を反映して閉じる」でAPIなしで保存できます。01末尾のボタンは台本と演出を保存して声選びへ進みます。既存台本も使え、読みや自動演出が未準備なら1回の準備処理を明示します。再生成した台本はカットを重複させず取り込み、同じ字幕・読みの音声は保持します。台本欄にURLだけを貼った場合も、読み上げ用の文章ではなく参考資料として扱います。
+字幕・ひらがなの読み・見出し・要点・出典・画像の割り当てと注目位置・タイトル・声を提案します。タイトルと声は自動／手動を選べ、タイトルは手修正できます。資料要約と各カットの出典を確認してください。各カットに全体像・詳細・要約の役割と共通の視覚方針を提案し、配色・外見・図の表記を生成予定の画像指示へ反映します。[Director Skills](https://github.com/kangarooking/director-skills)の素材分析・分鏡・一貫性の考え方を解説動画に合わせています。時間は実音声に合わせます。構成作成は画像・音声の生成や最終確認を代行せず、既存の制作も開けます。台本欄の上で案を生成し、確認・修正後、必要なら下のボタンで明示的に再生成します。新規制作は自動演出がONで、同じ台本生成の1回でタイトル・12種からのテンプレート選択・動きを返し、見本を表示します。OFFでは手動調整欄を開いたまま、APIなしで保存できます。01末尾のボタンは台本と演出を保存して声選びへ進みます。既存台本も使え、読みや自動演出が未準備なら1回の準備処理を明示します。再生成した台本はカットを重複させず取り込み、同じ字幕・読みの音声は保持します。台本欄にURLだけを貼った場合も、読み上げ用の文章ではなく参考資料として扱います。
 
 ![Script preparation and next step / 台本準備から声選びへ](docs/screenshots/workflow.jpg)
 
@@ -60,9 +60,9 @@ The plan includes captions, hiragana readings, headings, points, source attribut
 
 ### Supplied and generated artwork / 提供画像と生成画像
 
-Provided-only mode prohibits image generation. Mixed mode selects relevant images and proposes generation only for missing artwork; not every reference needs to appear. Review a cut's instructions and up to three reference images before explicitly generating one image with Gemini. Image-only changes reuse unchanged script/audio. Failures preserve completed assets without retrying automatically. Image focus can zoom toward a labeled area; replacing artwork clears its old focus. Check names and explanations too. Headings/points are editable without an API call. These controls do not generate new actions for pictured people or remove backgrounds.
+Provided-only mode prohibits image generation. Mixed mode selects relevant images and proposes generation only for missing artwork; not every reference needs to appear. Adopting the voice prepares missing images with Gemini. Review the actual image in each cut and adopt it locally; only unwanted images need individual regeneration. Image-only changes reuse unchanged script/audio. Failures preserve completed assets without retrying automatically. Image focus can zoom toward a labeled area; replacing artwork clears its old focus. Check names and explanations too. Headings/points are editable without an API call. These controls do not generate new actions for pictured people or remove backgrounds.
 
-提供素材のみでは画像を生成しません。混合モードは関連する画像を選び、不足したカットに生成案を用意します。資料をすべて映す必要はありません。指示と参照画像（最大3枚）を確認して、明示操作で1枚ずつ生成します。画像だけの変更は台本・音声を再利用し、失敗時も完成済み素材を残して自動再試行しません。注目位置とラベルで指定箇所へ寄れます。差し替え時は古い注目位置を解除するので、人物名や説明も確認してください。見出し・要点はAPIなしで編集できます。人物の新しい動作や背景除去は生成しません。
+提供素材のみでは画像を生成しません。混合モードは関連する画像を選び、不足したカットに生成案を用意します。資料をすべて映す必要はありません。声を採用すると不足画像を生成します。各カットの実画像を見てAPIなしで採用し、気になる画像だけ個別に再生成できます。画像だけの変更は台本・音声を再利用し、失敗時も完成済み素材を残して自動再試行しません。注目位置とラベルで指定箇所へ寄れます。差し替え時は古い注目位置を解除するので、人物名や説明も確認してください。見出し・要点はAPIなしで編集できます。人物の新しい動作や背景除去は生成しません。
 
 ### Script input / 台本入力
 
@@ -111,9 +111,9 @@ The opening-title/ending section stores title text, its hiragana reading, ending
 
 ## Export and saved projects / 出力と保存した制作
 
-AI proposes which supplied images to use and which missing images to create. Approve the proposal and its generation count to prepare the cuts. Replanning or replacing an individual image is optional; unchanged script and audio are retained. File selection, drag-and-drop, unassignment and removal from the material list are available inside the image adjustment controls. Removed material files remain on disk.
+AI selects supplied images and generates missing images before image review. Adopt the displayed images locally without another API call. Individual regeneration or file replacement is optional; unchanged script and audio are retained. File selection, drag-and-drop, unassignment and removal from the material list are available inside the image adjustment controls. Removed material files remain on disk.
 
-AIが提供画像の割り当てと不足画像の作成を提案します。内容と新規作成枚数を確認して承認すれば、カットの画像を準備できます。再提案・再生成・手動差し替えは気になるときだけ使い、変更しない台本と音声は保持します。画像の調整欄でファイル選択・ドロップ・割り当て解除ができ、素材一覧からも外せます。元の素材ファイルは残ります。
+AIが提供画像を割り当て、不足画像を作ってから実画像を表示します。確認後の採用はAPIなしで行います。個別の再生成・手動差し替えは気になるときだけ使い、変更しない台本と音声は保持します。画像の調整欄でファイル選択・ドロップ・割り当て解除ができ、素材一覧からも外せます。元の素材ファイルは残ります。
 
 Once narration is ready, the full-length player appears automatically as one seekable audio track, including cut pauses. The explicit narration submission button replaces the separate consent checkbox; voice selection and reading confirmation are still required.
 

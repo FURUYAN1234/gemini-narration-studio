@@ -4,10 +4,22 @@ import {mkdtemp,readFile,readdir,rm,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {NarrationSession,buildRequest,buildDraftRequest,SAMPLE_SETTINGS,VOICES,VOICE_GENDERS,MODELS,previewFingerprint} from '../core.mjs';
-import {ProductionInputs,normalizeScriptReadings,normalizeBookends} from '../production.mjs';
+import {ProductionInputs,normalizeScriptReadings,normalizeBookends,normalizeBrief,normalizeImageProposal} from '../production.mjs';
 import {startServer} from '../server.mjs';
 import {prepareReviewedAudio} from '../client.mjs';
 import {musicSignature} from '../music.mjs';
+test('user requirements: the server ignores an old manual theme only in automatic theme mode',()=>{
+ const brief={scriptMode:'ai',assetMode:'mixed',instructions:'以前の手動テーマ',script:'',themeAuto:true};assert.equal(normalizeBrief(brief).instructions,'');assert.equal(normalizeBrief({...brief,themeAuto:false}).instructions,'以前の手動テーマ');assert.throws(()=>normalizeBrief({...brief,themeAuto:'true'}),/INVALID_THEME_PREFERENCE/);
+});
+test('persisted image candidates reject invented fields, untrusted paths, credentials and inconsistent readiness',()=>{
+ const proposal={id:'12345678-1234-4234-8234-123456789abc',revision:'a'.repeat(64),productionRevision:'b'.repeat(64),scenes:[{id:'one',caption:'字幕',imageFile:'c'.repeat(64)+'.png',imagePrompt:'',imageReferences:[],reason:'対応する候補'}]};assert.deepEqual(normalizeImageProposal(proposal),proposal);
+ for(const changed of [{url:'https://example.com'},{imageFile:'../image.png'},{imagePrompt:'未生成の指示'},{generationPrompt:'Bearer abcdefghijklmnop'}])assert.throws(()=>normalizeImageProposal({...proposal,scenes:[{...proposal.scenes[0],...changed}]}));
+});
+test('user requirements: export includes the fixed URL and author watermark without any credit form or title call',async t=>{
+ const {s,dir}=await setup(t);s.setKey('test-only-key');await s.approve('existing',s.revision());await s.generate(['existing']);await s.markListened('existing',s.revision());
+ const p=await ProductionInputs.open(dir);await p.saveMusicEnabled(false);await p.finalize(s.status());await s.exportManifest();
+ const data=await prepareReviewedAudio({sourceDir:dir,publicDir:path.join(dir,'public')});assert.equal(data.bookends?.owner,'FURU');assert.equal(data.bookends.endUrl,'https://note.com/happy_duck780');assert.equal(data.bookends.endLabel,'ネームから全自動の自律式統合AI漫画システム');assert.equal(data.title,s.status().title);assert.equal(data.bookends.titleRowId,undefined);assert.equal(data.bookends.frames,120);
+});
 test('bookends persist creation year, preserve body audio and require the new reading before export',async t=>{
  const {s,dir}=await setup(t);s.setKey('test-only-key');await s.approve('existing',s.revision());await s.generate(['existing']);await s.markListened('existing',s.revision());const body=structuredClone(s.status().rows[0]);
  const prepared=await ProductionInputs.open(dir);await prepared.saveMusicEnabled(true);await prepared.addAsset('bgm.mp3',Buffer.concat([Buffer.from('ID3'),Buffer.alloc(32)]),{origin:'generated-music'});await prepared.saveMusic({file:prepared.status().assets[0].file,signature:musicSignature(s.status()),direction:'静かな曲',model:'lyria-3.5',durationSeconds:30,level:.24});
@@ -30,7 +42,7 @@ test('local cut text and pacing edits preserve narration and require current vis
  const post=async(route,body)=>(await fetch(service.url+'/api/'+route,{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':token},body:JSON.stringify({...body,revision:status.revision,productionRevision:status.productionRevision})})).json();
  const visualResult=await post('cut-visuals',{id:'existing',title:'説明',points:['一般的な設計図']});assert.equal(visualResult.error,null,JSON.stringify(visualResult));assert.equal(visualResult.rows[0].cutVisual.points[0],'一般的な設計図');status=await(await fetch(service.url+'/api/status')).json();
  assert.equal((await post('cut-pause',{seconds:-1})).error,'INVALID_CUT_PAUSE');status=await post('cut-pause',{seconds:.8});assert.equal(status.production.pauseSeconds,.8);assert.deepEqual(await readFile(path.join(dir,'job.json')),before);
- const p=await ProductionInputs.open(dir);await p.finalize(s.status());await s.exportManifest();const data=await prepareReviewedAudio({sourceDir:dir,publicDir:path.join(dir,'public')});assert.equal(data.gapFrames,24);assert.equal(data.durationInFrames,data.rows[0].frames+24);await assert.rejects(prepareReviewedAudio({sourceDir:dir,publicDir:path.join(dir,'public'),gapFrames:7}),/INVALID_TIMING/);
+ const p=await ProductionInputs.open(dir);await p.finalize(s.status());await s.exportManifest();const data=await prepareReviewedAudio({sourceDir:dir,publicDir:path.join(dir,'public')});assert.equal(data.gapFrames,24);assert.equal(data.durationInFrames,data.rows[0].frames+24+120);await assert.rejects(prepareReviewedAudio({sourceDir:dir,publicDir:path.join(dir,'public'),gapFrames:7}),/INVALID_TIMING/);
 });
 test('an image-only revision reuses sealed BGM despite the automatic revision title suffix',async t=>{
  const {s,dir}=await setup(t);s.setKey('test-only-key');await s.approve('existing',s.revision());await s.generate(['existing']);await s.markListened('existing',s.revision());const p=await ProductionInputs.open(dir);await p.addAsset('music.mp3',Buffer.concat([Buffer.from('ID3'),Buffer.alloc(32)]),{origin:'generated-music'});

@@ -4,10 +4,41 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {VOICE_GENDERS,VOICES,MODELS,SAMPLE_SETTINGS} from '../core.mjs';
-import {VIDEO_TEMPLATES} from '../designs.mjs';
+import {VIDEO_TEMPLATES,presentationDesign} from '../designs.mjs';
+import {themeTokens} from '../themes.mjs';
 
 const appSource = (await readFile(new URL('../ui/app.mjs', import.meta.url), 'utf8')).replace(/^import .*script-flow\.mjs';\r?\n/m,'');
 const html = await readFile(new URL('../ui/index.html', import.meta.url), 'utf8');
+test('user requirements: preview colors match saved legacy colors and the adopted renderer template',async()=>{
+ const ui=await setup();ui.get('auto-direction').checked=false;await ui.get('auto-direction').emit('change');
+ const theme=await themeTokens(ui.state().presentation.theme);assert.equal(ui.get('direction-sample').style.vars.get('--d-bg'),theme.background);
+ await ui.get('template-gallery').children.find(b=>b.dataset.template==='blueprint').emit('click');await ui.get('apply-direction').emit('click');
+ const design=presentationDesign(ui.state().presentation);for(const [key,value]of [['bg',design.background],['fg',design.foreground],['heading',design.heading],['accent',design.accent]])assert.equal(ui.get('direction-sample').style.vars.get('--d-'+key),value);
+});
+test('user requirements: prepared images and adoption/regeneration are together in each cut, with no prose-only proposal list',async()=>{
+ const file='a'.repeat(64)+'.png',imageProposal={id:'proposal',scenes:[{id:'one',caption:'説明。',imageFile:file,imagePrompt:'',reason:'対応する画像'}]};
+ const ui=await setup({rows:[{id:'one',caption:'説明。',speech:'せつめい。',cutImage:null}],assets:[{name:'候補.png',file,size:4}],imageProposal});
+ const card=[...ui.get('rows').walk()].find(e=>e.dataset.rowId==='one');assert.ok([...card.walk()].some(e=>e.tagName==='img'&&e.attributes.src==='/materials/'+file));
+ const adopt=[...card.walk()].find(e=>e.attributes['data-adopt-image']==='one'),regenerate=[...card.walk()].find(e=>e.attributes['data-generate-image']==='one');assert.ok(adopt);assert.ok(regenerate);
+ assert.equal(ui.get('image-proposal').children.length,0);assert.match(ui.get('approve-images').textContent,/APIなし/);
+ await adopt.emit('click');assert.equal(ui.requests.filter(r=>r.route==='approve-images').length,1);assert.equal(ui.requests.find(r=>r.route==='approve-images').input.id,'one');assert.equal(ui.requests.some(r=>['prepare-images','generate-image','regenerate-image'].includes(r.route)),false);
+});
+test('user requirements: automatic theme disables manual instructions and excludes retained text from submission',async()=>{
+ const ui=await setup({rows:[]});await ui.edit(ui.get('production-instructions'),'以前の手入力テーマ');
+ ui.get('theme-auto').checked=true;await ui.get('theme-auto').emit('change');assert.equal(ui.get('production-instructions').disabled,true);
+ await ui.get('generate-script').emit('click');assert.equal(ui.requests.find(r=>r.route==='draft').input.brief.instructions,'');
+ ui.get('theme-auto').checked=false;await ui.get('theme-auto').emit('change');assert.equal(ui.get('production-instructions').disabled,false);
+});
+test('user requirements: ordinary UI contains no material diagnosis or ending-credit inputs',()=>{
+ assert.doesNotMatch(html,/素材送信の診断|id="diagnose-sources"|id="ending-(?:label|url|owner|seconds)"/);
+ assert.match(html,/id="opening-speech"/);
+});
+test('user requirements: source context is below the editable result, with no duplicate scene script',async()=>{
+ assert.ok(html.indexOf('id="storyboard-preview"')>html.indexOf('id="script-input"'));
+ const sourcePlan={script:'新しい説明です。',readings:[{caption:'新しい説明です。',speech:'あたらしいせつめいです。'}],storyboard:{title:'新しい説明',summary:'資料の構成',voice:'Puck',voiceReason:'明るい声',sources:[{id:'text',label:'本文',status:'provided',summary:'参考資料'}],scenes:[{caption:'新しい説明です。',title:'説明',points:['要点'],imageFile:'',sourceIds:['text']}]}};
+ const ui=await setup({rows:[],sourcePlan});await ui.edit(ui.get('source-text'),'資料本文');await ui.edit(ui.get('production-instructions'),'説明を作る');await ui.get('generate-script').emit('click');
+ assert.equal(ui.get('script-input').value,'新しい説明です。');assert.equal([...ui.get('storyboard-preview').walk()].some(e=>e.textContent==='新しい説明です。'),false);
+});
 test('adding a material after typing keeps the draft usable without hiding concurrent brief changes',async()=>{
  for(const concurrent of [false,true]){
   const ui=await setup({rows:[],strictProductionRevision:true,materialConcurrentEdit:concurrent});
@@ -49,9 +80,9 @@ test('draft generation stays for review, displays an actual catalog choice, then
  const previewMarkup=html.slice(html.indexOf('id="direction-sample"'),html.indexOf('id="manual-direction"'));assert.match(previewMarkup,/<div class="preview-points"><span>[^<]+<\/span><span>[^<]+<\/span><\/div>/);assert.match(ui.get('direction-sample').attributes.class,/design-steps/);
  assert.equal(ui.get('generate-script').hidden,true);assert.equal(ui.get('regenerate-script').hidden,false);await ui.get('plan-sources').emit('click');assert.equal(ui.location.hash,'#connection');assert.equal(ui.requests.filter(r=>r.route==='draft').length,1);assert.ok(ui.requests.find(r=>r.route==='adopt-script'));assert.equal(ui.state().presentation.template,'steps');assert.equal(ui.requests.some(r=>['approve','generate','finalize'].includes(r.route)),false);
 });
-test('manual direction expands, applies and closes without a provider call, and stays manual during regeneration',async()=>{
+test('manual direction stays expanded after applying settings and polling, and stays manual during regeneration',async()=>{
  const ui=await setup({rows:[]});ui.get('auto-direction').checked=false;await ui.get('auto-direction').emit('change');assert.equal(ui.get('manual-direction').hidden,false);assert.equal(ui.get('manual-direction').open,true);
- await ui.edit(ui.get('job-title'),'手動の題名');await ui.get('template-gallery').children.find(b=>b.dataset.template==='blueprint').emit('click');await ui.edit(ui.get('motion-style'),'off');await ui.get('motion-style').emit('change');await ui.get('apply-direction').emit('click');assert.equal(ui.get('manual-direction').open,false);assert.equal(ui.get('auto-direction').checked,false);assert.equal(ui.state().title,'手動の題名');assert.equal(ui.state().presentation.template,'blueprint');assert.equal(ui.state().presentation.motion,null);assert.equal(ui.requests.some(r=>['draft','source-plan','generate'].includes(r.route)),false);
+ await ui.edit(ui.get('job-title'),'手動の題名');await ui.get('template-gallery').children.find(b=>b.dataset.template==='blueprint').emit('click');await ui.edit(ui.get('motion-style'),'off');await ui.get('motion-style').emit('change');await ui.get('apply-direction').emit('click');await ui.poll();assert.equal(ui.get('manual-direction').open,true);assert.equal(ui.get('auto-direction').checked,false);assert.equal(ui.state().title,'手動の題名');assert.equal(ui.state().presentation.template,'blueprint');assert.equal(ui.state().presentation.motion,null);assert.equal(ui.requests.some(r=>['draft','source-plan','generate'].includes(r.route)),false);
  await ui.edit(ui.get('script-input'),'既存の台本。');await ui.edit(ui.get('production-instructions'),'わかりやすく修正');await ui.sendScript({confirmOverwrite:true});assert.equal(ui.state().title,'手動の題名');assert.equal(ui.state().presentation.template,'blueprint');assert.equal(ui.state().presentation.motion,null);
 });
 test('narration completion advances to listening and never automatically seals, marks listening or renders',async()=>{
@@ -355,7 +386,7 @@ class Element {
     this.disabled = false;
     this.files = [];
     const classes=new Set();this.classList = {toggle(name,on) {if(on)classes.add(name);else classes.delete(name);},contains:name=>classes.has(name),add:name=>classes.add(name),remove:name=>classes.delete(name)};
-    this.style = {setProperty() {}};
+    this.style = {vars:new Map(),setProperty(key,value) {this.vars.set(key,value);}};
   }
   setAttribute(name, value) {
     this.attributes[name] = String(value);
@@ -452,6 +483,7 @@ async function setup({imageProposal,motion,autoConfirm=false,voiceConfirmed=true
     if (route === 'themes') return reply([{name: 'moon', background: '#002b36', foreground: '#93a1a1', heading: '#eee8d5', accent: '#268bd2'}]);
     if (route === 'designs') return reply(VIDEO_TEMPLATES);
     if (options.headers?.['X-Narration-Token'] !== token) return reply({error: 'CSRF_TOKEN_REQUIRED'}, false);
+    if(route==='approve-images'){const choices=state.imageProposal.scenes.filter(s=>!input.id||s.id===input.id);for(const scene of choices)state.rows.find(r=>r.id===scene.id).cutImage={file:scene.imageFile};state.imageProposal=null;return reply(state);}
     if(route==='material'){
       const bytes=await options.body.arrayBuffer(),file=Buffer.from(await crypto.subtle.digest('SHA-256',bytes)).toString('hex')+'.png';
       state.production.assets.push({name:options.body.name,file,size:bytes.byteLength});state.productionRevision='inputs-material';
@@ -623,8 +655,8 @@ test('individual correction applies only that cut and preserves other pending in
 });
 
 test('bookend edits survive polling, block final approval and save without generation',async()=>{
- const ui=await setup();await ui.edit(ui.get('opening-title'),'制作の紹介');await ui.edit(ui.get('opening-speech'),'せいさくのしょうかい');await ui.edit(ui.get('ending-label'),'制作システム');await ui.edit(ui.get('ending-url'),'https://example.com');await ui.edit(ui.get('ending-owner'),'Author');ui.get('ending-seconds').value='4';await ui.poll();assert.equal(ui.get('opening-title').value,'制作の紹介');assert.equal(ui.get('confirm-full').disabled,true);
- await ui.get('save-bookends').emit('click');const call=ui.requests.find(r=>r.route==='bookends');assert.equal(call.input.owner,'Author');assert.equal(call.input.endSeconds,4);assert.equal(call.input.speech,'せいさくのしょうかい');assert.equal(ui.requests.some(r=>['generate','generate-music','finalize'].includes(r.route)),false);
+ const ui=await setup();await ui.edit(ui.get('opening-title'),'制作の紹介');await ui.edit(ui.get('opening-speech'),'せいさくのしょうかい');await ui.poll();assert.equal(ui.get('opening-title').value,'制作の紹介');assert.equal(ui.get('confirm-full').disabled,true);
+ await ui.get('save-bookends').emit('click');const call=ui.requests.find(r=>r.route==='bookends');assert.equal(call.input.owner,'FURU');assert.equal(call.input.endUrl,'https://note.com/happy_duck780');assert.equal(call.input.endSeconds,4);assert.equal(call.input.speech,'せいさくのしょうかい');assert.equal(ui.requests.some(r=>['generate','generate-music','finalize'].includes(r.route)),false);
 });
 
 for(const buttonId of ['new-project','new-project-bottom'])test(buttonId+' starts an empty project at the page top and preserves the completed project and key',async()=>{
@@ -720,9 +752,9 @@ test('an explicitly cleared image does not reappear from a legacy filename after
  const select=[...ui.get('rows').walk()].find(e=>e.dataset.cutImage==='one');assert.equal(select.value,'');
  assert.equal([...ui.get('rows').walk()].some(e=>e.tagName==='img'&&e.attributes.src==='/materials/'+file),false);
 });
-test('image proposals show costs for approval and keep regeneration as an optional disclosure without calling providers',async()=>{
+test('unprepared images cannot be adopted; preparing and per-cut regeneration disclose costs without sending on render',async()=>{
  const proposal={id:'proposal-1',scenes:[{id:'one',caption:'字幕。',imageFile:'',imagePrompt:'静かな室内',reason:'説明に対応する画像が必要'}]};
- const ui=await setup({imageProposal:proposal});assert.equal(ui.get('plan-images').hidden,true);assert.equal(ui.get('approve-images').hidden,false);assert.match(ui.get('approve-images').textContent,/画像1枚.*API 1回/);assert.equal(ui.get('image-rethink').hidden,false);assert.ok([...ui.get('image-proposal').walk()].some(e=>e.textContent==='説明に対応する画像が必要'));assert.equal(ui.requests.some(r=>['plan-images','approve-images','generate-image'].includes(r.route)),false);await ui.edit(ui.textArea('one','speech'),'変更');assert.equal(ui.get('approve-images').disabled,true);
+ const ui=await setup({imageProposal:proposal});assert.equal(ui.get('plan-images').hidden,false);assert.match(ui.get('plan-images').textContent,/画像1枚.*API/);assert.equal(ui.get('approve-images').disabled,true);assert.match(ui.get('approve-images').textContent,/APIなし/);assert.equal(ui.get('image-proposal').children.length,0);assert.equal(ui.requests.some(r=>['prepare-images','approve-images','regenerate-image'].includes(r.route)),false);
 });
 test('only one final render control exists and new-project and draft saving are subordinate actions',()=>{
  assert.ok(!html.includes('id="export"'));assert.ok(!html.includes('id="play-full"'));assert.ok(!html.includes('id="consent"'));assert.ok(!html.includes('class="audio-download"'));assert.match(html,/<button id="new-project-bottom"[^>]*class="quiet">別の制作を始める/);assert.match(html,/<details class="draft-save"><summary>途中で保存して終える<\/summary><button id="save-production"/);assert.ok(html.includes('id="download-audio"'));

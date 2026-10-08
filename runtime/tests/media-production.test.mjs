@@ -59,7 +59,7 @@ test('image endpoint enforces consent, revision, mode and references before spen
  const get=async()=> (await fetch(service.url+'/api/status')).json();const post=async(input)=>(await fetch(service.url+'/api/generate-image',{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':token},body:JSON.stringify(input)})).json();
  const state=await get(),input={id:'one',prompt:'机',references:[],revision:state.revision,productionRevision:state.productionRevision,consent:true};
  assert.equal((await post({...input,consent:false})).error,'GENERATION_CONSENT_REQUIRED');assert.equal((await post({...input,productionRevision:'stale'})).error,'STALE_REVISION');assert.equal((await post({...input,references:[file]})).error,'INVALID_IMAGE_REFERENCES');assert.equal(calls,0);
- const before=await readFile(path.join(dir,'job.json'));const result=await post(input);assert.equal(result.error,null);assert.equal(calls,1);assert.equal(result.production.assets[0].origin,'generated-image');assert.ok(result.rows[0].cutImage);assert.deepEqual(await readFile(path.join(dir,'job.json')),before);
+ const before=await readFile(path.join(dir,'job.json'));const result=await post(input);assert.equal(result.error,null);assert.equal(calls,1);assert.equal(result.production.assets[0].origin,'generated-image');assert.equal(result.rows[0].cutImage,null);assert.ok(result.imageProposal.scenes[0].imageFile);assert.deepEqual(await readFile(path.join(dir,'job.json')),before);
  assert.equal((await post(input)).error,'STALE_REVISION');assert.equal(calls,1);
  const p=await ProductionInputs.open(dir);assert.equal(p.status().assets[0].origin,'generated-image');
 });

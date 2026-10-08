@@ -51,13 +51,25 @@ export async function startServer({session,port=6181,sampleDir=path.join(session
   }
   function currentImageProposal(){
     if(production.status().finalization)return null;
-    if(imageProposal&&(imageProposal.revision!==session.revision()||imageProposal.productionRevision!==production.finalInputsHash()))imageProposal=null;
+    const saved=imageProposal||production.status().imageProposal;
+    if(saved&&(saved.revision!==session.revision()||saved.productionRevision!==production.finalInputsHash()||!imageProposal)){
+      imageProposal=null;
+      try{const scenes=saved.scenes.filter(s=>session.status().rows.some(r=>r.id===s.id&&r.caption===s.caption)),targets=scenes.map(s=>session.status().rows.find(r=>r.id===s.id));
+        if(scenes.length){const checked=makeImageProposal(scenes.map(s=>({...s,imageReason:s.reason})),targets);imageProposal={...checked,...(saved.revision===checked.revision&&saved.productionRevision===checked.productionRevision?{id:saved.id}:{}),scenes:checked.scenes.map((s,i)=>({...s,...(scenes[i].generationPrompt?{generationPrompt:safeText(scenes[i].generationPrompt,3000)}:{})}))};}
+      }catch{}
+    }
     if(!imageProposal){const rows=session.status().rows.filter(r=>r.id!==production.status().bookends?.titleRowId),scenes=production.status().brief.storyboard?.scenes;if(rows.length&&scenes?.length===rows.length&&rows.some(r=>!production.cutImage(r)&&production.imagePlan(r)))try{imageProposal=makeImageProposal(scenes.map((s,i)=>production.cutImage(rows[i])?{...s,imageFile:production.cutImage(rows[i]).file,imagePrompt:'',imageReferences:[]}:s),rows);}catch{}}
     return imageProposal;
   }
+  async function queueImageCandidates(scenes){
+    const prior=currentImageProposal(),targets=scenes.map(s=>session.status().rows.find(r=>r.id===s.id));
+    const prepared=makeImageProposal(scenes.map(s=>({...s,imagePrompt:'',imageReferences:[],imageReason:s.reason})),targets);
+    imageProposal={...prepared,scenes:[...(prior?.scenes||[]).filter(s=>!scenes.some(c=>c.id===s.id)),...prepared.scenes.map((s,i)=>({...s,...(scenes[i].generationPrompt?{generationPrompt:scenes[i].generationPrompt}:{})}))]};
+    await production.saveImageProposal(imageProposal);
+  }
   async function musicDependency(){if(musicFactory)return;if(!rendererRoot)throw new Error('VIDEO_RENDERER_UNAVAILABLE');await stat(path.join(rendererRoot,'node_modules','@remotion','compositor-win32-x64-msvc',process.platform==='win32'?'ffprobe.exe':'ffprobe'));}
   async function createMusic(direction){
-    const current={...session.status(),pauseSeconds:production.status().pauseSeconds,bookends:production.status().bookends};musicTimeline(current);direction=safeText(direction||'',2000);await musicDependency();
+    const current={...session.status(),pauseSeconds:production.status().pauseSeconds,bookends:production.ending()};musicTimeline(current);direction=safeText(direction||'',2000);await musicDependency();
     const result=musicFactory?await musicFactory({current,direction}):await session.generateMedia('music',{current,direction});
     if(narrationCanceled)throw new Error('CANCELED');
     await production.addAsset('生成BGM-'+Date.now()+'.mp3',result.bytes,{origin:'generated-music'});
@@ -156,28 +168,42 @@ export async function startServer({session,port=6181,sampleDir=path.join(session
         return json(res,200,status());
       }
       if(!['/api/key','/api/connection-check','/api/cancel','/api/preview','/api/prepare-samples','/api/render-video'].includes(route))production.assertWritable();
-      if(['/api/plan-images','/api/approve-images','/api/remove-material'].includes(route)){
+      if(['/api/plan-images','/api/prepare-images','/api/regenerate-image','/api/approve-images','/api/remove-material'].includes(route)){
         if(session.busy||video.status(session.revision()).running)throw new Error('BUSY');
         if(input.revision!==session.revision()||input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');
         if(route==='/api/remove-material'){await production.removeAsset(input.file,session.status().rows);imageProposal=null;return json(res,200,status());}
         if(input.consent!==true)throw new Error('GENERATION_CONSENT_REQUIRED');
         inputBusy=true;try{
           const rows=session.status().rows.filter(r=>r.id!==production.status().bookends?.titleRowId);
-          if(route==='/api/plan-images'){
+          if(route==='/api/regenerate-image'){
+            const row=rows.find(r=>r.id===input.id);if(!row)throw new Error('ROW_NOT_FOUND');
+            const prior=currentImageProposal()?.scenes.find(s=>s.id===row.id),plan=production.imagePlan(row),file=prior?.imageFile||production.cutImage(row)?.file;
+            const prompt=(prior?.generationPrompt||plan?.imagePrompt||'台本の場面を説明する画像：'+row.caption)+'。変更希望：'+safeText(input.instructions||'同じ内容と雰囲気を保ち、構図を変えてください。',2000);
+            const candidate=makeImageProposal([{caption:row.caption,imagePrompt:prompt,imageReferences:input.references??(file?[file]:[]),imageReason:'指定したカットだけの再生成'}],[row]);
+            if(imageProposal){imageProposal.scenes=[...imageProposal.scenes.filter(s=>s.id!==row.id),...candidate.scenes];imageProposal.id=randomUUID();}else imageProposal=candidate;
+          }else if(route==='/api/plan-images'||route==='/api/prepare-images'&&!currentImageProposal()){
             const targets=input.id?rows.filter(r=>r.id===input.id):rows;if(!targets.length)throw new Error('ROW_NOT_FOUND');
             const brief={...production.status().brief,scriptMode:'existing',script:targets.map(r=>r.caption).join('\n'),instructions:'台本の字幕を一字も変更せず、各カットに使う画像だけを提案してください。提供素材を内容に合う場面へ割り当て、不足する場合だけ新規画像の指示を作成します。'+safeText(input.instructions||'',2000),autoDirection:false,references:{text:targets.map(r=>r.caption).join('\n'),urls:[]}};
-            const images=production.status().assets.filter(a=>/\.(png|jpe?g|webp)$/.test(a.file));const plan=await session.planSources(brief,images,file=>production.readAsset(file));imageProposal=makeImageProposal(plan.storyboard?.scenes,targets);return json(res,200,status());
+            const images=production.status().assets.filter(a=>/\.(png|jpe?g|webp)$/.test(a.file));const plan=await session.planSources(brief,images,file=>production.readAsset(file));imageProposal=makeImageProposal(plan.storyboard?.scenes,targets);
           }
-          const proposal=currentImageProposal();if(!proposal||proposal.id!==input.proposalId)throw new Error('STALE_IMAGE_PROPOSAL');
-          for(const scene of proposal.scenes){if(!scene.imagePrompt)continue;
+          if(imageProposal)await production.saveImageProposal(imageProposal);
+          if(route==='/api/plan-images')return json(res,200,status());
+          const proposal=currentImageProposal();if(!proposal)throw new Error('STALE_IMAGE_PROPOSAL');
+          if(route==='/api/approve-images'){
+            if(proposal.id!==input.proposalId)throw new Error('STALE_IMAGE_PROPOSAL');const choices=input.id?proposal.scenes.filter(s=>s.id===input.id):proposal.scenes;if(!choices.length)throw new Error('ROW_NOT_FOUND');
+            if(choices.some(s=>s.imagePrompt))throw new Error('IMAGE_CANDIDATE_REQUIRED');
+            await production.applyImageChoices(choices,rows);proposal.scenes=proposal.scenes.filter(s=>!choices.some(c=>c.id===s.id));proposal.productionRevision=production.finalInputsHash();proposal.id=randomUUID();if(!proposal.scenes.length)imageProposal=null;await production.saveImageProposal(imageProposal||undefined);return json(res,200,status());
+          }
+          for(const scene of proposal.scenes){if(!scene.imagePrompt||route==='/api/regenerate-image'&&scene.id!==input.id)continue;
             const references=await Promise.all(scene.imageReferences.map(async file=>({bytes:await production.readAsset(file),extension:file.split('.').at(-1)})));
-            const image=await session.generateMedia('image',{prompt:scene.imagePrompt,references});await production.addAsset('生成画像-'+scene.id+'.'+image.extension,image.bytes,{origin:'generated-image'});scene.imageFile=createHash('sha256').update(image.bytes).digest('hex')+'.'+image.extension;scene.imagePrompt='';scene.imageReferences=[];proposal.productionRevision=production.finalInputsHash();
+            const image=await session.generateMedia('image',{prompt:scene.imagePrompt,references});await production.addAsset('生成画像-'+scene.id+'.'+image.extension,image.bytes,{origin:'generated-image'});
+            scene.generationPrompt=scene.imagePrompt;scene.imageFile=createHash('sha256').update(image.bytes).digest('hex')+'.'+image.extension;scene.imagePrompt='';scene.imageReferences=[];proposal.productionRevision=production.finalInputsHash();await production.saveImageProposal(proposal);
           }
-          await production.applyImageChoices(proposal.scenes,rows);imageProposal=null;return json(res,200,status());
+          return json(res,200,status());
         }finally{inputBusy=false;}
       }
       if(route==='/api/cut-image'){
-        if(session.busy)throw new Error('BUSY');if(input.revision!==session.revision())throw new Error('STALE_REVISION');const row=session.status().rows.find(r=>r.id===input.id);if(!row)throw new Error('ROW_NOT_FOUND');await production.assignCutImage(row,input.file);return json(res,200,status());
+        if(session.busy)throw new Error('BUSY');if(input.revision!==session.revision())throw new Error('STALE_REVISION');const row=session.status().rows.find(r=>r.id===input.id);if(!row)throw new Error('ROW_NOT_FOUND');await production.assignCutImage(row,input.file);if(imageProposal){imageProposal.scenes=imageProposal.scenes.filter(s=>s.id!==row.id);imageProposal.productionRevision=production.finalInputsHash();imageProposal.id=randomUUID();if(!imageProposal.scenes.length)imageProposal=null;}await production.saveImageProposal(imageProposal||undefined);return json(res,200,status());
       }
       if(route==='/api/bookends'){
         if(session.busy||video.status(session.revision()).running)throw new Error('BUSY');
@@ -287,8 +313,8 @@ export async function startServer({session,port=6181,sampleDir=path.join(session
             const references=[];for(const file of files){const asset=production.status().assets.find(a=>a.file===file);if(!asset||! /\.(png|jpe?g|webp)$/.test(file))throw new Error('INVALID_IMAGE_REFERENCES');references.push({bytes:await production.readAsset(file),extension:file.split('.').at(-1)});}
             const image=await session.generateMedia('image',{prompt,references});
             await production.addAsset('生成画像-'+row.id+'.'+image.extension,image.bytes,{origin:'generated-image'});
-            const file=createHash('sha256').update(image.bytes).digest('hex')+'.'+image.extension;await production.assignCutImage(row,file);
-            const brief=production.status().brief;if(brief.storyboard){const scenes=brief.storyboard.scenes;const index=session.status().rows.findIndex(r=>r.id===row.id);if(scenes[index]?.caption===row.caption){scenes[index]={...scenes[index],imageFile:file,imagePrompt:'',imageReferences:[]};delete scenes[index].imageFocus;await production.saveBrief(brief);}}
+            const file=createHash('sha256').update(image.bytes).digest('hex')+'.'+image.extension;
+            await queueImageCandidates([{id:row.id,caption:row.caption,imageFile:file,generationPrompt:prompt,reason:'このカットの生成画像'}]);
             return json(res,200,status());
           }
           narrationCanceled=false;await createMusic(input.direction);return json(res,200,status());
@@ -308,9 +334,11 @@ export async function startServer({session,port=6181,sampleDir=path.join(session
           const proposed=all.map(r=>edits.find(e=>e.id===r.id)||r),brief={...production.status().brief,script:proposed.map(r=>r.caption).join('\n')};delete brief.readings;delete brief.storyboard;if(proposed.every(r=>isHiraganaReading(r.speech)))brief.readings=proposed.map(({caption,speech})=>({caption,speech}));normalizeBrief(brief);
           for(const e of edits)if(e.image)validateAsset('修正画像.'+e.image.extension,e.image.bytes);
           const visuals={...(production.status().visuals||{})};
-          for(const e of edits){if(e.image){await production.addAsset('修正画像-'+e.id+'.'+e.image.extension,e.image.bytes);const image=production.status().assets.find(a=>a.file.startsWith(createHash('sha256').update(e.image.bytes).digest('hex')+'.'));await production.assignCutImage(all.find(r=>r.id===e.id),image.file);}visuals[e.id]={title:e.title,points:e.points};await production.reopenCut(e.id);}
+          const candidates=[];
+          for(const e of edits){if(e.image){await production.addAsset('修正画像-'+e.id+'.'+e.image.extension,e.image.bytes,{origin:'generated-image'});candidates.push({id:e.id,caption:e.caption,imageFile:createHash('sha256').update(e.image.bytes).digest('hex')+'.'+e.image.extension,generationPrompt:e.imagePrompt,reason:'修正指示を反映した画像'});}visuals[e.id]={title:e.title,points:e.points};await production.reopenCut(e.id);}
           await production.saveVisuals(visuals,all);await session.applyCorrectionRows(edits,baseline);
           const current=session.status();await production.saveBrief(brief);
+          if(candidates.length)await queueImageCandidates(candidates);
           await production.saveReview({...review,sourceRevision:current.revision,overall:input.id?review.overall:'',cuts:review.cuts.filter(c=>!edits.some(e=>e.id===c.rowId))});return json(res,200,{...status(),correctionResult:{ids:edits.map(e=>e.id),images:edits.filter(e=>e.image).length,textChanged:edits.filter(e=>{const r=all.find(r=>r.id===e.id);return r.caption!==e.caption||r.speech!==e.speech;}).length}});
         }finally{inputBusy=false;}
       }
@@ -330,7 +358,7 @@ export async function startServer({session,port=6181,sampleDir=path.join(session
         if(input.sessionId!==session.status().sessionId)throw new Error('SESSION_MISMATCH');
         await session.replaceJob(input.job,{confirmReplace:input.confirmReplace===true,expectedRevision:input.expectedRevision,sessionId:input.sessionId});
       }
-      else if(route==='/api/settings'){const {candidate,...config}=input;if(candidate!==undefined&&typeof candidate!=='boolean')throw new Error('INVALID_VOICE_CONFIRMATION');const fingerprint=previewFingerprint(config);production.assertWritable();await session.configure(config);await production.saveVoiceConfirmation(candidate===true?null:fingerprint);}
+      else if(route==='/api/settings'){const proposal=currentImageProposal();const {candidate,...config}=input;if(candidate!==undefined&&typeof candidate!=='boolean')throw new Error('INVALID_VOICE_CONFIRMATION');const fingerprint=previewFingerprint(config);production.assertWritable();await session.configure(config);await production.saveVoiceConfirmation(candidate===true?null:fingerprint);if(proposal&&proposal.scenes.every(s=>session.status().rows.some(r=>r.id===s.id&&r.caption===s.caption))){imageProposal={...proposal,id:randomUUID(),revision:session.revision(),productionRevision:production.finalInputsHash()};await production.saveImageProposal(imageProposal);}}
       else if(route==='/api/title')await session.setTitle(input.title);
       else if(route==='/api/presentation'){if(input.presentation){if(input.revision!==session.revision())throw new Error('STALE_REVISION');await session.setPresentation(input.presentation);}else await session.setTheme(input.theme);}
       else if(route==='/api/append-row'){assertAdopted();if(!isHiraganaReading(input.speech))throw new Error('HIRAGANA_READING_REQUIRED');await session.appendRow(input);const brief=production.status().brief,rows=session.status().rows.filter(r=>r.id!==production.status().bookends?.titleRowId);await production.saveBrief({...brief,script:rows.map(r=>r.caption).join('\n'),readings:undefined,storyboard:undefined,scriptEdited:true});}

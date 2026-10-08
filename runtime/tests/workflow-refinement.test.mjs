@@ -23,11 +23,42 @@ test('AI image proposal needs approval, rejects stale/unknown choices and preser
  bad=true;assert.equal((await post('plan-images',{consent:true})).code,409);assert.equal((await status()).rows[0].cutImage.file,file);
  result=await post('remove-material',{file});assert.equal(result.code,200);assert.equal(result.data.production.assets.length,0);assert.equal(result.data.rows[0].cutImage,null);assert.deepEqual(await readFile(path.join(f.dir,'job.json')),before);
 });
-test('approved missing images generate only once each; failure retains candidates and retry requires another explicit approval',async t=>{
+test('missing images are generated before approval; partial failure keeps candidates and an explicit preparation resumes only missing images',async t=>{
  const f=await setup(t),png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=','base64');let calls=0;
  f.session.planSources=async()=>({storyboard:{scenes:f.session.status().rows.map(r=>({caption:r.caption,imageFile:'',imagePrompt:'A calm landscape',imageReason:'不足する場面',imageReferences:[]}))}});
  f.session.generateMedia=async()=>{calls++;if(calls===2)throw new Error('PROVIDER_RATE_LIMIT');return {bytes:png,extension:'png'};};
  const service=await startServer({session:f.session,port:0});t.after(()=>service.close());const token=(await(await fetch(service.url+'/api/bootstrap')).json()).token,status=async()=>(await fetch(service.url+'/api/status')).json();const post=async(route,extra={})=>{const st=await status();const r=await fetch(service.url+'/api/'+route,{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':token},body:JSON.stringify({revision:st.revision,productionRevision:st.productionRevision,...extra})});return {code:r.status,data:await r.json()};};
- const planned=await post('plan-images',{consent:true});assert.equal(calls,0);const id=planned.data.imageProposal.id;const before=await readFile(path.join(f.dir,'job.json'));assert.equal((await post('approve-images',{proposalId:id,consent:true})).code,409);assert.equal(calls,2);const failed=await status();assert.ok(failed.imageProposal.scenes[0].imageFile);assert.equal(failed.imageProposal.scenes[0].imagePrompt,'');assert.ok(failed.imageProposal.scenes[1].imagePrompt);assert.equal(failed.rows[0].cutImage,null);assert.equal((await post('approve-images',{proposalId:id})).code,409);assert.equal(calls,2);
- assert.equal((await post('approve-images',{proposalId:id,consent:true})).code,200);assert.equal(calls,3);assert.equal((await status()).imageProposal,null);assert.deepEqual(await readFile(path.join(f.dir,'job.json')),before);
+ const before=await readFile(path.join(f.dir,'job.json'));assert.equal((await post('prepare-images',{consent:true})).code,409);assert.equal(calls,2);
+ const failed=await status(),id=failed.imageProposal.id;assert.ok(failed.imageProposal.scenes[0].imageFile);assert.ok(failed.imageProposal.scenes[1].imagePrompt);assert.equal(failed.rows[0].cutImage,null);
+ assert.equal((await post('approve-images',{proposalId:id,consent:true})).code,409);assert.equal(calls,2);
+ assert.equal((await post('prepare-images',{consent:true})).code,200);assert.equal(calls,3);const prepared=await status();assert.ok(prepared.imageProposal.scenes.every(s=>s.imageFile&&!s.imagePrompt));
+ assert.equal((await post('approve-images',{proposalId:prepared.imageProposal.id,consent:true})).code,200);assert.equal(calls,3);assert.deepEqual(await readFile(path.join(f.dir,'job.json')),before);
+});
+test('only the requested image regenerates; approval calls no provider, and prepared candidates survive reopening',async t=>{
+ const f=await setup(t),png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=','base64');let calls=0;
+ f.session.planSources=async()=>({storyboard:{scenes:f.session.status().rows.map(r=>({caption:r.caption,imagePrompt:'A landscape',imageFile:'',imageReferences:[]}))}});
+ f.session.generateMedia=async()=>({bytes:Buffer.concat([png,Buffer.from([++calls])]),extension:'png'});
+ let service=await startServer({session:f.session,port:0});t.after(()=>service.close());let token=(await(await fetch(service.url+'/api/bootstrap')).json()).token;
+ const status=async()=>(await fetch(service.url+'/api/status')).json(),post=async(route,extra={})=>{const st=await status();const res=await fetch(service.url+'/api/'+route,{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':token},body:JSON.stringify({revision:st.revision,productionRevision:st.productionRevision,consent:true,...extra})});return {code:res.status,data:await res.json()};};
+ const before=await readFile(path.join(f.dir,'job.json'));assert.equal((await post('prepare-images')).code,200);assert.equal(calls,2);
+ await service.close();service=await startServer({session:f.session,port:0});token=(await(await fetch(service.url+'/api/bootstrap')).json()).token;
+ const reopened=await status();assert.ok(reopened.imageProposal?.scenes.every(s=>s.imageFile));assert.equal(calls,2);
+ assert.equal((await post('approve-images',{proposalId:reopened.imageProposal.id})).code,200);const adopted=await status(),original=adopted.rows.map(r=>r.cutImage.file);
+ assert.equal((await post('regenerate-image',{id:'missing'})).code,404);assert.equal(calls,2);
+ const regenerated=await post('regenerate-image',{id:'first',instructions:'夕方の光に変える'});assert.equal(regenerated.code,200);assert.equal(calls,3);assert.deepEqual(regenerated.data.rows.map(r=>r.cutImage.file),original);
+ const pending=await ProductionInputs.open(f.dir);await assert.rejects(pending.finalize(f.session.status()),/IMAGE_APPROVAL_REQUIRED/);assert.throws(()=>pending.assertFinalization(f.session.status()),/IMAGE_APPROVAL_REQUIRED/);await assert.rejects(pending.confirmCut(f.session.status().rows[0],regenerated.data.rows[0].cutFingerprint),/IMAGE_APPROVAL_REQUIRED/);
+ assert.equal((await post('approve-images',{proposalId:regenerated.data.imageProposal.id,id:'first'})).code,200);const final=await status();assert.notEqual(final.rows[0].cutImage.file,original[0]);assert.equal(final.rows[1].cutImage.file,original[1]);assert.equal(calls,3);assert.deepEqual(await readFile(path.join(f.dir,'job.json')),before);
+});
+test('voice selection retains prepared images while rejecting the old approval snapshot without new image requests',async t=>{
+ const f=await setup(t),png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=','base64');let calls=0;
+ f.session.planSources=async()=>({storyboard:{scenes:f.session.status().rows.map(r=>({caption:r.caption,imagePrompt:'A room',imageFile:'',imageReferences:[]}))}});f.session.generateMedia=async()=>{calls++;return {bytes:png,extension:'png'};};
+ const service=await startServer({session:f.session,port:0});t.after(()=>service.close());const token=(await(await fetch(service.url+'/api/bootstrap')).json()).token,status=async()=>(await fetch(service.url+'/api/status')).json();
+ const send=async(route,input)=>{const res=await fetch(service.url+'/api/'+route,{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':token},body:JSON.stringify(input)});return {code:res.status,data:await res.json()};};
+ let st=await status();assert.equal((await send('prepare-images',{revision:st.revision,productionRevision:st.productionRevision})).code,409);assert.equal(calls,0);
+ st=(await send('prepare-images',{revision:st.revision,productionRevision:st.productionRevision,consent:true})).data;const old=st.imageProposal;
+ const next=await send('settings',{...st.settings,voice:'Puck'});assert.equal(next.code,200);assert.ok(next.data.imageProposal.scenes.every(s=>s.imageFile));assert.equal(calls,2);assert.notEqual(next.data.imageProposal.id,old.id);
+ assert.equal((await send('approve-images',{revision:old.revision,productionRevision:old.productionRevision,proposalId:old.id,consent:true})).code,409);assert.equal(calls,2);
+ const beforeReading=next.data.imageProposal;await f.session.updateRow('first',{speech:'あめのひは、ほんをよみます。'});const afterReading=await status();assert.ok(afterReading.imageProposal.scenes.every(s=>s.imageFile));assert.notEqual(afterReading.imageProposal.id,beforeReading.id);assert.equal(calls,2);
+ assert.equal((await send('approve-images',{revision:afterReading.revision,productionRevision:afterReading.productionRevision,proposalId:beforeReading.id,consent:true})).code,409);
+ assert.equal((await send('approve-images',{revision:afterReading.revision,productionRevision:afterReading.productionRevision,proposalId:afterReading.imageProposal.id,consent:true})).code,200);assert.equal(calls,2);
 });
