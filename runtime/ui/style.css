@@ -103,3 +103,20 @@
 .script-confirm{margin-top:16px;padding:16px;border:1px solid var(--accent);border-radius:10px}.script-confirm[hidden]{display:none}
 
 .action-guidance{font-size:14px;line-height:1.8;color:var(--fg);margin:14px 0}#ai-script-controls{border:0;padding:0;margin:20px 0;min-width:0}#ai-script-controls[hidden]{display:none}#ai-script-controls legend{font-weight:700;margin-bottom:12px}.reading-preparation{margin:20px 0}#retry-confirm{padding:16px;border:1px solid var(--border);border-radius:8px}
+/* Text regions have separate bounds; fitting keeps long Japanese titles visible. */
+.design-sample .preview-heading{top:15%;height:34%;max-height:34%;overflow:hidden;margin:0;box-sizing:border-box}
+.design-sample .preview-points{top:53%;height:25%;max-height:25%;overflow:hidden;margin:0;box-sizing:border-box}
+.design-sample.design-focus .preview-heading,.design-sample.design-steps .preview-heading{height:23%;max-height:23%}
+.design-sample.design-gallery .preview-heading{height:43%;max-height:43%}
+.design-sample.design-gallery .preview-points{top:66%;height:13%;max-height:13%}
+.design-sample.design-rail .preview-heading{height:24%;max-height:24%}
+.design-sample.design-rail .preview-points{top:20%;height:55%;max-height:55%}
+.design-sample.design-stack .preview-heading{height:20%;max-height:20%}
+.design-sample.design-stack .preview-points{top:40%;height:37%;max-height:37%}
+.image-planning{margin:24px 0;padding:20px;border:1px solid var(--border);border-radius:12px}
+.image-choice{padding:16px 0;border-bottom:1px solid var(--border)}.image-choice img{display:block;max-width:100%;width:320px;max-height:200px;object-fit:contain}.image-choice p{overflow-wrap:anywhere}
+.cut-image-drop{border:1px dashed var(--accent);padding:12px;margin:12px 0}.cut-image-drop input{max-width:100%}
+.material-list>div{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.new-video-action #new-project-bottom{width:auto;background:transparent;color:var(--muted);border:1px solid var(--border)}
+#full-audio{display:block;width:100%;margin:14px 0}#full-audio[hidden]{display:none}
+.planning-actions{gap:12px}.download-actions{display:flex;flex-wrap:wrap;gap:12px}

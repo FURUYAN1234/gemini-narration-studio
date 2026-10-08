@@ -20,6 +20,13 @@ export async function fullDecodeVideo(ffmpeg,output,{signal}={}){
   // Decode every video/audio frame using encoders present in that runtime.
   await promisify(execFile)(ffmpeg,['-v','error','-xerror','-i',output,'-map','0:v:0','-map','0:a:0','-c:v','rawvideo','-c:a','pcm_s16le','-f','null','-'],{windowsHide:true,maxBuffer:1024*1024,signal});
 }
+export async function extractVideoAudio(ffmpeg,video,output,{signal}={}){
+  const run=promisify(execFile),options={windowsHide:true,maxBuffer:1024*1024,signal};
+  // The bundled FFmpeg enables mp4 but not the ipod/m4a alias. Preserve AAC
+  // packets without another lossy encode and explicitly select its container.
+  await run(ffmpeg,['-v','error','-xerror','-i',video,'-map','0:a:0','-vn','-c:a','copy','-f','mp4','-y',output],options);
+  await run(ffmpeg,['-v','error','-xerror','-i',output,'-c:a','pcm_s16le','-f','null','-'],options);
+}
 export async function downloadsFolder(){
   if(process.platform!=='win32')return path.join(homedir(),'Downloads');
   const script="$p=Get-ItemPropertyValue -LiteralPath 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders' -Name '{374DE290-123F-4565-9164-39C4925E467B}'; [Environment]::ExpandEnvironmentVariables($p)";
@@ -54,7 +61,7 @@ export class StudioVideo {
   async save(){await writeFile(this.record(),JSON.stringify(this.state,null,2));}
   start({revision,title}){
     if(this.state.running)throw new Error('BUSY');
-    if(this.state.result?.revision===revision)return {started:false,cached:true};
+    if(this.state.result?.revision===revision&&this.state.result.audio)return {started:false,cached:true};
     if(!this.rendererRoot)throw new Error('VIDEO_RENDERER_REQUIRED');
     this.controller=new AbortController();this.state={running:true,stage:'preparing',progress:0,error:null,result:null,steps:['preparing']};
     this.completion=this.render({revision,title});return {started:true};
@@ -74,17 +81,20 @@ export class StudioVideo {
       }});
       check();this.state.stage='saving';this.state.steps.push('saving');await this.save();check();
       const bytes=await readFile(temporary);if(bytes.length<12||bytes.toString('ascii',4,8)!=='ftyp')throw new Error('INVALID_VIDEO_OUTPUT');
+      const audioBytes=await readFile(temporary.replace(/\.mp4$/,'.m4a'));if(audioBytes.length<12||audioBytes.toString('ascii',4,8)!=='ftyp')throw new Error('INVALID_AUDIO_OUTPUT');
+      const audioHash=digest(audioBytes),audioFile=audioHash+'.m4a';await copyFile(temporary.replace(/\.mp4$/,'.m4a'),path.join(videoDir,audioFile));
       const sha256=digest(bytes),file=sha256+'.mp4';await copyFile(temporary,path.join(videoDir,file));
       const folder=this.downloadsDir||await downloadsFolder();if(!path.isAbsolute(folder))throw new Error('INVALID_DOWNLOADS_FOLDER');
       check();await mkdir(folder,{recursive:true});const filename=downloadName(title,runId),savedPath=path.join(folder,filename);check();
       await copyFile(path.join(videoDir,file),savedPath,constants.COPYFILE_EXCL);
       if(digest(await readFile(savedPath))!==sha256)throw new Error('VIDEO_SAVE_HASH_MISMATCH');
-      check();this.state={...this.state,running:false,canceling:false,stage:'complete',progress:1,error:null,result:{revision,file,filename,savedPath,bytes:bytes.length,sha256,completedAt:new Date().toISOString()}};
+      const audioName=filename.replace(/^動画-/, '音声-').replace(/\.mp4$/,'.m4a'),audioPath=path.join(folder,audioName);check();await copyFile(path.join(videoDir,audioFile),audioPath,constants.COPYFILE_EXCL);if(digest(await readFile(audioPath))!==audioHash)throw new Error('AUDIO_SAVE_HASH_MISMATCH');
+      check();this.state={...this.state,running:false,canceling:false,stage:'complete',progress:1,error:null,result:{revision,file,filename,savedPath,audio:{file:audioFile,filename:audioName,savedPath:audioPath,sha256:audioHash,bytes:audioBytes.length},bytes:bytes.length,sha256,completedAt:new Date().toISOString()}};
       this.state.steps.push('complete');await this.save();
     }catch(error){this.state={...this.state,running:false,canceling:false,stage:signal.aborted?'canceled':'failed',error:signal.aborted?'VIDEO_RENDER_CANCELED':/^[A-Z_]+$/.test(error.message)?error.message:error.code==='EACCES'?'VIDEO_SAVE_DENIED':'VIDEO_RENDER_FAILED',result:null};await this.save();}
   }
-  async media(revision){
-    const result=this.status(revision).result;if(!result||!/^[a-f0-9]{64}\.mp4$/.test(result.file))throw new Error('VIDEO_NOT_READY');
+  async media(revision,kind='video'){
+    const saved=this.status(revision).result,result=kind==='audio'?saved?.audio:saved;if(!result||!new RegExp('^[a-f0-9]{64}\\.'+(kind==='audio'?'m4a':'mp4')+'$').test(result.file))throw new Error('VIDEO_NOT_READY');
     const root=await realpath(path.join(this.sourceDir,'video')),file=await realpath(path.join(root,result.file));if(path.dirname(file)!==root)throw new Error('INVALID_VIDEO_PATH');
     const bytes=await readFile(file);if(digest(bytes)!==result.sha256)throw new Error('VIDEO_HASH_MISMATCH');return {bytes,result};
   }

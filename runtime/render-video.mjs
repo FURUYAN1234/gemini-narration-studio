@@ -7,7 +7,7 @@ import path from 'node:path';
 import {prepareReviewedAudio} from './client.mjs';
 import {themeTokens} from './themes.mjs';
 import {ProductionInputs} from './production.mjs';
-import {fullDecodeVideo,renderErrorCode} from './video.mjs';
+import {fullDecodeVideo,extractVideoAudio,renderErrorCode} from './video.mjs';
 import {presentationDesign,presentationMotion} from './designs.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url)),args=process.argv.slice(2),option=name=>{const index=args.indexOf(name);return index<0?undefined:args[index+1];};
@@ -53,6 +53,8 @@ try{
   const run=promisify(execFile);checkCanceled();await fullDecodeVideo(ffmpeg,output,{signal:controller.signal});
   const {stdout}=await run(ffprobe,['-v','error','-show_streams','-show_format','-of','json',output],{windowsHide:true,maxBuffer:1024*1024,signal:controller.signal});checkCanceled();const metadata=JSON.parse(stdout),video=metadata.streams.find(s=>s.codec_type==='video'),audio=metadata.streams.find(s=>s.codec_type==='audio');
   if(!video||!audio||video.width!==composition.width||video.height!==composition.height||Math.abs(Number(metadata.format.duration)-composition.durationInFrames/composition.fps)>0.25)throw new Error('VIDEO_MEDIA_QA_FAILED');
+  const audioOutput=output.replace(/\.mp4$/,'.m4a');
+  await extractVideoAudio(ffmpeg,output,audioOutput,{signal:controller.signal});checkCanceled();
   await writeFile(path.join(sourceDir,'video','media-qa.json'),JSON.stringify({fullDecode:true,frames:composition.durationInFrames,fps:composition.fps,metadata,provider:data.provider,settings:data.settings,...(data.music?{music:data.music}:{}),...(data.bookends?{bookends:data.bookends}:{}),rows:data.rows.map(r=>({id:r.id,image:r.image,file:r.file,frames:r.frames})),renderedAt:new Date().toISOString()},null,2));report({stage:'verifying',progress:1});
 }catch(error){
   // This local renderer never receives credentials. Keep bounded, redacted

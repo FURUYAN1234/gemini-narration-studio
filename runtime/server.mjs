@@ -1,3 +1,4 @@
+import {fullNarration,narrationSignature} from './full-audio.mjs';
 import http from 'node:http';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
@@ -39,8 +40,21 @@ export async function startServer({session,port=6181,sampleDir=path.join(session
   await recoverAdoption();
   let video=await StudioVideo.open({sourceDir:session.outputDir,rendererRoot,downloadsDir,runner:videoRunner});
   const samples=await new VoiceSamples([sampleDir,bundledSampleDir]).load();let inputBusy=false,sampleProgress=null,bankCanceled=false,bankError=null,narrationStage=null,narrationError=null,narrationCanceled=false;
+  let fullAudioCache=null,imageProposal=null;
   let token=randomBytes(32).toString('hex'),instanceId=randomBytes(16).toString('hex'),url;
-  const status=()=>{const current=session.status();Object.assign(projects.find(p=>p.id===projectId),{title:current.title,finalized:!!production.status().finalization});return {...current,voiceConfirmed:production.status().voiceConfirmation===previewFingerprint(current.settings)||(production.status().voiceConfirmation===undefined&&current.rows.some(r=>r.audioCurrent)),projectId,projects:projects.map(p=>({...p})),video:video.status(current.revision),voiceGenders:VOICE_GENDERS,sampleSettings:SAMPLE_SETTINGS,rows:current.rows.map(row=>({...row,...production.cutInfo(row)})),busy:session.busy||inputBusy,error:narrationError||bankError||session.error,progress:narrationStage?{...current.progress,phase:narrationStage}:current.progress,instanceId,resumed,adoptionError,unsavedDraft,production:production.status(),productionRevision:production.finalInputsHash(),musicCurrent:production.status().musicEnabled===false||!production.status().music||production.status().music.signature===musicSignature(current),samples:samples.status(),sampleProgress,sampleLibraryTotal:SAMPLE_SETTINGS.length};};
+  const status=()=>{const current=session.status();Object.assign(projects.find(p=>p.id===projectId),{title:current.title,finalized:!!production.status().finalization});return {...current,imageProposal:currentImageProposal(),fullAudioRevision:narrationSignature(current,production.status().pauseSeconds),voiceConfirmed:production.status().voiceConfirmation===previewFingerprint(current.settings)||(production.status().voiceConfirmation===undefined&&current.rows.some(r=>r.audioCurrent)),projectId,projects:projects.map(p=>({...p})),video:video.status(current.revision),voiceGenders:VOICE_GENDERS,sampleSettings:SAMPLE_SETTINGS,rows:current.rows.map(row=>({...row,...production.cutInfo(row)})),busy:session.busy||inputBusy,error:narrationError||bankError||session.error,progress:narrationStage?{...current.progress,phase:narrationStage}:current.progress,instanceId,resumed,adoptionError,unsavedDraft,production:production.status(),productionRevision:production.finalInputsHash(),musicCurrent:production.status().musicEnabled===false||!production.status().music||production.status().music.signature===musicSignature(current),samples:samples.status(),sampleProgress,sampleLibraryTotal:SAMPLE_SETTINGS.length};};
+  function makeImageProposal(scenes,rows){
+    if(!Array.isArray(scenes)||scenes.length!==rows.length)throw new Error('INVALID_IMAGE_PLAN');
+    const assets=production.status().assets,provided=production.status().brief.assetMode==='provided';
+    const choices=scenes.map((scene,i)=>{if(scene.caption!==rows[i].caption)throw new Error('STALE_STORYBOARD');const file=scene.imageFile||'',prompt=safeText(scene.imagePrompt||'',3000),references=scene.imageReferences||[];if(file&&!assets.some(a=>a.file===file&&/\.(png|jpe?g|webp)$/.test(file)))throw new Error('INVALID_CUT_IMAGE');if(file&&prompt||provided&&prompt||!Array.isArray(references)||references.length>3||references.some(f=>!assets.some(a=>a.file===f&&/\.(png|jpe?g|webp)$/.test(f))))throw new Error('INVALID_IMAGE_PLAN');return {id:rows[i].id,caption:rows[i].caption,imageFile:file,imagePrompt:prompt,imageReferences:references,reason:safeText(scene.imageReason|| (file?'提供素材を使用':prompt?'内容に合う画像を新規作成':'文字と図解で構成'),500)};});
+    return {id:randomUUID(),revision:session.revision(),productionRevision:production.finalInputsHash(),scenes:choices};
+  }
+  function currentImageProposal(){
+    if(production.status().finalization)return null;
+    if(imageProposal&&(imageProposal.revision!==session.revision()||imageProposal.productionRevision!==production.finalInputsHash()))imageProposal=null;
+    if(!imageProposal){const rows=session.status().rows.filter(r=>r.id!==production.status().bookends?.titleRowId),scenes=production.status().brief.storyboard?.scenes;if(rows.length&&scenes?.length===rows.length&&rows.some(r=>!production.cutImage(r)&&production.imagePlan(r)))try{imageProposal=makeImageProposal(scenes.map((s,i)=>production.cutImage(rows[i])?{...s,imageFile:production.cutImage(rows[i]).file,imagePrompt:'',imageReferences:[]}:s),rows);}catch{}}
+    return imageProposal;
+  }
   async function musicDependency(){if(musicFactory)return;if(!rendererRoot)throw new Error('VIDEO_RENDERER_UNAVAILABLE');await stat(path.join(rendererRoot,'node_modules','@remotion','compositor-win32-x64-msvc',process.platform==='win32'?'ffprobe.exe':'ffprobe'));}
   async function createMusic(direction){
     const current={...session.status(),pauseSeconds:production.status().pauseSeconds,bookends:production.status().bookends};musicTimeline(current);direction=safeText(direction||'',2000);await musicDependency();
@@ -55,7 +69,7 @@ export async function startServer({session,port=6181,sampleDir=path.join(session
     const outputDir=await projectPath(id),next=await session.openRelated(outputDir,{fresh});
     const nextProduction=await ProductionInputs.open(outputDir),nextVideo=await StudioVideo.open({sourceDir:outputDir,rendererRoot,downloadsDir,runner:videoRunner});
     await atomicWrite(pointer,JSON.stringify({id}));session=next;production=nextProduction;video=nextVideo;projectId=id;bankError=null;sampleProgress=null;narrationError=null;narrationStage=null;narrationCanceled=false;
-    token=randomBytes(32).toString('hex');instanceId=randomBytes(16).toString('hex');unsavedDraft=null;resumed=!fresh;adoptionError=null;await recoverAdoption();
+    imageProposal=null;fullAudioCache=null;token=randomBytes(32).toString('hex');instanceId=randomBytes(16).toString('hex');unsavedDraft=null;resumed=!fresh;adoptionError=null;await recoverAdoption();
   };
   const assertAdopted=()=>{if(production.status().authoring?.pendingAdoption)throw new Error('ADOPTION_CONFLICT');const brief=production.status().brief,body=session.status().rows.filter(r=>r.id!==production.status().bookends?.titleRowId).map(r=>r.caption).join('\n');if(brief.scriptEdited===true&&parseScriptParts(brief.script).join('\n')!==body)throw new Error('SCRIPT_ADOPTION_REQUIRED');};
   const reviewedManifest=async()=>{assertAdopted();if(session.busy||inputBusy)throw new Error('BUSY');production.assertNoCorrections();production.assertCutsConfirmed(session.status().rows);production.assertFinalization(session.status());return session.exportManifest();};
@@ -73,6 +87,17 @@ export async function startServer({session,port=6181,sampleDir=path.join(session
         if(route==='/api/themes')return json(res,200,await Promise.all(THEME_NAMES.map(themeTokens)));
         if(route==='/api/launcher-status'&&launcherStatus)return json(res,200,launcherStatus);
         if(route==='/api/designs')return json(res,200,VIDEO_TEMPLATES);
+        if(route==='/api/full-audio'){
+          const current=session.status(),params=new URL(req.url,url).searchParams,signature=narrationSignature(current,production.status().pauseSeconds);
+          if(params.get('revision')!==current.revision||(params.has('audio')&&params.get('audio')!==signature))throw new Error('STALE_REVISION');
+          if(session.busy||inputBusy)throw new Error('BUSY');
+          if(!fullAudioCache||fullAudioCache.signature!==signature){const bytes=await fullNarration(current,session.outputDir,production.status().pauseSeconds);fullAudioCache={signature,bytes};}
+          const bytes=fullAudioCache.bytes;let range;try{range=mediaRange(req.headers.range,bytes.length);}catch{res.writeHead(416,{'Content-Range':`bytes */${bytes.length}`});return res.end();}
+          res.setHeader('Content-Type','audio/wav');res.setHeader('Accept-Ranges','bytes');res.setHeader('Content-Length',range.end-range.start+1);if(range.partial)res.setHeader('Content-Range',`bytes ${range.start}-${range.end}/${bytes.length}`);res.writeHead(range.partial?206:200);return res.end(bytes.subarray(range.start,range.end+1));
+        }
+        if(route==='/api/audio-download'){
+          production.assertFinalization(session.status());const {bytes,result}=await video.media(session.revision(),'audio');res.setHeader('Content-Type','audio/mp4');res.setHeader('Content-Length',bytes.length);res.setHeader('Content-Disposition',`attachment; filename="Narration-Audio.m4a"; filename*=UTF-8''${encodeURIComponent(result.filename)}`);return res.end(bytes);
+        }
         if(route==='/api/manifest')return json(res,200,await reviewedManifest());
         if(route==='/api/video-download'||/^\/video\/[a-f0-9]{64}\.mp4$/.test(route)){
           production.assertFinalization(session.status());const {bytes,result}=await video.media(session.revision());
@@ -131,6 +156,26 @@ export async function startServer({session,port=6181,sampleDir=path.join(session
         return json(res,200,status());
       }
       if(!['/api/key','/api/connection-check','/api/cancel','/api/preview','/api/prepare-samples','/api/render-video'].includes(route))production.assertWritable();
+      if(['/api/plan-images','/api/approve-images','/api/remove-material'].includes(route)){
+        if(session.busy||video.status(session.revision()).running)throw new Error('BUSY');
+        if(input.revision!==session.revision()||input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');
+        if(route==='/api/remove-material'){await production.removeAsset(input.file,session.status().rows);imageProposal=null;return json(res,200,status());}
+        if(input.consent!==true)throw new Error('GENERATION_CONSENT_REQUIRED');
+        inputBusy=true;try{
+          const rows=session.status().rows.filter(r=>r.id!==production.status().bookends?.titleRowId);
+          if(route==='/api/plan-images'){
+            const targets=input.id?rows.filter(r=>r.id===input.id):rows;if(!targets.length)throw new Error('ROW_NOT_FOUND');
+            const brief={...production.status().brief,scriptMode:'existing',script:targets.map(r=>r.caption).join('\n'),instructions:'台本の字幕を一字も変更せず、各カットに使う画像だけを提案してください。提供素材を内容に合う場面へ割り当て、不足する場合だけ新規画像の指示を作成します。'+safeText(input.instructions||'',2000),autoDirection:false,references:{text:targets.map(r=>r.caption).join('\n'),urls:[]}};
+            const images=production.status().assets.filter(a=>/\.(png|jpe?g|webp)$/.test(a.file));const plan=await session.planSources(brief,images,file=>production.readAsset(file));imageProposal=makeImageProposal(plan.storyboard?.scenes,targets);return json(res,200,status());
+          }
+          const proposal=currentImageProposal();if(!proposal||proposal.id!==input.proposalId)throw new Error('STALE_IMAGE_PROPOSAL');
+          for(const scene of proposal.scenes){if(!scene.imagePrompt)continue;
+            const references=await Promise.all(scene.imageReferences.map(async file=>({bytes:await production.readAsset(file),extension:file.split('.').at(-1)})));
+            const image=await session.generateMedia('image',{prompt:scene.imagePrompt,references});await production.addAsset('生成画像-'+scene.id+'.'+image.extension,image.bytes,{origin:'generated-image'});scene.imageFile=createHash('sha256').update(image.bytes).digest('hex')+'.'+image.extension;scene.imagePrompt='';scene.imageReferences=[];proposal.productionRevision=production.finalInputsHash();
+          }
+          await production.applyImageChoices(proposal.scenes,rows);imageProposal=null;return json(res,200,status());
+        }finally{inputBusy=false;}
+      }
       if(route==='/api/cut-image'){
         if(session.busy)throw new Error('BUSY');if(input.revision!==session.revision())throw new Error('STALE_REVISION');const row=session.status().rows.find(r=>r.id===input.id);if(!row)throw new Error('ROW_NOT_FOUND');await production.assignCutImage(row,input.file);return json(res,200,status());
       }

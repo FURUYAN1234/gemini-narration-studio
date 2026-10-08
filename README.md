@@ -1,4 +1,4 @@
-# Gemini Narration Studio / Gemini ナレーション・スタジオ v1.2.1
+# Gemini Narration Studio / Gemini ナレーション・スタジオ v1.2.2
 
 A Windows x64 local app for turning materials and scripts into narrated, subtitled MP4 videos. Review Japanese readings, create Gemini speech, check each cut's image and audio, then export locally. Distribution currently uses a private GitHub repository; access requires an invitation.
 
@@ -107,9 +107,17 @@ The opening-title/ending section stores title text, its hiragana reading, ending
 
 ## Export and saved projects / 出力と保存した制作
 
-Final confirmation prepares the exact reviewed assets, renders the video, checks streams and full decoding, and saves a uniquely named MP4 to Downloads with a matching hash. The finished player and download action appear after success. The bottom new-video action saves the current project, starts an empty one and returns to the top. Reopen earlier work from the saved-project menu. Unsaved edits and active processing block switching; the key remains in memory until server exit and completed originals are preserved.
+AI proposes which supplied images to use and which missing images to create. Approve the proposal and its generation count to prepare the cuts. Replanning or replacing an individual image is optional; unchanged script and audio are retained. File selection, drag-and-drop, unassignment and removal from the material list are available inside the image adjustment controls. Removed material files remain on disk.
 
-最終確認後、確定素材を用意して描画し、映像・音声情報と全デコードを検査します。ハッシュ一致を確認して固有名のMP4をダウンロードへ保存し、成功後にプレーヤーとダウンロード操作を表示します。最下部の新規作成で現在の制作を保存し、空の制作を始めて画面先頭へ戻れます。以前の制作は保存メニューから開きます。未保存の編集・処理中は切り替えを止め、キーは終了までメモリに保持し、完成済みの元作品は残します。
+AIが提供画像の割り当てと不足画像の作成を提案します。内容と新規作成枚数を確認して承認すれば、カットの画像を準備できます。再提案・再生成・手動差し替えは気になるときだけ使い、変更しない台本と音声は保持します。画像の調整欄でファイル選択・ドロップ・割り当て解除ができ、素材一覧からも外せます。元の素材ファイルは残ります。
+
+Once narration is ready, the full-length player appears automatically as one seekable audio track, including cut pauses. The explicit narration submission button replaces the separate consent checkbox; voice selection and reading confirmation are still required.
+
+音声がそろうと、カット間の余白を含む一本の全文プレーヤーを表示します。再生位置は自由に移動できます。音声生成は送信内容を明記したボタンで実行し、別の同意チェックは不要です。声の決定と読みの確認は引き続き必要です。
+
+Final confirmation prepares the exact reviewed assets, renders the video, checks streams and full decoding, and saves uniquely named MP4 and standalone M4A files to Downloads with matching hashes. The M4A contains the same narration and BGM as the video. The finished player and both download links appear after success. “別の制作を始める” starts an empty project and returns to the top; it does not render a video. Reopen earlier work from the saved-project menu. Unsaved edits and active processing block switching; the key remains in memory until server exit and completed originals are preserved.
+
+最終確認後、確定素材を用意して描画し、映像・音声情報と全デコードを検査します。ハッシュ一致を確認し、固有名のMP4と単独音声M4Aを両方ダウンロードへ自動保存します。M4Aには動画と同じナレーション・BGMが入ります。成功後は完成プレーヤーと両ファイルの保存リンクを表示します。「別の制作を始める」は空の制作を始めて先頭へ戻る操作で、動画生成とは別です。以前の制作は保存メニューから開きます。未保存の編集・処理中は切り替えを止め、キーは終了までメモリに保持し、完成済みの元作品は残します。
 
 ![Actual video completion / 実アプリの動画完成画面](docs/screenshots/finished.jpg)
 
