@@ -279,14 +279,15 @@ export async function startServer({session,port=6181,sampleDir=path.join(session
         const attempt={id:input.requestId,sequence:input.sequence,operation,inputHash,projectId,baseRevision:session.revision(),baseProductionRevision:production.finalInputsHash(),request:brief,previousDraft,state:'running'};
         inputBusy=true;unsavedDraft=null;draftCanceled=false;
         try{
-          await production.saveAuthoring({...production.status().authoring,version:1,lastAttempt:attempt},brief);
+          const failures=[...(production.status().authoring?.failures||[])];if(last?.error&&!failures.some(f=>f.id===last.id))failures.push({id:last.id,sequence:last.sequence,state:last.state,error:last.error});
+          await production.saveAuthoring({...production.status().authoring,version:1,failures:failures.slice(-10),lastAttempt:attempt},brief);
           const baseline=production.finalInputsHash();
           const generated=operation==='prepare-readings'?await session.draftScript({...brief,script:readingTargets.map(r=>r.caption).join('\n'),instructions:'字幕の各行を一文字も変えず、対応するひらがなの読みだけを用意してください。'},[]):hasReferences?await session.planSources(brief,assets,file=>production.readAsset(file)):await session.draftScript(brief,[]);
           const draft=normalizeDraftRecord(operation==='prepare-readings'?{...generated,script:brief.script,readings:readingRows.map(r=>{const i=readingTargets.findIndex(t=>t.id===r.id);return {caption:r.caption,speech:i<0?r.speech:generated.readings[i]?.speech};})}:generated);
           if(draftCanceled)throw new Error('CANCELED');
           if(target!==session||targetProduction!==production||targetProject!==projectId||attempt.baseRevision!==session.revision()||baseline!==production.finalInputsHash())throw new Error('STALE_REVISION');
           let imageError;
-          const draftBrief=()=>normalizeBrief({... (operation==='prepare-readings'?previousDraft:brief),script:draft.script,readings:draft.readings,storyboard:operation==='prepare-readings'?previousDraft.storyboard:draft.storyboard,direction:operation==='prepare-readings'?previousDraft.direction:draft.direction,sourceEvidence:operation==='prepare-readings'?previousDraft.sourceEvidence:draft.verifiedSources?{sources:draft.verifiedSources,bindings:draft.sourceBindings}:undefined,scriptEdited:true});
+          const draftBrief=()=>normalizeBrief({... (operation==='prepare-readings'?previousDraft:brief),script:draft.script,readings:draft.readings,titleReading:operation==='prepare-readings'?previousDraft.titleReading:draft.titleReading,storyboard:operation==='prepare-readings'?previousDraft.storyboard:draft.storyboard,direction:operation==='prepare-readings'?previousDraft.direction:draft.direction,sourceEvidence:operation==='prepare-readings'?previousDraft.sourceEvidence:draft.verifiedSources?{sources:draft.verifiedSources,bindings:draft.sourceBindings}:undefined,scriptEdited:true});
           if(operation!=='prepare-readings'){
             try{
               await production.saveAuthoring({...production.status().authoring,version:1,lastAttempt:{...attempt,state:'running',result:draft}},draftBrief());

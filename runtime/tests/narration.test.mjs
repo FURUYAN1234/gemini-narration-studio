@@ -208,7 +208,7 @@ test('reference intake: source planning accepts a URL without instructions and r
  const dir=await mkdtemp(path.join(tmpdir(),'studio-reference-'));t.after(()=>rm(dir,{recursive:true,force:true}));
  const session=await NarrationSession.open({outputDir:dir});session.setKey('test-only-key');let calls=0,retrieved=true;
  const url='https://example.com/article';
- const result={visualStyle:'白地に青い文字',title:'資料の説明',summary:'資料を解説',voice:'Kore',voiceReason:'明瞭な説明',motion:{version:1,style:'editorial',intensity:'standard'},sources:[{id:'url-0',summary:'参考資料'}],rows:[{purpose:'detail',caption:'資料を説明します。',speech:'しりょうをせつめいします。',title:'資料',points:[],imageFile:'',sourceIds:['url-0']}]};
+ const result={visualStyle:'白地に青い文字',title:'資料の説明',titleSpeech:'しりょうのせつめい',summary:'資料を解説',voice:'Kore',voiceReason:'明瞭な説明',motion:{version:1,style:'editorial',intensity:'standard'},sources:[{id:'url-0',summary:'参考資料'}],rows:[{purpose:'detail',caption:'資料を説明します。',speech:'しりょうをせつめいします。',title:'資料',points:[],imageFile:'',sourceIds:['url-0']}]};
  t.mock.method(globalThis,'fetch',async()=>{calls++;return new Response(JSON.stringify({candidates:[{finishReason:'STOP',urlContextMetadata:{urlMetadata:[{retrievedUrl:url,urlRetrievalStatus:retrieved?'URL_RETRIEVAL_STATUS_SUCCESS':'URL_RETRIEVAL_STATUS_ERROR'}]},content:{parts:[{text:JSON.stringify(result)}]}}]}),{status:200,headers:{'Content-Type':'application/json'}});});
  const brief={scriptMode:'ai',assetMode:'provided',instructions:'',script:'',references:{text:'',urls:[url]}};
  assert.equal((await session.planSources(brief,[],()=>{})).script,result.rows[0].caption);assert.equal(calls,1);

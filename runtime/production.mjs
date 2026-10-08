@@ -37,11 +37,18 @@ function normalizeCutImages(items=[]){
 export function normalizeVisuals(value){if(value===undefined)return undefined;if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).length>300)throw new Error('INVALID_CUT_VISUALS');const result={};for(const [id,visual]of Object.entries(value)){if(!/^[\w-]{1,100}$/.test(id)||!visual||Object.keys(visual).some(k=>!['title','points','imageFocus'].includes(k))||!Array.isArray(visual.points)||visual.points.length>6)throw new Error('INVALID_CUT_VISUALS');result[id]={title:safeText(visual.title,200),points:visual.points.map(p=>safeText(p,160)),...(visual.imageFocus?{imageFocus:normalizeImageFocus(visual.imageFocus)}:{})};}return result;}
 
 export const MAX_ASSET_BYTES=100*1024*1024;
+export function normalizeTitleReading(input){
+ if(typeof input?.caption!=='string'||typeof input?.speech!=='string')throw new Error('TITLE_READING_REQUIRED');
+ const caption=safeText(input?.caption,200),speech=safeText(input?.speech,4000);
+ if(!caption||!isHiraganaReading(speech))throw new Error('TITLE_READING_REQUIRED');
+ return {caption,speech};
+}
 export function normalizeDraftRecord(input){
  if(!input||typeof input!=='object')throw new Error('INVALID_DRAFT_RESULT');
  const script=safeText(input.script),readings=normalizeScriptReadings(script,input.readings),warnings=input.warnings||[];
  if(!['ready','needs-review','not-requested'].includes(input.visualPlanStatus)||!Array.isArray(warnings)||warnings.length>100)throw new Error('INVALID_DRAFT_RESULT');
  const record={script,readings,visualPlanStatus:input.visualPlanStatus,warnings:warnings.map(w=>{if(w.stage!=='visual-plan'||! /^[A-Z_]+$/.test(w.code))throw new Error('INVALID_DRAFT_RESULT');return {stage:w.stage,code:w.code};})};
+ if(input.titleReading)record.titleReading=normalizeTitleReading(input.titleReading);
  if(input.storyboard)record.storyboard=normalizeStoryboard(input.storyboard,script);if(input.direction)record.direction=normalizeAutomaticDirection(input.direction);
  if(input.verifiedSources){if(!Array.isArray(input.verifiedSources)||input.verifiedSources.length>100)throw new Error('INVALID_DRAFT_RESULT');record.verifiedSources=input.verifiedSources.map(s=>{if(!/^(text|asset-\d+|url-\d+)$/.test(s.id)||!['retrieved','provided'].includes(s.status))throw new Error('INVALID_DRAFT_RESULT');return {id:s.id,status:s.status,label:safeText(s.label,2048),summary:safeText(s.summary,1200)};});}
  if(input.sourceBindings){if(!Array.isArray(input.sourceBindings)||input.sourceBindings.length!==readings.length)throw new Error('INVALID_DRAFT_RESULT');record.sourceBindings=input.sourceBindings.map((b,i)=>{if(b.lineIndex!==i||b.captionHash!==createHash('sha256').update(readings[i].caption).digest('hex')||!Array.isArray(b.sourceIds)||!b.sourceIds.length||b.sourceIds.some(id=>!record.verifiedSources?.some(s=>s.id===id)))throw new Error('INVALID_DRAFT_RESULT');return {lineIndex:i,captionHash:b.captionHash,sourceIds:[...new Set(b.sourceIds)]};});}
@@ -49,6 +56,7 @@ export function normalizeDraftRecord(input){
 }
 export function normalizeAuthoring(input){
  if(!input||input.version!==1)throw new Error('INVALID_AUTHORING');safeText(JSON.stringify(input),1900000);const result={version:1};
+ if(input.failures!==undefined){if(!Array.isArray(input.failures)||input.failures.length>10)throw new Error('INVALID_AUTHORING');result.failures=input.failures.map(a=>{if(!a||typeof a!=='object'||!/^[a-f0-9-]{36}$/.test(a.id)||!Number.isSafeInteger(a.sequence)||a.sequence<1||!['partial','failed','canceled','interrupted'].includes(a.state)||!a.error||! /^[A-Z_]+$/.test(a.error.code))throw new Error('INVALID_AUTHORING');return {id:a.id,sequence:a.sequence,state:a.state,error:{stage:safeText(a.error.stage,40),code:safeText(a.error.code,100)}};});}
  if(input.lastAttempt){const a=input.lastAttempt;if(!/^[a-f0-9-]{36}$/.test(a.id)||!Number.isSafeInteger(a.sequence)||a.sequence<1||!['compose','rewrite','prepare-readings'].includes(a.operation)||!['running','complete','partial','failed','canceled','interrupted'].includes(a.state)||! /^[a-f0-9]{64}$/.test(a.inputHash))throw new Error('INVALID_AUTHORING');result.lastAttempt={id:a.id,sequence:a.sequence,operation:a.operation,state:a.state,inputHash:a.inputHash,projectId:safeText(a.projectId,64),baseRevision:safeText(a.baseRevision,64),baseProductionRevision:safeText(a.baseProductionRevision,64),request:normalizeBrief(a.request),previousDraft:normalizeBrief(a.previousDraft),...(a.result?{result:normalizeDraftRecord(a.result)}:{}),...(a.error?{error:{stage:safeText(a.error.stage,40),code:safeText(a.error.code,100)}}:{})};}
  if(input.pendingAdoption){const p=input.pendingAdoption;if(!/^[a-f0-9-]{36}$/.test(p.id)||! /^[a-f0-9]{64}$/.test(p.baseRowsHash)||! /^[a-f0-9]{64}$/.test(p.desiredRowsHash)||!Array.isArray(p.rows)||p.rows.length>300)throw new Error('INVALID_AUTHORING');for(const r of p.rows){if(!/^[-\w]{1,64}$/.test(r.id))throw new Error('INVALID_AUTHORING');safeText(r.caption,4000);safeText(r.speech,4000);}result.pendingAdoption=structuredClone(p);}
  if(input.adoptedScriptHash!==undefined){if(! /^[a-f0-9]{64}$/.test(input.adoptedScriptHash))throw new Error('INVALID_AUTHORING');result.adoptedScriptHash=input.adoptedScriptHash;}
@@ -80,6 +88,7 @@ export function normalizeBrief(input){
   if(input.autoDirection!==undefined)brief.autoDirection=input.autoDirection;if(input.direction!==undefined)brief.direction=normalizeAutomaticDirection(input.direction);
   for(const [field,code]of [['themeAuto','INVALID_THEME_PREFERENCE'],['scriptEdited','INVALID_SCRIPT_EDIT_PREFERENCE']])if(input[field]!==undefined){if(typeof input[field]!=='boolean')throw new Error(code);brief[field]=input[field];}
   if(brief.themeAuto&&brief.scriptMode==='ai')brief.instructions='';
+  if(input.titleReading!==undefined)brief.titleReading=normalizeTitleReading(input.titleReading);
   if(input.readings!==undefined)brief.readings=normalizeScriptReadings(brief.script,input.readings);
   if(input.references!==undefined)brief.references=normalizeReferences(input.references);
   if(input.storyboard!==undefined)brief.storyboard=normalizeStoryboard(input.storyboard,brief.script);

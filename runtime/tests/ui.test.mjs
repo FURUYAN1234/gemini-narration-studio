@@ -1,5 +1,5 @@
 import test from 'node:test';
-import {scriptActionState,parseScriptParts} from '../script-flow.mjs';
+import {scriptActionState,parseScriptParts,FRESH_BRIEF} from '../script-flow.mjs';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
@@ -9,6 +9,13 @@ import {themeTokens} from '../themes.mjs';
 
 const appSource = (await readFile(new URL('../ui/app.mjs', import.meta.url), 'utf8')).replace(/^import .*script-flow\.mjs';\r?\n/m,'');
 const html = await readFile(new URL('../ui/index.html', import.meta.url), 'utf8');
+
+test('actions have button semantics and secondary actions keep a visible button boundary',async()=>{
+ const css=await readFile(new URL('../ui/style.css',import.meta.url),'utf8');
+ assert.doesNotMatch(html,/<a\b[^>]*data-go-step=/);
+ for(const step of ['planning','connection','reading','finish'])assert.match(html,new RegExp('<button[^>]*data-go-step="'+step+'"'));
+ const quiet=css.match(/button\.quiet\{([^}]+)\}/)?.[1]||'';assert.match(quiet,/border-color:var\(--(?:muted|border)\)/);assert.match(quiet,/background:var\(--panel\)/);
+});
 test('user requirements: preview colors match saved legacy colors and the adopted renderer template',async()=>{
  const ui=await setup();ui.get('auto-direction').checked=false;await ui.get('auto-direction').emit('change');
  const theme=await themeTokens(ui.state().presentation.theme);assert.equal(ui.get('direction-sample').style.vars.get('--d-bg'),theme.background);
@@ -409,9 +416,9 @@ class Element {
     list.push(listener);
     this.listeners.set(name, list);
   }
-  async emit(name) {
+  async emit(name,event={preventDefault(){}}) {
     if (name === 'click'){assert.equal(this.disabled,false,'A user cannot click a disabled control');for(let p=this;p;p=p.parent)assert.equal(!!p.hidden,false,'A user cannot click a hidden control or hidden ancestor');}
-    for (const listener of this.listeners.get(name) || []) await listener({preventDefault() {}});
+    for (const listener of this.listeners.get(name) || []) await listener(event);
   }
   *walk() {
     yield this;
@@ -437,7 +444,7 @@ test('reference-only inputs enable the single planning action without extra inst
  empty.restart();await empty.poll();assert.equal(empty.get('generate-script').disabled,true);
 });
 
-async function setup({imageProposal,motion,autoConfirm=false,voiceConfirmed=true,productionErrorAt=0,strictProductionRevision=false,materialConcurrentEdit=false,sourcePlan,sourceError,rows,samples,assets=[],previewError,rowError,draftWait,pausedStep,confirmResult=true,secondReviewed = true,voices=['Kore','Puck']} = {}) {
+async function setup({titleReading,imageProposal,motion,autoConfirm=false,voiceConfirmed=true,productionErrorAt=0,strictProductionRevision=false,materialConcurrentEdit=false,sourcePlan,sourceError,rows,samples,assets=[],previewError,rowError,draftWait,pausedStep,confirmResult=true,secondReviewed = true,voices=['Kore','Puck']} = {}) {
   const elements = new Map();let anonymous=0;
   const tree=new Element('root'),stack=[tree],voids=new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']);
   for(const [token,closing,tag,attributes] of html.matchAll(/<(\/?)([\w-]+)([^>]*)>/g)){
@@ -470,7 +477,7 @@ async function setup({imageProposal,motion,autoConfirm=false,voiceConfirmed=true
     keyConfigured: true, busy: false, error: null, progress: null,video:{available:true,running:false,stage:'idle',progress:0,result:null,error:null},
     settings: {model: 'gemini-3.8-flash-tts', voice: 'Kore', style: 'Original style'},
     presentation: {theme: 'moon',...(motion?{motion}:{})}, dictionary: [], voices,voiceGenders:VOICE_GENDERS,
-    voiceConfirmed,production:{brief:{scriptMode:'ai',assetMode:'mixed',instructions:'',script:''},assets:[]},samples:[{id:'sample-kore',file:'sample-kore.wav',settings:{model:'gemini-3.8-flash-tts',voice:'Kore',style:'Original style'},durationSeconds:1},{id:'sample-puck',file:'sample-puck.wav',settings:{model:'gemini-3.8-flash-tts',voice:'Puck',style:'明るく親しみやすい日本語で、聞き取りやすく話す。'},durationSeconds:2}],
+    voiceConfirmed,production:{brief:{scriptMode:'ai',assetMode:'mixed',instructions:'',script:'',...(titleReading?{titleReading}:{})},assets:[]},samples:[{id:'sample-kore',file:'sample-kore.wav',settings:{model:'gemini-3.8-flash-tts',voice:'Kore',style:'Original style'},durationSeconds:1},{id:'sample-puck',file:'sample-puck.wav',settings:{model:'gemini-3.8-flash-tts',voice:'Puck',style:'明るく親しみやすい日本語で、聞き取りやすく話す。'},durationSeconds:2}],
     rows: ['one', 'two'].map(id => ({id, caption: 'Caption ' + id, speech: 'Speech ' + id, scene: '', reviewed: id === 'one' || secondReviewed, attempts: 0, hints: [], audio: null, audioCurrent: false, listenedCurrent: false})),
   };
   state.projectId='original';state.projects=[{id:'original',title:state.title}];const savedProjects=new Map();
@@ -499,7 +506,7 @@ async function setup({imageProposal,motion,autoConfirm=false,voiceConfirmed=true
     if(route==='new-project'||route==='project'||route==='revision-project'){
       savedProjects.set(state.projectId,structuredClone(state));const id=route==='new-project'?'new-project':route==='revision-project'?'revision-project':input.id;
       const list=state.projects,keyConfigured=state.keyConfigured,samples=state.samples;
-      if(route==='new-project'){list.push({id,title:'新しい動画'});state={...structuredClone(state),title:'新しい動画',sessionId:'new-session',projectId:id,rows:[],dictionary:[],presentation:{theme:'moon'},voiceConfirmed:false,production:{musicEnabled:true,voiceConfirmation:null,brief:{scriptMode:'existing',assetMode:'mixed',instructions:'',script:''},assets:[],finalization:null},video:{available:true,running:false,stage:'idle',result:null},projects:list};}
+      if(route==='new-project'){list.push({id,title:'新しい動画'});state={...structuredClone(state),title:'新しい動画',sessionId:'new-session',projectId:id,rows:[],dictionary:[],presentation:{theme:'moon'},voiceConfirmed:false,production:{musicEnabled:true,voiceConfirmation:null,brief:{...FRESH_BRIEF},assets:[],finalization:null},video:{available:true,running:false,stage:'idle',result:null},projects:list};}
       else if(route==='revision-project'){list.push({id,title:state.title+'（修正版）'});state={...structuredClone(state),projectId:id,sessionId:'revision-session',production:{...structuredClone(state.production),finalization:null,cutConfirmations:[]},projects:list,video:{available:true,running:false,stage:'idle',result:null}};for(const row of state.rows)row.cutConfirmed=false;}else state={...structuredClone(savedProjects.get(id)),projects:list,keyConfigured,samples};
       token='fixture-token-project-'+id;state.instanceId='instance-project-'+id;
     }
@@ -522,7 +529,7 @@ async function setup({imageProposal,motion,autoConfirm=false,voiceConfirmed=true
     else if (route === 'append-script') {const rows=[{id:'added',caption:input.script,speech:input.readings?.[0]?.speech||input.script,reviewed:false,attempts:0,hints:[]}];if(input.replace)state.rows=rows;else state.rows.push(...rows);}
     else if (route === 'preview') {if(previewError&&requests.filter(r=>r.route==='preview').length===previewError)return reply({error:'PROVIDER_RATE_LIMIT'},false);const id='sample-'+state.samples.length;state.samples.push({id,file:id+'.wav',settings:input.settings,durationSeconds:5});return reply({sample:id});}
     else if(route==='prepare-samples'){const configs=SAMPLE_SETTINGS.filter(c=>voices.includes(c.voice));const missing=configs.filter(c=>!state.samples.some(s=>s.settings.model===c.model&&s.settings.voice===c.voice&&s.settings.style===c.style&&(s.settings.pitch||'standard')===(c.pitch||'standard')));state.sampleProgress={running:false,total:missing.length,completed:0};for(const config of missing){if(previewError&&state.sampleProgress.completed+1===previewError){state.error='PROVIDER_RATE_LIMIT';break;}const id='sample-'+state.samples.length;state.samples.push({id,file:id+'.wav',settings:config,durationSeconds:5});state.sampleProgress.completed++;}return reply({started:true,total:missing.length});}
-    else if(route==='source-plan'){if(sourceError)return reply({error:sourceError},false);assert.equal(input.consent,true);const result={...sourcePlan,...(input.brief.autoDirection?{direction:sourcePlan?.direction||{title:sourcePlan?.storyboard?.title||'AIのタイトル',template:'steps',motion:{version:1,style:'editorial',intensity:'standard'}}}:{}),saved:true};state.production.brief={...input.brief,script:result.script,readings:result.readings,storyboard:result.storyboard,direction:result.direction,scriptEdited:true};state.production.authoring={version:1,lastAttempt:{sequence:input.sequence,result}};return reply(result);}
+    else if(route==='source-plan'){if(sourceError)return reply({error:sourceError},false);assert.equal(input.consent,true);const result={...sourcePlan,...(input.brief.autoDirection?{direction:sourcePlan?.direction||{title:sourcePlan?.storyboard?.title||'AIのタイトル',template:'steps',motion:{version:1,style:'editorial',intensity:'standard'}}}:{}),saved:true};state.production.brief={...input.brief,script:result.script,readings:result.readings,titleReading:result.titleReading,storyboard:result.storyboard,direction:result.direction,scriptEdited:true};state.production.authoring={version:1,lastAttempt:{sequence:input.sequence,result}};return reply(result);}
     else if (route === 'draft') {if(draftWait){state.busy=true;await draftWait;state.busy=false;return reply({error:'CANCELED'},false);}const script=input.brief.autoDirection&&input.brief.scriptMode==='existing'&&input.brief.script?input.brief.script:'AI draft result';const result={script,readings:[{caption:script,speech:script==='AI draft result'?'えーあいだいほん。':script}],...(input.brief.autoDirection?{direction:{title:'AIのタイトル',template:'steps',motion:{version:1,style:'editorial',intensity:'standard'}}}:{}),saved:true};state.production.brief={...input.brief,script,readings:result.readings,direction:result.direction,scriptEdited:true};state.production.authoring={version:1,lastAttempt:{sequence:input.sequence,result}};return reply(result);}
     else if (route === 'approve') {
       if (input.revision !== state.revision) return reply({error: 'STALE_REVISION'}, false);
@@ -763,5 +770,42 @@ test('unprepared images cannot be adopted; preparing and per-cut regeneration di
  const ui=await setup({imageProposal:proposal});assert.equal(ui.get('plan-images').hidden,false);assert.match(ui.get('plan-images').textContent,/画像1枚.*API/);assert.equal(ui.get('approve-images').disabled,true);assert.match(ui.get('approve-images').textContent,/APIなし/);assert.equal(ui.get('image-proposal').children.length,0);assert.equal(ui.requests.some(r=>['prepare-images','approve-images','regenerate-image'].includes(r.route)),false);
 });
 test('only one final render control exists and new-project and draft saving are subordinate actions',()=>{
- assert.ok(!html.includes('id="export"'));assert.ok(!html.includes('id="play-full"'));assert.ok(!html.includes('id="consent"'));assert.ok(!html.includes('class="audio-download"'));assert.match(html,/<button id="new-project-bottom"[^>]*class="quiet">別の制作を始める/);assert.match(html,/<details class="draft-save"><summary>途中で保存して終える<\/summary><button id="save-production"/);assert.ok(html.includes('id="download-audio"'));
+ assert.ok(!html.includes('id="export"'));assert.ok(!html.includes('id="play-full"'));assert.ok(!html.includes('id="consent"'));assert.ok(!html.includes('class="audio-download"'));assert.match(html,/<button id="new-project-bottom"[^>]*class="quiet">別の制作を始める/);assert.ok(!html.includes('<details class="draft-save">'));assert.match(html,/<button id="save-production"/);assert.ok(html.includes('id="download-audio"'));
+});
+
+test('requested controls: save is a direct button, manual cut insertion is absent, title reading is prefilled',async()=>{
+ assert.match(html,/<button id="save-production"[^>]*>途中で保存する（APIなし）<\/button>/);
+ assert.ok(!html.includes('manual-cut-add'));assert.ok(!appSource.includes("$('manual-cut-add')"));
+ const ui=await setup({titleReading:{caption:'Original title',speech:'たいとるのよみ'}});await ui.poll();
+ assert.equal(ui.get('opening-speech').value,'たいとるのよみ');
+ await ui.edit(ui.get('opening-speech'),'じぶんのよみ');await ui.poll();assert.equal(ui.get('opening-speech').value,'じぶんのよみ');
+});
+
+test('the visible image drop frame accepts a dropped file and prevents browser navigation',async()=>{
+ const ui=await setup();const zone=[...ui.get('rows').walk()].find(e=>e.attributes.class==='cut-image-drop');assert.ok(zone);
+ assert.ok([...zone.walk()].some(e=>e.textContent==='この点線枠の中に画像をドロップして差し替える'));
+ let prevented=false;const bytes=new Uint8Array([1,2,3]);await zone.emit('drop',{preventDefault(){prevented=true;},dataTransfer:{files:[{name:'replacement.png',size:bytes.length,arrayBuffer:async()=>bytes.buffer}]}});
+ assert.equal(prevented,true);assert.ok(ui.requests.some(r=>r.route==='cut-image'));
+});
+
+test('source script adoption carries AI title reading into review without a separate AI action',async()=>{
+ const title='朝の道具',titleReading={caption:title,speech:'あさのどうぐ'},sourcePlan={script:'窓を開けます。',readings:[{caption:'窓を開けます。',speech:'まどをあけます。'}],titleReading,direction:{title,template:'steps',motion:null}};
+ const ui=await setup({rows:[],sourcePlan});await ui.edit(ui.get('source-text'),'朝の道具を紹介');await ui.get('generate-script').emit('click');await ui.get('plan-sources').emit('click');await ui.get('apply-voice').emit('click');
+ assert.equal(ui.get('opening-title').value,title);assert.equal(ui.get('opening-speech').value,titleReading.speech);assert.equal(ui.requests.filter(r=>r.route==='source-plan').length,1);assert.equal(ui.requests.some(r=>r.route==='prepare-readings'),false);
+});
+
+test('fresh project and URL only starts source generation on the first click with no overwrite dialog',async()=>{
+ const sourcePlan={script:'道具の紹介。',readings:[{caption:'道具の紹介。',speech:'どうぐのしょうかい。'}]};const ui=await setup({sourcePlan});await ui.get('new-project').emit('click');
+ await ui.edit(ui.get('source-urls'),'https://example.com/tools');assert.equal(ui.get('script-input').value,'');assert.equal(ui.get('generate-script').disabled,false);
+ await ui.get('generate-script').emit('click');assert.equal(ui.requests.filter(r=>r.route==='source-plan').length,1);assert.equal(ui.get('script-confirm').hidden,true);assert.equal(ui.get('script-input').value,sourcePlan.script);
+});
+
+test('draft image regeneration explains missing API readiness and unlocks after UI key registration',async()=>{
+ const file='b'.repeat(64)+'.png',sourcePlan={script:'道具の説明。',storyboard:{title:'道具',scenes:[{title:'道具',caption:'道具の説明。',imageFile:file}]}};
+ const ui=await setup({rows:[],sourcePlan});await ui.edit(ui.get('source-urls'),'https://example.com/tools');await ui.get('generate-script').emit('click');
+ ui.restart();await ui.poll();
+ const find=()=>[...ui.get('storyboard-preview').walk()].find(e=>e.attributes['data-regenerate-draft-image']==='0');
+ assert.equal(find().disabled,true);assert.ok([...ui.get('storyboard-preview').walk()].some(e=>e.textContent==='画像を再生成するには、画面上部でGemini APIキーを登録してください。'));
+ await ui.edit(ui.get('api-key'),'test-only-key');await ui.get('key-form').emit('submit');
+ assert.equal(find().disabled,false);assert.equal(ui.requests.some(r=>r.route==='regenerate-image'),false);
 });

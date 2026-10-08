@@ -4,10 +4,15 @@ import {mkdtemp,readFile,readdir,rm,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {NarrationSession,buildRequest,buildDraftRequest,SAMPLE_SETTINGS,VOICES,VOICE_GENDERS,MODELS,previewFingerprint} from '../core.mjs';
-import {ProductionInputs,normalizeScriptReadings,normalizeBookends,normalizeBrief,normalizeImageProposal} from '../production.mjs';
+import {ProductionInputs,normalizeScriptReadings,normalizeBookends,normalizeBrief,normalizeImageProposal,normalizeAuthoring} from '../production.mjs';
 import {startServer} from '../server.mjs';
 import {prepareReviewedAudio} from '../client.mjs';
 import {musicSignature} from '../music.mjs';
+test('attempt failure history is bounded and retains only diagnostic identifiers and codes',()=>{
+ const a={id:'01234567-89ab-cdef-0123-456789abcdef',sequence:1,state:'failed',error:{stage:'script',code:'PROVIDER_FAILED',detail:'untrusted response'},extra:'not retained'};
+ const result=normalizeAuthoring({version:1,failures:[a]});assert.deepEqual(result.failures,[{id:a.id,sequence:1,state:'failed',error:{stage:'script',code:'PROVIDER_FAILED'}}]);
+ for(const failures of [[null],[{...a,sequence:0}],[{...a,error:{stage:'script',code:'raw provider output'}}],Array(11).fill(a)])assert.throws(()=>normalizeAuthoring({version:1,failures}),/INVALID_AUTHORING/);
+});
 test('user requirements: the server ignores an old manual theme only in automatic theme mode',()=>{
  const brief={scriptMode:'ai',assetMode:'mixed',instructions:'以前の手動テーマ',script:'',themeAuto:true};assert.equal(normalizeBrief(brief).instructions,'');assert.equal(normalizeBrief({...brief,themeAuto:false}).instructions,'以前の手動テーマ');assert.throws(()=>normalizeBrief({...brief,themeAuto:'true'}),/INVALID_THEME_PREFERENCE/);
 });

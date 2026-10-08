@@ -53,7 +53,7 @@ test('source request uses the documented responseFormat without conflicting lega
  const config=request.generationConfig;
  assert.equal(config.responseFormat?.text.mimeType,'APPLICATION_JSON');
  assert.equal(config.responseFormat.text.schema.properties.voice.enum,VOICES);
- assert.deepEqual(config.responseFormat.text.schema.required,['title','summary','voice','voiceReason','motion','sources','rows','visualStyle']);
+ assert.deepEqual(config.responseFormat.text.schema.required,['title','titleSpeech','summary','voice','voiceReason','motion','sources','rows','visualStyle']);
  for(const key of ['responseMimeType','responseSchema','responseJsonSchema','_responseJsonSchema'])assert.equal(Object.hasOwn(config,key),false);
 });
 test('UI HTTP save/import carries storyboard into actual scene visuals, without synthesis or approval',async t=>{
@@ -135,4 +135,12 @@ test('malformed source output reports only structural facts and never private va
   });
  }
  assert.equal(normalizeSourcePlan(output,bundle,VOICES).script,output.rows[0].caption);
+});
+
+test('title reading is requested with the script and survives source normalization; malformed readings are rejected',async()=>{
+ const bundle=await collectSources(brief,[],()=>{}),raw={...output,titleSpeech:'いりぐちから、はじめよう'};
+ const result=normalizeSourcePlan(raw,bundle,VOICES);assert.deepEqual(result.titleReading,{caption:output.title,speech:raw.titleSpeech});
+ for(const titleSpeech of ['', '入口から始めよう', 'AIでつくる'])assert.throws(()=>normalizeSourcePlan({...raw,titleSpeech},bundle,VOICES),/TITLE_READING_REQUIRED/);
+ const request=buildDraftRequest({brief:{...brief,scriptMode:'ai'}});assert.ok(request.generationConfig.responseJsonSchema.required.includes('titleSpeech'));
+ const readingOnly=buildDraftRequest({brief:{...brief,scriptMode:'existing'}});assert.ok(!readingOnly.generationConfig.responseJsonSchema.required.includes('titleSpeech'));
 });

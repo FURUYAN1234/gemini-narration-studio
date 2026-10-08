@@ -161,7 +161,7 @@ test('initial voice is a candidate; explicit settings selection persists, provis
 });
 test('reference-only source planning reaches the provider once and empty input remains blocked',async t=>{
  const dir=await directory(t),session=await NarrationSession.open({outputDir:dir});session.setKey('test-only-key');let calls=0;
- const response={visualStyle:'白地に青い文字',title:'資料の説明',summary:'資料を解説',voice:'Kore',voiceReason:'明瞭な説明',motion:{version:1,style:'editorial',intensity:'standard'},sources:[{id:'text',summary:'参考資料'}],rows:[{purpose:'detail',caption:'資料を説明します。',speech:'しりょうをせつめいします。',title:'資料',points:[],imageFile:'',sourceIds:['text']}]};
+ const response={visualStyle:'白地に青い文字',title:'資料の説明',titleSpeech:'しりょうのせつめい',summary:'資料を解説',voice:'Kore',voiceReason:'明瞭な説明',motion:{version:1,style:'editorial',intensity:'standard'},sources:[{id:'text',summary:'参考資料'}],rows:[{purpose:'detail',caption:'資料を説明します。',speech:'しりょうをせつめいします。',title:'資料',points:[],imageFile:'',sourceIds:['text']}]};
  t.mock.method(globalThis,'fetch',async()=>{calls++;return new Response(JSON.stringify({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(response)}]}}]}),{status:200,headers:{'Content-Type':'application/json'}});});
  const brief={scriptMode:'ai',assetMode:'provided',instructions:'',script:'',references:{text:'参考資料',urls:[]}};
  assert.equal((await session.planSources(brief,[],()=>{})).script,'資料を説明します。');assert.equal(calls,1);
@@ -206,4 +206,19 @@ test('production saving rejects a missing or stale baseline and preserves the ot
  assert.equal((await post({...brief,instructions:'古いタブの内容',productionRevision:initial.productionRevision})).status,409);
  const saved=await(await fetch(service.url+'/api/status')).json();assert.equal(saved.production.brief.instructions,brief.instructions);
  assert.equal((await post({...brief,instructions:'新しい内容',productionRevision:saved.productionRevision})).status,200);
+});
+
+test('generated title reading survives the ordinary draft route and reopening before adoption',async t=>{
+ const studio=await draftStudio(t,async()=>({title:'朝の準備',titleSpeech:'あさのじゅんび',rows:[{caption:'窓を開けます。',speech:'まどをあけます。'}]}));
+ const res=await studio.post('draft',studio.input),draft=await res.json();assert.equal(res.status,200);
+ assert.deepEqual(draft.titleReading,{caption:'朝の準備',speech:'あさのじゅんび'});
+ assert.deepEqual((await ProductionInputs.open(studio.dir)).status().brief.titleReading,draft.titleReading);
+ assert.equal((await studio.status()).rows.length,0);
+});
+
+test('a successful second generation retains the first failure for diagnosis',async t=>{
+ let calls=0;const studio=await draftStudio(t,async()=>{if(++calls===1)throw Error('PROVIDER_EMPTY_TEXT');return {rows:[{caption:'説明。',speech:'せつめい。'}]};});
+ assert.equal((await studio.post('draft',studio.input)).status,409);let st=await studio.status();assert.equal(st.production.authoring.lastAttempt.state,'failed');
+ const next={...studio.input,requestId:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',sequence:2,revision:st.revision,productionRevision:st.productionRevision};assert.equal((await studio.post('draft',next)).status,200);
+ const saved=(await ProductionInputs.open(studio.dir)).status().authoring;assert.equal(saved.lastAttempt.state,'complete');assert.equal(saved.failures[0].sequence,1);assert.equal(saved.failures[0].error.code,'PROVIDER_EMPTY_TEXT');assert.equal(calls,2);
 });
