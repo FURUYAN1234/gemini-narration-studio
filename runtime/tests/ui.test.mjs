@@ -213,8 +213,14 @@ test('new/switch UI is disabled while edits are unsaved or generation is active'
  ui.externalVideo({running:true});await ui.poll();assert.equal(ui.get('new-project').disabled,true);assert.equal(ui.requests.some(r=>r.route==='new-project'),false);
 });
 
+test('script-generation result presents prepared images before adoption and voice selection without another generation click',async()=>{
+ const file='a'.repeat(64)+'.png',sourcePlan={script:'新しい説明です。',readings:[{caption:'新しい説明です。',speech:'あたらしいせつめいです。'}],storyboard:{title:'説明',summary:'概要',voice:'Kore',voiceReason:'明瞭な解説',sources:[],scenes:[{caption:'新しい説明です。',title:'新しい場面',points:[],imageFile:file,sourceIds:[]}]}};
+ const ui=await setup({sourcePlan,rows:[],assets:[{file,name:'生成画像.png',origin:'generated-image'}]});await ui.edit(ui.get('source-text'),'参考本文');await ui.get('generate-script').emit('click');
+ const image=[...ui.get('storyboard-preview').walk()].find(e=>e.tagName==='img');assert.equal(image.attributes.src,'/materials/'+file);assert.equal(ui.get('storyboard-preview').hidden,false);assert.equal(ui.state().rows.length,0);assert.match(ui.get('plan-sources').textContent,/台本と画像/);assert.equal(ui.requests.filter(r=>r.route==='source-plan').length,1);assert.equal(ui.requests.some(r=>['prepare-images','regenerate-image','approve-images','generate'].includes(r.route)),false);
+ const card=[...ui.get('storyboard-preview').walk()].find(e=>e.dataset.draftImage==='0');assert.ok(card);assert.ok([...card.walk()].some(e=>e.dataset.regenerateDraftImage==='0'));assert.ok([...card.walk()].some(e=>e.attributes.type==='file'));assert.ok([...card.walk()].some(e=>e.attributes.class==='cut-image-drop'));await ui.get('plan-sources').emit('click');assert.equal(ui.location.hash,'#connection');assert.equal(ui.requests.filter(r=>r.route==='source-plan').length,1);await ui.get('apply-voice').emit('click');assert.equal(ui.requests.some(r=>['prepare-images','regenerate-image','generate'].includes(r.route)),false);
+});
 test('planning action creates an editable script before narration/video through one unified input flow',()=>{
- assert.match(html,/台本と演出を確定して声選びへ/);assert.doesNotMatch(html,/素材から動画を組み立てる（API利用）/);assert.ok(html.indexOf('class="text-only-alternative"')<html.indexOf('id="draft-script"'));assert.match(html,/この段階では構成・台本/);
+ assert.match(html,/台本と演出を確定して声選びへ/);assert.doesNotMatch(html,/素材から動画を組み立てる（API利用）/);assert.ok(html.indexOf('class="text-only-alternative"')<html.indexOf('id="draft-script"'));assert.match(html,/不足画像も作成してから結果を表示/);
 });
 test('material intake precedes script planning in visual and keyboard order',()=>{
  const ids=['asset-mode','material-files','material-list','script-mode','production-instructions','script-input','append-script','save-production'];

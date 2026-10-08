@@ -174,6 +174,16 @@ export async function startServer({session,port=6181,sampleDir=path.join(session
         if(route==='/api/remove-material'){await production.removeAsset(input.file,session.status().rows);imageProposal=null;return json(res,200,status());}
         if(input.consent!==true)throw new Error('GENERATION_CONSENT_REQUIRED');
         inputBusy=true;try{
+          if(route==='/api/regenerate-image'&&input.draftIndex!==undefined){
+            const brief=production.status().brief,attempt=production.status().authoring?.lastAttempt,index=input.draftIndex;
+            if(!Number.isSafeInteger(index)||index<0||!brief.storyboard?.scenes[index]||attempt?.result?.script!==brief.script)throw new Error('STALE_IMAGE_PROPOSAL');
+            if(brief.assetMode==='provided')throw new Error('IMAGE_GENERATION_NOT_ALLOWED');
+            const scene=brief.storyboard.scenes[index],prompt=(scene.imagePrompt||'台本の場面を説明する画像：'+scene.caption)+'。共通の視覚方針：'+(brief.storyboard.visualStyle||'')+'。変更希望：'+safeText(input.instructions||'同じ内容と雰囲気を保ち、構図を変えてください。',2000),files=scene.imageFile?[scene.imageFile]:scene.imageReferences||[];
+            const references=await Promise.all(files.map(async file=>({bytes:await production.readAsset(file),extension:file.split('.').at(-1)}))),image=await session.generateMedia('image',{prompt,references});
+            await production.addAsset('台本画像-'+attempt.id+'-'+index+'.'+image.extension,image.bytes,{origin:'generated-image'});scene.imageFile=createHash('sha256').update(image.bytes).digest('hex')+'.'+image.extension;delete scene.imagePrompt;delete scene.imageReferences;delete scene.imageFocus;
+            const result={...attempt.result,storyboard:brief.storyboard},remaining=brief.assetMode!=='provided'&&brief.storyboard.scenes.some(s=>!s.imageFile),finished={...attempt,result,state:remaining||result.warnings.length?'partial':'complete'};if(!remaining)delete finished.error;
+            await production.saveAuthoring({...production.status().authoring,version:1,lastAttempt:finished},brief);return json(res,200,status());
+          }
           const rows=session.status().rows.filter(r=>r.id!==production.status().bookends?.titleRowId);
           if(route==='/api/regenerate-image'){
             const row=rows.find(r=>r.id===input.id);if(!row)throw new Error('ROW_NOT_FOUND');
@@ -203,6 +213,15 @@ export async function startServer({session,port=6181,sampleDir=path.join(session
         }finally{inputBusy=false;}
       }
       if(route==='/api/cut-image'){
+        if(input.draftIndex!==undefined){
+          if(session.busy||input.revision!==session.revision()||input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');
+          const brief=production.status().brief,attempt=production.status().authoring?.lastAttempt,index=input.draftIndex;
+          if(!Number.isSafeInteger(index)||index<0||!brief.storyboard?.scenes[index]||attempt?.result?.script!==brief.script)throw new Error('STALE_IMAGE_PROPOSAL');
+          if(input.file!==''&&!production.status().assets.some(a=>a.file===input.file&&/\.(png|jpe?g|webp)$/.test(a.file)))throw new Error('INVALID_CUT_IMAGE');
+          const scene=brief.storyboard.scenes[index];scene.imageFile=input.file;delete scene.imagePrompt;delete scene.imageReferences;delete scene.imageFocus;
+          const result={...attempt.result,storyboard:brief.storyboard},remaining=brief.assetMode!=='provided'&&brief.storyboard.scenes.some(s=>!s.imageFile),finished={...attempt,result,state:remaining||result.warnings.length?'partial':'complete'};if(!remaining)delete finished.error;
+          await production.saveAuthoring({...production.status().authoring,version:1,lastAttempt:finished},brief);return json(res,200,status());
+        }
         if(session.busy)throw new Error('BUSY');if(input.revision!==session.revision())throw new Error('STALE_REVISION');const row=session.status().rows.find(r=>r.id===input.id);if(!row)throw new Error('ROW_NOT_FOUND');await production.assignCutImage(row,input.file);if(imageProposal){imageProposal.scenes=imageProposal.scenes.filter(s=>s.id!==row.id);imageProposal.productionRevision=production.finalInputsHash();imageProposal.id=randomUUID();if(!imageProposal.scenes.length)imageProposal=null;}await production.saveImageProposal(imageProposal||undefined);return json(res,200,status());
       }
       if(route==='/api/bookends'){
@@ -266,15 +285,38 @@ export async function startServer({session,port=6181,sampleDir=path.join(session
           const draft=normalizeDraftRecord(operation==='prepare-readings'?{...generated,script:brief.script,readings:readingRows.map(r=>{const i=readingTargets.findIndex(t=>t.id===r.id);return {caption:r.caption,speech:i<0?r.speech:generated.readings[i]?.speech};})}:generated);
           if(draftCanceled)throw new Error('CANCELED');
           if(target!==session||targetProduction!==production||targetProject!==projectId||attempt.baseRevision!==session.revision()||baseline!==production.finalInputsHash())throw new Error('STALE_REVISION');
-          const finished={...attempt,result:draft,state:draft.warnings.length?'partial':'complete'};
-          const nextBrief=normalizeBrief({... (operation==='prepare-readings'?previousDraft:brief),script:draft.script,readings:draft.readings,storyboard:operation==='prepare-readings'?previousDraft.storyboard:draft.storyboard,direction:operation==='prepare-readings'?previousDraft.direction:draft.direction,sourceEvidence:operation==='prepare-readings'?previousDraft.sourceEvidence:draft.verifiedSources?{sources:draft.verifiedSources,bindings:draft.sourceBindings}:undefined,scriptEdited:true});
+          let imageError;
+          const draftBrief=()=>normalizeBrief({... (operation==='prepare-readings'?previousDraft:brief),script:draft.script,readings:draft.readings,storyboard:operation==='prepare-readings'?previousDraft.storyboard:draft.storyboard,direction:operation==='prepare-readings'?previousDraft.direction:draft.direction,sourceEvidence:operation==='prepare-readings'?previousDraft.sourceEvidence:draft.verifiedSources?{sources:draft.verifiedSources,bindings:draft.sourceBindings}:undefined,scriptEdited:true});
+          if(operation!=='prepare-readings'){
+            try{
+              await production.saveAuthoring({...production.status().authoring,version:1,lastAttempt:{...attempt,state:'running',result:draft}},draftBrief());
+              if(!draft.storyboard&&brief.assetMode!=='provided'){
+                if(draft.visualPlanStatus==='needs-review')throw new Error('IMAGE_PLAN_REQUIRED');
+                const artwork=await session.planSources({...brief,scriptMode:'existing',script:draft.script,autoDirection:false,themeAuto:false,instructions:'字幕段落を一文字も変更せず、各場面の画像を割り当て、提供画像がない場面には具体的なimagePromptを用意してください。',references:{text:draft.script,urls:[]}},assets,file=>production.readAsset(file));
+                if(artwork.script!==draft.script||!artwork.storyboard)throw new Error('IMAGE_PLAN_REQUIRED');draft.storyboard=normalizeDraftRecord({...draft,storyboard:artwork.storyboard}).storyboard;
+              }
+              for(const [index,scene]of (draft.storyboard?.scenes||[]).entries()){
+                if(scene.imageFile){if(!production.status().assets.some(a=>a.file===scene.imageFile))throw new Error('INVALID_CUT_IMAGE');continue;}
+                if(brief.assetMode==='provided')continue;
+                if(draftCanceled)throw new Error('CANCELED');
+                const prompt=scene.imagePrompt||'動画用の挿絵。次の台本の場面を具体的に描いてください。文字や字幕は画像へ入れないでください。共通の視覚方針：'+(draft.storyboard.visualStyle||'動画全体で統一した自然な構図と配色。')+'。台本：'+scene.caption;
+                const references=await Promise.all((scene.imageReferences||[]).map(async file=>({bytes:await production.readAsset(file),extension:file.split('.').at(-1)})));
+                const image=await session.generateMedia('image',{prompt,references});if(draftCanceled)throw new Error('CANCELED');
+                await production.addAsset('台本画像-'+attempt.id+'-'+index+'.'+image.extension,image.bytes,{origin:'generated-image'});
+                scene.imageFile=createHash('sha256').update(image.bytes).digest('hex')+'.'+image.extension;delete scene.imagePrompt;delete scene.imageReferences;
+                await production.saveAuthoring({...production.status().authoring,version:1,lastAttempt:{...attempt,state:'running',result:draft}},draftBrief());
+              }
+            }catch(error){if(error.message==='CANCELED')throw error;imageError={stage:'images',code:/^[A-Z_]+$/.test(error.message)?error.message:'IMAGE_PREPARATION_FAILED'};}
+          }
+          const finished={...attempt,result:draft,state:imageError||draft.warnings.length?'partial':'complete',...(imageError?{error:imageError}:{})};
+          const nextBrief=draftBrief();
           try{await production.saveAuthoring({...production.status().authoring,version:1,lastAttempt:finished},nextBrief);}catch{unsavedDraft={attempt:finished,result:draft,brief:nextBrief};return json(res,200,{...draft,attempt:finished,saved:false,saveError:'DRAFT_SAVE_FAILED'});}
           if(operation==='prepare-readings'){
             try{await session.applyPreparedReadings(draft.readings,{expectedRevision:attempt.baseRevision,preserveIds:production.status().bookends?[production.status().bookends.titleRowId]:[]});}
             catch{const pending={...finished,state:'partial',error:{stage:'application',code:'READING_APPLY_FAILED'}};try{await production.saveAuthoring({...production.status().authoring,version:1,lastAttempt:pending});}catch{}return json(res,200,{...draft,attempt:pending,saved:true,applicationError:'READING_APPLY_FAILED'});}
           }
           return json(res,200,{...draft,attempt:finished,saved:true,model:'gemini-3.5-flash'});
-        }catch(error){const failed={...attempt,state:error.message==='CANCELED'?'canceled':'failed',error:{stage:'generation',code:/^[A-Z_]+$/.test(error.message)?error.message:'REQUEST_FAILED'}};try{await targetProduction.saveAuthoring({...targetProduction.status().authoring,version:1,lastAttempt:failed},previousDraft);}catch{}throw error;}
+        }catch(error){const latest=targetProduction.status().authoring?.lastAttempt,preserved=latest?.id===attempt.id&&latest.result;const failed={...attempt,...(preserved?{result:preserved}:{}),state:error.message==='CANCELED'?'canceled':'failed',error:{stage:preserved?'images':'generation',code:/^[A-Z_]+$/.test(error.message)?error.message:'REQUEST_FAILED'}};try{await targetProduction.saveAuthoring({...targetProduction.status().authoring,version:1,lastAttempt:failed},preserved?targetProduction.status().brief:previousDraft);}catch{}throw error;}
         finally{inputBusy=false;}
       }
       if(route==='/api/save-draft-result'){if(!unsavedDraft)throw new Error('DRAFT_RESULT_REQUIRED');if(input.revision!==session.revision()||input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');await production.saveAuthoring({...production.status().authoring,version:1,lastAttempt:unsavedDraft.attempt},unsavedDraft.brief);unsavedDraft=null;return json(res,200,status());}
@@ -284,9 +326,10 @@ export async function startServer({session,port=6181,sampleDir=path.join(session
         const interrupted=production.status().authoring?.pendingAdoption;if(interrupted&&![interrupted.baseRowsHash,interrupted.desiredRowsHash].includes(session.rowsHash()))throw new Error('ADOPTION_CONFLICT');
         if(input.revision!==session.revision()||input.productionRevision!==production.finalInputsHash()||input.projectId!==projectId||input.instanceId!==instanceId)throw new Error('STALE_REVISION');
         production.assertNoCorrections();const previous=production.status().brief,preserveIds=production.status().bookends?[production.status().bookends.titleRowId]:[];
+        if(previous.scriptMode!=='existing'&&previous.script===input.script&&previous.assetMode!=='provided'&&(previous.storyboard?.scenes.some(s=>!s.imageFile)||production.status().authoring?.lastAttempt?.error?.stage==='images'))throw new Error('IMAGE_PREPARATION_REQUIRED');
         const rows=session.planScriptAdoption(input.script,{readings:input.readings,preserveIds}),pending={id:randomUUID(),baseRowsHash:session.rowsHash(),desiredRowsHash:createHash('sha256').update(JSON.stringify(rows)).digest('hex'),rows};
         const brief=normalizeBrief({...previous,script:input.script,readings:input.readings,storyboard:previous.script===input.script?previous.storyboard:undefined,scriptEdited:true});
-        inputBusy=true;try{await production.saveAuthoring({...production.status().authoring,version:1,pendingAdoption:pending},brief);await session.applyScriptAdoption(rows,pending.baseRowsHash);const {pendingAdoption,...authoring}=production.status().authoring;await production.saveAuthoring({...authoring,adoptedScriptHash:createHash('sha256').update(parseScriptParts(input.script).join('\n')).digest('hex')});if(brief.storyboard)await production.applyStoryboard(brief.storyboard,session.status().rows.filter(r=>!preserveIds.includes(r.id)));return json(res,200,status());}finally{inputBusy=false;}
+        inputBusy=true;try{await production.saveAuthoring({...production.status().authoring,version:1,pendingAdoption:pending},brief);await session.applyScriptAdoption(rows,pending.baseRowsHash);const {pendingAdoption,...authoring}=production.status().authoring;await production.saveAuthoring({...authoring,adoptedScriptHash:createHash('sha256').update(parseScriptParts(input.script).join('\n')).digest('hex')});if(brief.storyboard){const adoptedRows=session.status().rows.filter(r=>!preserveIds.includes(r.id));await production.applyStoryboard(brief.storyboard,adoptedRows);imageProposal=currentImageProposal();if(imageProposal){imageProposal.scenes=imageProposal.scenes.filter(s=>!adoptedRows.some(r=>r.id===s.id));if(!imageProposal.scenes.length)imageProposal=null;}await production.saveImageProposal(imageProposal||undefined);}return json(res,200,status());}finally{inputBusy=false;}
       }
       if(route==='/api/design-draft'){
         if(input.consent!==true)throw new Error('GENERATION_CONSENT_REQUIRED');
