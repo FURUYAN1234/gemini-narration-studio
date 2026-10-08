@@ -1,4 +1,4 @@
-# Gemini Narration Studio / Gemini ナレーション・スタジオ v1.2.3
+# Gemini Narration Studio / Gemini ナレーション・スタジオ v1.2.4
 
 A Windows x64 local app for turning materials and scripts into narrated, subtitled MP4 videos. Review Japanese readings, create Gemini speech, check each cut's image and audio, then export locally. Distribution currently uses a private GitHub repository; access requires an invitation.
 

@@ -8,6 +8,18 @@ import {VIDEO_TEMPLATES} from '../designs.mjs';
 
 const appSource = (await readFile(new URL('../ui/app.mjs', import.meta.url), 'utf8')).replace(/^import .*script-flow\.mjs';\r?\n/m,'');
 const html = await readFile(new URL('../ui/index.html', import.meta.url), 'utf8');
+test('adding a material after typing keeps the draft usable without hiding concurrent brief changes',async()=>{
+ for(const concurrent of [false,true]){
+  const ui=await setup({rows:[],strictProductionRevision:true,materialConcurrentEdit:concurrent});
+  await ui.edit(ui.get('script-mode'),'existing');await ui.edit(ui.get('script-input'),'手入力した台本。');
+  const bytes=new Uint8Array([1,2,3]);ui.get('material-files').files=[{name:'provided.png',size:bytes.length,arrayBuffer:async()=>bytes.buffer}];
+  await ui.get('material-files').emit('change');assert.equal(ui.get('script-input').value,'手入力した台本。');
+  await ui.get('plan-sources').emit('click');
+  if(concurrent){assert.equal(ui.requests.some(r=>r.route==='adopt-script'),false);assert.equal(ui.state().production.brief.instructions,'他の画面で編集');assert.match(ui.get('source-status').textContent,/台本が更新|STALE_REVISION/);}
+  else{assert.equal(ui.location.hash,'#connection');assert.equal(ui.state().rows[0].caption,'手入力した台本。');}
+  assert.equal(ui.requests.some(r=>['draft','source-plan','generate'].includes(r.route)),false);
+ }
+});
 test('saving an AI cut plan or changing strength retains its transitions; changing style clears the old plan',async()=>{
  const motion={version:1,style:'cinematic',intensity:'standard',transitions:['iris','split'],transitionTones:['image','background']},ui=await setup({motion});
  assert.equal(ui.get('apply-motion').disabled,true);
@@ -388,7 +400,7 @@ test('reference-only inputs enable the single planning action without extra inst
  empty.restart();await empty.poll();assert.equal(empty.get('generate-script').disabled,true);
 });
 
-async function setup({imageProposal,motion,autoConfirm=false,voiceConfirmed=true,productionErrorAt=0,sourcePlan,sourceError,rows,samples,assets=[],previewError,rowError,draftWait,pausedStep,confirmResult=true,secondReviewed = true,voices=['Kore','Puck']} = {}) {
+async function setup({imageProposal,motion,autoConfirm=false,voiceConfirmed=true,productionErrorAt=0,strictProductionRevision=false,materialConcurrentEdit=false,sourcePlan,sourceError,rows,samples,assets=[],previewError,rowError,draftWait,pausedStep,confirmResult=true,secondReviewed = true,voices=['Kore','Puck']} = {}) {
   const elements = new Map();let anonymous=0;
   const tree=new Element('root'),stack=[tree],voids=new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']);
   for(const [token,closing,tag,attributes] of html.matchAll(/<(\/?)([\w-]+)([^>]*)>/g)){
@@ -428,10 +440,11 @@ async function setup({imageProposal,motion,autoConfirm=false,voiceConfirmed=true
   if(rows)state.rows=rows.map((r,i)=>({id:'row-'+i,scene:'',reviewed:false,attempts:0,hints:[],audio:null,...r}));
   if(samples)state.samples=samples;
   state.production.assets=assets;
+  if(strictProductionRevision){state.productionRevision='inputs-0';state.production.musicEnabled=true;}
   let token = 'fixture-token-1', revision = 0;
   const requests = [], intervals = [], confirmations=[];
   const fetch = async (url, options = {}) => {
-    const route = url.replace('/api/', ''), input = options.body ? JSON.parse(options.body) : undefined;
+    const route = url.replace('/api/', '').split('?')[0], input = typeof options.body==='string' ? JSON.parse(options.body) : undefined;
     requests.push({route, input, headers: options.headers});
     const reply = (value, ok = true) => ({ok, json: async () => structuredClone(value)});
     if (route === 'bootstrap') return reply({token, instanceId: state.instanceId});
@@ -439,6 +452,11 @@ async function setup({imageProposal,motion,autoConfirm=false,voiceConfirmed=true
     if (route === 'themes') return reply([{name: 'moon', background: '#002b36', foreground: '#93a1a1', heading: '#eee8d5', accent: '#268bd2'}]);
     if (route === 'designs') return reply(VIDEO_TEMPLATES);
     if (options.headers?.['X-Narration-Token'] !== token) return reply({error: 'CSRF_TOKEN_REQUIRED'}, false);
+    if(route==='material'){
+      const bytes=await options.body.arrayBuffer(),file=Buffer.from(await crypto.subtle.digest('SHA-256',bytes)).toString('hex')+'.png';
+      state.production.assets.push({name:options.body.name,file,size:bytes.byteLength});state.productionRevision='inputs-material';
+      if(materialConcurrentEdit)state.production.brief.instructions='他の画面で編集';return reply(state);
+    }
     if(route==='render-video'){if(!state.production.finalization)return reply({error:'FINAL_CONFIRMATION_REQUIRED'},false);state.video={...state.video,running:true,stage:'rendering',progress:.4,renderedFrames:40,totalFrames:100,steps:['preparing','bundling','rendering']};return reply({started:true});}
     if(route==='new-project'||route==='project'||route==='revision-project'){
       savedProjects.set(state.projectId,structuredClone(state));const id=route==='new-project'?'new-project':route==='revision-project'?'revision-project':input.id;
@@ -461,7 +479,7 @@ async function setup({imageProposal,motion,autoConfirm=false,voiceConfirmed=true
     else if(route==='apply-review'){if(!input.consent)return reply({error:'GENERATION_CONSENT_REQUIRED'},false);const ids=input.id?[input.id]:input.review.cuts.map(c=>c.rowId);for(const id of ids){const row=state.rows.find(r=>r.id===id);Object.assign(row,{caption:'修正後。',speech:'しゅうせいご。',reviewed:false,audioCurrent:false,cutConfirmed:false});}state.production.review={...input.review,overall:input.id?input.review.overall:'',cuts:input.review.cuts.filter(c=>!ids.includes(c.rowId))};state.correctionResult={ids,images:0,textChanged:ids.length};}
     else if(route==='review'){if(input.expectedRevision!==state.revision)return reply({error:'STALE_REVISION'},false);state.production.review=input.review;}
     else if(route==='music-preference')state.production.musicEnabled=input.enabled;
-    else if (route === 'production') {if(productionErrorAt&&requests.filter(r=>r.route==='production').length===productionErrorAt)return reply({error:'STALE_REVISION'},false);state.production.brief=input;}
+    else if (route === 'production') {if(strictProductionRevision&&input.productionRevision!==state.productionRevision||productionErrorAt&&requests.filter(r=>r.route==='production').length===productionErrorAt)return reply({error:'STALE_REVISION'},false);state.production.brief=input;}
     else if(route==='adopt-script'){state.rows=input.script.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map((caption,i)=>({id:'adopted-'+i,caption,speech:input.readings?.[i]?.speech||(/^[ぁ-ゖー。！？、\s]+$/.test(caption)?caption:''),readingState:input.readings?'ready':'pending',reviewed:false,attempts:0,hints:[],audioCurrent:false}));}
     else if (route === 'append-script') {const rows=[{id:'added',caption:input.script,speech:input.readings?.[0]?.speech||input.script,reviewed:false,attempts:0,hints:[]}];if(input.replace)state.rows=rows;else state.rows.push(...rows);}
     else if (route === 'preview') {if(previewError&&requests.filter(r=>r.route==='preview').length===previewError)return reply({error:'PROVIDER_RATE_LIMIT'},false);const id='sample-'+state.samples.length;state.samples.push({id,file:id+'.wav',settings:input.settings,durationSeconds:5});return reply({sample:id});}
@@ -478,7 +496,7 @@ async function setup({imageProposal,motion,autoConfirm=false,voiceConfirmed=true
     return reply(state);
   };
   const storage=new Map(pausedStep?[['narration-paused:original',pausedStep]]:[]);
-  const context = vm.createContext({ResizeObserver:class {observe(){}},MutationObserver:class {observe(){}},requestAnimationFrame:callback=>callback(),scriptActionState,parseScriptParts,document, fetch, setInterval: callback => {intervals.push(callback);}, window: {sessionStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},location:{hash:''},confirm: message => {confirmations.push(message);return confirmResult;}}, crypto: {randomUUID: () => 'fixture-id'}});
+  const context = vm.createContext({ResizeObserver:class {observe(){}},MutationObserver:class {observe(){}},requestAnimationFrame:callback=>callback(),scriptActionState,parseScriptParts,document, fetch, setInterval: callback => {intervals.push(callback);}, window: {sessionStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},location:{hash:''},confirm: message => {confirmations.push(message);return confirmResult;}}, crypto: {randomUUID: () => 'fixture-id',subtle:crypto.subtle}});
   await vm.runInContext('(async () => {\n' + appSource + '\n})()', context, {filename: 'ui/app.mjs'});
   const get = id => {assert.ok(elements.has(id), 'UI element exists: ' + id); return elements.get(id);};
   const row = id => [...get('rows').walk()].find(element => element.dataset.approve === id);
