@@ -27,6 +27,29 @@ test('cancel stops only the active render and never saves/publishes a late succe
 });
 async function directory(t){const dir=await mkdtemp(path.join(tmpdir(),'studio-video-'));t.after(()=>rm(dir,{recursive:true,force:true}));return dir;}
 
+test('one authorized action generates audio then video without inventing listening or sealing the project',async t=>{
+ const dir=await directory(t),s=await NarrationSession.open({outputDir:dir});s.setKey('fixture-only-key');await s.adoptScript('説明。',{readings:[{caption:'説明。',speech:'せつめい。'}],expectedRevision:s.revision()});await s.approve(s.job.rows[0].id,s.revision());
+ const p=await ProductionInputs.open(dir);await p.saveBrief({...p.status().brief,script:'説明。',scriptEdited:true,assetMode:'provided'});await p.saveMusicEnabled(false);await p.saveVoiceConfirmation((await import('../core.mjs')).previewFingerprint(s.job.settings));
+ let generated=0,rendered=0;t.mock.method(s,'generate',async()=>{generated++;const row=s.job.rows[0];row.audio={fingerprint:s.audioHash(row),file:'a'.repeat(64)+'.wav',contentHash:'fixture',durationSeconds:1};await s.configure(s.job.settings);});
+ const service=await startServer({session:s,port:0,videoRendererRoot:dir,downloadsDir:path.join(dir,'Downloads'),sampleDir:path.join(dir,'samples'),bundledSampleDir:path.join(dir,'empty'),videoRunner:async({output,preview})=>{assert.equal(generated,1);assert.equal(preview,true);rendered++;await writeFile(output,mp4);await writeFile(output.replace(/\.mp4$/,'.m4a'),mp4);}});t.after(()=>service.close());
+ const boot=await(await fetch(service.url+'/api/bootstrap')).json();
+ s.job.rows[0].approval=null;await s.configure(s.job.settings);let current=await(await fetch(service.url+'/api/status')).json();
+ const blocked=await fetch(service.url+'/api/generate',{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':boot.token},body:JSON.stringify({ids:[s.job.rows[0].id],consent:true,createVideo:true,revision:current.revision,productionRevision:current.productionRevision})});assert.equal(blocked.status,409);assert.equal((await blocked.json()).error,'READING_REVIEW_REQUIRED');assert.equal(generated,0);
+ await s.approve(s.job.rows[0].id,s.revision());current=await(await fetch(service.url+'/api/status')).json();
+ const response=await fetch(service.url+'/api/generate',{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':boot.token},body:JSON.stringify({ids:[s.job.rows[0].id],consent:true,createVideo:true,revision:current.revision,productionRevision:current.productionRevision})});assert.equal(response.status,202,JSON.stringify(await response.json()));
+ let status;for(let i=0;i<100;i++){status=await(await fetch(service.url+'/api/status')).json();if(status.video.result||status.error)break;await new Promise(r=>setTimeout(r,10));}
+ assert.equal(rendered,1);assert.equal(status.video.stage,'complete');assert.equal(status.video.result.reviewState,'pending');assert.equal(status.production.finalization,null);assert.equal(status.rows[0].listenedCurrent,false);assert.equal(status.rows[0].cutConfirmed,false);assert.equal((await fetch(service.url+'/api/manifest')).status,409);
+ const manifest=JSON.parse(await readFile(path.join(dir,'narration-preview-manifest.json'),'utf8'));assert.equal(manifest.reviewState,'pending');assert.equal(manifest.rows[0].audioListened,false);
+ const originalBrief=status.production.brief;
+ const change=await fetch(service.url+'/api/production',{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':boot.token},body:JSON.stringify({...originalBrief,instructions:'変更した条件',productionRevision:status.productionRevision})});assert.equal(change.status,200);let changed=await(await fetch(service.url+'/api/status')).json();assert.equal(changed.video.result,null);assert.equal((await fetch(service.url+'/api/video-download')).status,409);
+ const restore=await fetch(service.url+'/api/production',{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':boot.token},body:JSON.stringify({...originalBrief,productionRevision:changed.productionRevision})});assert.equal(restore.status,200);status=await(await fetch(service.url+'/api/status')).json();
+
+ const stale=await fetch(service.url+'/api/confirm-video',{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':boot.token},body:JSON.stringify({revision:'stale',productionRevision:status.productionRevision,confirmReviewed:true})});assert.equal(stale.status,409);assert.equal((await ProductionInputs.open(dir)).status().finalization,null);
+ const accept=await fetch(service.url+'/api/confirm-video',{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':boot.token},body:JSON.stringify({revision:status.revision,productionRevision:status.productionRevision,confirmReviewed:true})});assert.equal(accept.status,200,JSON.stringify(await accept.json()));
+ status=await(await fetch(service.url+'/api/status')).json();assert.equal(rendered,1);assert.equal(status.video.result.reviewState,'confirmed');assert.ok(status.production.finalization);assert.equal(status.rows[0].listenedCurrent,true);
+
+});
+
 test('bundled FFmpeg fully decodes real video and audio but rejects a corrupt MP4',async t=>{
  const root=await findRendererRoot(process.cwd());if(!root||process.platform!=='win32'){t.skip('Existing Windows Remotion runtime required');return;}
  const dir=await directory(t),ffmpeg=path.join(root,'node_modules','@remotion','compositor-win32-x64-msvc','ffmpeg.exe');

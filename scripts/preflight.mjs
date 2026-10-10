@@ -5,9 +5,9 @@ import {execFileSync} from 'node:child_process';
 import {SAMPLE_SETTINGS,previewFingerprint,wavInfo} from '../runtime/core.mjs';
 import {validateAsset} from '../runtime/production.mjs';
 export function allowedFile(relative) {
-  if(/(^|\/)(\.git|node_modules|output|data)(\/|$)/.test(relative))return false;
+  if(/(^|\/)(\.git|node_modules|output|data|dist)(\/|$)/.test(relative))return false;
   if(/(^|\/)(\.env[^/]*|\.npmrc|job\.json|production\.json|active-project\.json|video-receipt\.json|credentials[^/]*|auth\.json)$/.test(relative))return false;
-  return /^(package(-lock)?\.json|\.gitignore|start_narration_studio\.bat|launch\.mjs|README\.md|THIRD_PARTY_NOTICES\.md|scripts\/(bootstrap\.ps1|[^/]+\.mjs)|tests\/[^/]+\.test\.mjs|docs\/(deploy\.md|publication\.md|note-draft\.md|releases\/v\d+\.\d+\.\d+\.md|screenshots\/[A-Za-z0-9_-]+\.(png|jpg|jpeg|webp))|runtime\/[^/]+\.(mjs|tsx)|runtime\/tests\/[^/]+\.test\.mjs|runtime\/ui\/(app\.mjs|index\.html|style\.css)|runtime\/vendor\/[A-Za-z0-9_.\/-]+)$/.test(relative);
+  return /^(package(-lock)?\.json|\.gitignore|start_narration_studio\.bat|launch\.mjs|LICENSE|index\.html|public\/LICENSE\.txt|README\.md|THIRD_PARTY_NOTICES\.md|scripts\/(bootstrap\.ps1|[^/]+\.mjs)|tests\/[^/]+\.test\.mjs|docs\/(deploy\.md|publication\.md|note-draft\.md|licenses\/previous-notices\.md|releases\/v\d+\.\d+\.\d+\.md|screenshots\/[A-Za-z0-9_-]+\.(png|jpg|jpeg|webp))|runtime\/[^/]+\.(mjs|tsx)|runtime\/tests\/[^/]+\.test\.mjs|runtime\/ui\/(app\.mjs|index\.html|style\.css)|runtime\/vendor\/[A-Za-z0-9_.\/-]+)$/.test(relative);
 }
 export function validateDependencyAudit(result) {
   const counts=result?.metadata?.vulnerabilities;
@@ -25,7 +25,7 @@ export async function audit(root,{tracked=false}={}) {
   }
   async function walk(dir,prefix='') {
     for(const entry of await readdir(dir,{withFileTypes:true})) {
-      if(!prefix&&['.git','node_modules','output','data'].includes(entry.name))continue;
+      if(!prefix&&['.git','node_modules','output','data','dist'].includes(entry.name))continue;
       if(!prefix&&entry.name==='HANDOFF.md')continue;
       const rel=prefix+entry.name;
       if(entry.isSymbolicLink())throw new Error('RELEASE_SYMLINK_REJECTED');

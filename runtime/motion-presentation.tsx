@@ -1,7 +1,7 @@
 import React,{useEffect,useState} from 'react';
 import {AbsoluteFill,Audio,Img,staticFile,useCurrentFrame,delayRender,continueRender,cancelRender} from 'remotion';
 import {ease,clamp,fitText,motionFrame,sceneDirection,pointSchedule,focusFrame,transitionPlan,transitionFrame,transitionLayers,transitionSurface} from './motion.mjs';
-import {captionAtFrame} from './subtitles.mjs';
+import {captionAtFrame,fitSubtitleText} from './subtitles.mjs';
 import type {Slide,PresentationData,Design,Theme} from './presentation';
 
 type Motion={version:1;style:'cinematic'|'kinetic'|'editorial';intensity:'subtle'|'standard'|'bold';transitions?:string[];transitionTones?:string[]};
@@ -108,7 +108,7 @@ export const MotionSlide=({row,data,index,design,theme,motion:m}:{row:Slide;data
  const textX=hasImage&&!closing&&left?970:110,textW=hasImage?closing?1000:800:1700;
  const targetHead:Box=sequence?{x:110,y:165,w:hasImage?990:1640,h:180}:closing?{x:110,y:230,w:hasImage?1000:1650,h:320}:{x:textX,y:hasImage?235:245,w:textW,h:points.length?300:450};
  const headBox:Box=kinetic?{x:110+(targetHead.x-110)*stage,y:290+(targetHead.y-290)*stage,w:1700+(targetHead.w-1700)*stage,h:430+(targetHead.h-430)*stage}:targetHead;
- const caption=captionAtFrame(row,frame),captionFit=fitText(caption,{width:1630,height:128,maxSize:34,lineHeight:1.35});
+ const caption=captionAtFrame(row,frame),captionFit=fitSubtitleText(caption,{width:1630});
  return <AbsoluteFill style={{fontFamily:'NarrationJapanese',overflow:'hidden',color:d.heading}}>
   <Backdrop d={d} m={m} frame={frame} fps={fps} index={index}/>
   <div style={{position:'absolute',left:110,top:100,width:80+180*state.reveal,height:4,background:d.accent}}/>

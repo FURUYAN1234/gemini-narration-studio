@@ -1,7 +1,7 @@
 import React,{useState,useEffect} from 'react';
 import {AbsoluteFill,Audio,Composition,Img,Sequence,interpolate,staticFile,useCurrentFrame,delayRender,continueRender,cancelRender} from 'remotion';
 import {loadLocalFont} from './font-loader.mjs';
-import {captionAtFrame} from './subtitles.mjs';
+import {captionAtFrame,fitSubtitleText} from './subtitles.mjs';
 import {musicVolume,musicClips,musicClipGain} from './music.mjs';
 import {MotionSlide,FocusArtwork,CutTransition} from './motion-presentation';
 import {EXPANDED_LAYOUTS,templateGeometry,fitText,motionFrame,ease,pointSchedule} from './motion.mjs';
@@ -12,6 +12,14 @@ export type Design={name:string;layout:'split'|'visual'|'steps'|'editorial'|'foc
 export type PresentationData={bookends?:{titleRowId?:string;endLabel:string;endUrl:string;owner:string;creationYear:number;from:number;frames:number};gapFrames?:number;music?:{src:string;durationSeconds:number;level:number};title:string;fps:number;durationInFrames:number;rows:Slide[];design?:Design;motion?:{version:1;style:'cinematic'|'kinetic'|'editorial';intensity:'subtle'|'standard'|'bold';transitions?:string[];transitionTones?:string[]}|null};
 export type Theme={name:string;background:string;foreground:string;heading:string;accent:string};
 const font='NarrationJapanese';
+const FittedHeading=({text,width,height,size,lineHeight=1.3}:{text:string;width:number;height:number;size:number;lineHeight?:number})=>{
+ const fit=fitText(text,{width,height,maxSize:size,lineHeight,balance:true});
+ return <div data-fitted-heading style={{fontWeight:800,fontSize:fit.size,lineHeight,whiteSpace:'pre'}}>{fit.lines.map((line,i)=><div key={i}>{line.replace(/\r?\n$/,'')}</div>)}</div>;
+};
+const SubtitleText=({text,width=1700}:{text:string;width?:number})=>{
+ const fit=fitSubtitleText(text,{width});
+ return <div data-subtitle-text style={{fontSize:fit.size,lineHeight:1.35,textAlign:'center'}}>{fit.lines.map((line,i)=><div key={i} style={{whiteSpace:'pre'}}>{line.replace(/\r?\n$/,'')}</div>)}</div>;
+};
 // Remotion initializes its global handles while modules load. Create the font
 // handle at mount so a later module cannot erase it and leave its timer alive.
 const useJapaneseFont=()=>{
@@ -26,18 +34,18 @@ const SlideView=({row,data,theme,index}:{row:Slide;data:PresentationData;theme:T
     <div style={{display:'flex',justifyContent:'space-between',fontSize:22,color:theme.accent,letterSpacing:3}}><span>{row.scene||data.title}</span><span>{String(index+1).padStart(2,'0')} / {data.rows.length}</span></div>
     <div style={{marginTop:layout==='title'?140:68,opacity,transform:`translateY(${(1-opacity)*18}px)`}}>
       <div style={{height:5,width:80,background:theme.accent,marginBottom:32}}/>
-      <h1 style={{fontSize:layout==='title'?82:58,margin:0,lineHeight:1.4,maxWidth:layout==='split'?820:1600,overflowWrap:'anywhere'}}>{row.title||row.caption}</h1>
+      <FittedHeading text={row.title||row.caption} width={layout==='split'?820:1600} height={layout==='split'?250:340} size={layout==='title'?82:58} lineHeight={1.4}/>
       {layout==='steps'&&points.length>0&&<div style={{display:'flex',gap:25,marginTop:45}}>{points.map((point,i)=><div key={i} style={{flex:1,border:`1px solid ${theme.accent}`,borderRadius:16,padding:30,fontSize:30,lineHeight:1.7}}><div style={{fontSize:22,color:theme.accent,marginBottom:22}}>0{i+1}</div>{point}</div>)}</div>}
       {layout==='split'&&<div style={{display:'flex',gap:55,marginTop:35}}><div style={{flex:1,fontSize:31,lineHeight:1.8,color:theme.foreground}}>{points.map((point,i)=><p key={i}>{point}</p>)}</div>{row.image&&<Img src={staticFile(row.image)} style={{width:720,height:510,objectFit:'contain',borderRadius:15}}/>}</div>}
     </div>
-    <div style={{position:'absolute',bottom:45,left:85,right:85,borderTop:`1px solid ${theme.accent}`,paddingTop:22,fontSize:32,lineHeight:1.6}}>{captionAtFrame(row,frame)}</div>
+    <div style={{position:'absolute',bottom:45,left:85,right:85,borderTop:`1px solid ${theme.accent}`,paddingTop:22,fontSize:32,lineHeight:1.6}}><SubtitleText text={captionAtFrame(row,frame)}/></div>
     <Audio src={staticFile(row.src)}/>
   </AbsoluteFill>;
 };
 const DesignedSlide=({row,data,index,design:d}:{row:Slide;data:PresentationData;index:number;design:Design})=>{
  const frame=useCurrentFrame(),opacity=interpolate(frame,[0,12],[0,1],{extrapolateRight:'clamp'}),title=row.title||row.scene||data.title,points=row.points||[];
  const image=row.image?<Img src={staticFile(row.image)} style={{width:'100%',height:'100%',objectFit:'contain',borderRadius:d.radius}}/>:null;
- const heading=<h1 style={{fontSize:d.titleSize,lineHeight:1.3,margin:0,color:d.heading,overflowWrap:'anywhere'}}>{title}</h1>;
+ const heading=<FittedHeading text={title} width={d.layout==='visual'?665:['steps','focus'].includes(d.layout)?1750:1750*(1-d.imageRatio)-60} height={['steps','focus'].includes(d.layout)?210:300} size={d.titleSize}/>;
  const notes=<div style={{fontSize:32,lineHeight:1.8,color:d.foreground}}>{points.map((point,i)=><p key={i}>{point}</p>)}</div>;
  const grid=d.decoration==='grid'?{backgroundImage:`linear-gradient(${d.accent}22 1px,transparent 1px),linear-gradient(90deg,${d.accent}22 1px,transparent 1px)`,backgroundSize:'60px 60px'}:{};
  return <AbsoluteFill style={{background:d.background,color:d.heading,fontFamily:font,...grid}}>
@@ -50,7 +58,7 @@ const DesignedSlide=({row,data,index,design:d}:{row:Slide;data:PresentationData;
    :d.layout==='focus'?<div style={{height:'100%',textAlign:'center'}}>{heading}<div style={{height:390,maxWidth:1050,margin:'35px auto 0'}}>{image||notes}</div>{image&&<div style={{display:'flex',justifyContent:'center',gap:45,fontSize:30,color:d.foreground}}>{points.map((point,i)=><span key={i}>{point}</span>)}</div>}</div>
    :<div style={{display:'flex',flexDirection:d.imageSide==='left'?'row-reverse':'row',gap:60,height:'100%'}}><div style={{flex:1,minWidth:0,paddingTop:d.layout==='editorial'?35:0,borderTop:d.decoration==='line'?`5px solid ${d.accent}`:undefined}}>{heading}{notes}</div><div style={{width:d.imageRatio*100+'%',height:'100%',paddingLeft:d.layout==='editorial'?30:0,borderLeft:d.layout==='editorial'?`2px solid ${d.accent}`:undefined}}>{image}</div></div>}
   </div>
-  <div style={{position:'absolute',bottom:0,left:0,right:0,minHeight:105,padding:'24px 85px 38px',borderTop:`1px solid ${d.accent}`,background:d.background,color:d.foreground,fontSize:32,lineHeight:1.6}}>{captionAtFrame(row,frame)}</div>
+  <div style={{position:'absolute',bottom:0,left:0,right:0,minHeight:105,padding:'24px 85px 38px',borderTop:`1px solid ${d.accent}`,background:d.background,color:d.foreground,fontSize:32,lineHeight:1.6}}><SubtitleText text={captionAtFrame(row,frame)}/></div>
   <Audio src={staticFile(row.src)}/>
  </AbsoluteFill>;
 };
@@ -78,7 +86,7 @@ const ExpandedSlide=({row,data,index,design:d}:{row:Slide;data:PresentationData;
    </div>;
   })}
   <div style={{position:'absolute',left:0,right:0,top:895,height:185,background:d.background,borderTop:`1px solid ${d.accent}`,opacity:1}}/>
-  {text(caption,{x:110,y:920,w:1700,h:128},34,'caption',d.foreground)}
+  <div data-template-text="caption" style={{position:'absolute',left:110,top:920,width:1700,height:128,color:d.foreground}}><SubtitleText text={caption}/></div>
   <Audio src={staticFile(row.src)}/>
  </AbsoluteFill>;
 };
@@ -90,10 +98,10 @@ const Bookend=({data,theme,row}:{data:PresentationData;theme:Theme;row?:Slide})=
  return <AbsoluteFill style={{background,color:foreground,fontFamily:font,overflow:'hidden'}}>
   <div style={{position:'absolute',width:1100,height:1100,borderRadius:'50%',border:`1px solid ${accent}`,opacity:.10,top:-600,right:-280,transform:`translateX(${frame*.2}px)`}}/>
   {ending?<div style={{position:'absolute',right:86,bottom:140,textAlign:'right',opacity:fade*.85,fontSize:26,lineHeight:1.8,maxWidth:1500,overflowWrap:'anywhere'}}><div>{b.endLabel}</div><div style={{fontSize:24}}>{b.endUrl}</div></div>:
-  <AbsoluteFill style={{justifyContent:'center',padding:'100px 150px',opacity:fade,transform:`translateY(${interpolate(frame,[0,24],[22,0],{extrapolateRight:'clamp'})}px)`}}><div style={{width:110,height:5,background:accent,marginBottom:42}}/><div style={{fontWeight:800,fontSize:Math.min(92,Math.max(42,Math.floor(1800/Math.max(1,[...row!.caption].length)))),lineHeight:1.55,letterSpacing:3,overflowWrap:'anywhere'}}>{row!.caption}</div></AbsoluteFill>}
+  <AbsoluteFill style={{justifyContent:'center',padding:'100px 150px',opacity:fade,transform:`translateY(${interpolate(frame,[0,24],[22,0],{extrapolateRight:'clamp'})}px)`}}><div style={{width:110,height:5,background:accent,marginBottom:42}}/><FittedHeading text={row!.caption} width={1620} height={650} size={92} lineHeight={1.55}/></AbsoluteFill>}
   {ending&&<div style={{position:'absolute',right:86,bottom:80,maxWidth:550,textAlign:'right',overflowWrap:'anywhere',opacity:fade*.75,fontSize:25,letterSpacing:2}}>@{b.creationYear}/{b.owner}</div>}
   {row&&<Audio src={staticFile(row.src)}/>}
  </AbsoluteFill>;
 };
-export const NarratedPresentation=({data,theme}:{data:PresentationData;theme:Theme})=>{useJapaneseFont();return <AbsoluteFill><BackgroundMusic data={data}/>{data.rows.map((row,index)=><Sequence key={row.id} from={row.from} durationInFrames={row.frames+(data.gapFrames??7)}>{data.bookends?.titleRowId===row.id?<Bookend data={data} theme={theme} row={row}/>:<CutTransition row={row} data={data} palette={data.design||theme}>{data.design&&EXPANDED_LAYOUTS.includes(data.design.layout)?<ExpandedSlide row={row} data={data} index={index} design={data.design}/>:data.motion?<MotionSlide row={row} data={data} index={index} design={data.design} theme={theme} motion={data.motion}/>:data.design?<DesignedSlide row={row} data={data} index={index} design={data.design}/>:<SlideView row={row} data={data} theme={theme} index={index}/>}</CutTransition>}</Sequence>)}{data.bookends&&<Sequence from={data.bookends.from} durationInFrames={data.bookends.frames}><Bookend data={data} theme={theme}/></Sequence>}</AbsoluteFill>;};
+export const NarratedPresentation=({data,theme}:{data:PresentationData;theme:Theme})=>{useJapaneseFont();return <AbsoluteFill><BackgroundMusic data={data}/>{data.rows.map((row,index)=><Sequence key={row.id} from={row.from} durationInFrames={row.frames+(data.gapFrames??7)}>{data.bookends?.titleRowId===row.id?<Bookend data={data} theme={theme} row={row}/>:<CutTransition row={row} data={data} palette={data.design||theme}>{data.design&&EXPANDED_LAYOUTS.includes(data.design.layout)?<ExpandedSlide row={row} data={data} index={index} design={data.design}/>:data.motion?<MotionSlide row={row} data={data} index={index} design={data.design} theme={theme} motion={data.motion}/>:data.design?<DesignedSlide row={row} data={data} index={index} design={data.design}/>:<SlideView row={row} data={data} theme={theme} index={index}/>}</CutTransition>}</Sequence>)}{data.bookends&&data.bookends.frames>0&&<Sequence from={data.bookends.from} durationInFrames={data.bookends.frames}><Bookend data={data} theme={theme}/></Sequence>}</AbsoluteFill>;};
 export const NarratedPresentationComposition=({data,theme}:{data:PresentationData;theme:Theme})=><Composition id="GeminiNarratedPresentation" component={NarratedPresentation} defaultProps={{data,theme}} durationInFrames={data.durationInFrames} fps={data.fps} width={1920} height={1080}/>;

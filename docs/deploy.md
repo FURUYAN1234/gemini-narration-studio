@@ -1,13 +1,9 @@
-# Private local distribution
+# Public local distribution / 公開ローカル配布
 
-Root-owned `scripts/release-apps.json` registers `distributionMode: private-local`, Pages disabled, `C:\gemini-narration-studio-main`, and the durable user-profile data directory. The seven existing public applications keep their existing stages. Before every new transaction stage, remote evidence must show the exact repository is private and has no Pages site.
+The app is registered as public-local in the root release contract. Its public Pages site is an installation/download guide; narration/video creation requires the Windows batch launcher. Existing seven public-app routes remain unchanged. / root契約はpublic-localです。Pagesは導入・ダウンロード案内で、音声・動画制作にはWindowsバッチ起動が必要です。既存7アプリの工程は変更しません。
 
-Use the existing formal transaction:
+Use only scripts/publish_app_release.ps1 for the formal transaction: preflight/current security audit, validation, build, exact source push, annotated tag, bilingual Release, Pages, C-drive source-ZIP parity and public verification. / 正式処理はscripts/publish_app_release.ps1のみを使い、当日の監査・検証・build・push・注釈tag・英日Release・Pages・Cコピー・公開確認を完遂します。
 
-```powershell
-powershell.exe -ExecutionPolicy Bypass -File scripts/publish_app_release.ps1 -App gemini-narration-studio -NotesPath C:\Users\sx717\Antigravity\gemini-narration-studio\docs\releases\v1.0.0.md -ReleaseTitle "Gemini Narration Studio v1.0.0"
-```
+Normal local server updates use the limited stop helper after confirming idle; relaunch with --resume to preserve the user's current production. Keys are held in memory and need re-entry only before another provider action. / idle確認後の限定停止helperと--resumeで現在の制作を保全します。メモリのキーは、次のAPI操作が必要なときに画面で再入力します。
 
-Required stages: preflight, validation, build/package audit, exact source push, annotated tag, exact bilingual Release, Release source ZIP download and C-drive copy parity, private verification. Do not publish Pages or run social announcements. Do not add `-RunFullBackup` merely to register the app with backup. A new full backup remains a separate authorized operation.
-
-The Release source ZIP is runnable after extraction and first-run setup. `node_modules`, browser binaries, personal production data and keys are excluded. Existing data lives outside the replaceable release-copy folder.
+Public app files exclude keys, production data, generated media, dependencies and browser profiles. Full backup is a separately authorized operation after publication. / 公開ファイルにキー、制作データ、生成物、依存導入物、ブラウザープロファイルを含めません。フルバックアップは公開後の別の承認済み処理です。

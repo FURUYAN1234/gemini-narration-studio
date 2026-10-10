@@ -1,3 +1,5 @@
+import {fitText} from './motion.mjs';
+
 // Local timing estimate: reading length, snapped to nearby pauses in existing
 // PCM audio. This is not speech recognition or provider word-level timestamps.
 export function buildSubtitleCues({caption,speech,bytes,fps,frames}){
@@ -22,3 +24,8 @@ export function buildSubtitleCues({caption,speech,bytes,fps,frames}){
  edges.push(frames);return texts.map((text,i)=>({text,from:edges[i],to:edges[i+1],timing:'estimated'}));
 }
 export function captionAtFrame(row,frame){return row.subtitles?row.subtitles.find(c=>frame>=c.from&&frame<c.to)?.text||'':row.caption||'';}
+
+// The same bounded, word-aware line layout is used by every video template.
+export function fitSubtitleText(text,{width=1700}={}){
+ return fitText(text,{width,height:128,maxSize:34,lineHeight:1.35,balance:true});
+}

@@ -7,7 +7,41 @@ import {NarrationSession,buildRequest,buildDraftRequest,SAMPLE_SETTINGS,VOICES,V
 import {ProductionInputs,normalizeScriptReadings,normalizeBookends,normalizeBrief,normalizeImageProposal,normalizeAuthoring} from '../production.mjs';
 import {startServer} from '../server.mjs';
 import {prepareReviewedAudio} from '../client.mjs';
-import {musicSignature} from '../music.mjs';
+import {musicSignature,musicTimeline} from '../music.mjs';
+
+test('ending watermark defaults on, persists off, preserves opening title and removes its full timeline duration',async t=>{
+ for(const enabled of [true,false]){
+  const {s,dir}=await setup(t);s.setKey('test-only-key');
+  await s.appendRow({id:'opening',caption:'動画の紹介',speech:'どうがのしょうかい'},{prepend:true});
+  const p=await ProductionInputs.open(dir);await p.saveMusicEnabled(false);
+  await p.saveBookends({titleRowId:'opening',endLabel:'紹介',endUrl:'https://example.com',owner:'作者',creationYear:2026,endSeconds:4});
+  assert.equal(p.status().watermarkEnabled,true);
+  if(!enabled)await p.saveWatermarkEnabled(false);
+  for(const r of s.status().rows){await s.approve(r.id,s.revision());await s.generate([r.id]);await s.markListened(r.id,s.revision());}
+  const restored=await ProductionInputs.open(dir);assert.equal(restored.status().watermarkEnabled,enabled);
+  await restored.finalize(s.status());await s.exportManifest();
+  const data=await prepareReviewedAudio({sourceDir:dir,publicDir:path.join(dir,'public')});
+  assert.equal(data.bookends.titleRowId,'opening');assert.equal(data.rows[0].id,'opening');
+  assert.equal(data.bookends.frames,enabled?120:0);
+  assert.equal(data.durationInFrames,data.rows.reduce((n,r)=>n+r.frames+data.gapFrames,0)+(enabled?120:0));
+  const timeline=musicTimeline({...s.status(),pauseSeconds:restored.status().pauseSeconds,bookends:restored.ending()});assert.equal(timeline.durationInFrames,data.durationInFrames);
+  await assert.rejects(restored.saveWatermarkEnabled(!enabled),/VIDEO_FINALIZED/);
+ }
+});
+
+test('watermark preference is local, revision-bound, strict and leaves narration and music untouched',async t=>{
+ const {s,dir}=await setup(t);const service=await startServer({session:s,port:0,sampleDir:path.join(dir,'samples'),bundledSampleDir:path.join(dir,'empty')});t.after(()=>service.close());
+ const {token}=await(await fetch(service.url+'/api/bootstrap')).json();const initial=await(await fetch(service.url+'/api/status')).json(),before=await readFile(path.join(dir,'job.json'));
+ const post=async(enabled,st=initial)=>(await fetch(service.url+'/api/watermark-preference',{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':token},body:JSON.stringify({enabled,revision:st.revision,productionRevision:st.productionRevision})})).json();
+ assert.equal(initial.production.watermarkEnabled,true);assert.equal((await post('false')).error,'INVALID_WATERMARK_PREFERENCE');
+ const off=await post(false);assert.equal(off.error,null);assert.equal(off.production.watermarkEnabled,false);assert.notEqual(off.productionRevision,initial.productionRevision);
+ assert.equal((await post(true)).error,'STALE_REVISION');assert.deepEqual(await readFile(path.join(dir,'job.json')),before);assert.equal(off.production.musicEnabled,initial.production.musicEnabled);
+ assert.equal((await ProductionInputs.open(dir)).status().watermarkEnabled,false);
+ const on=await post(true,off);assert.equal(on.production.watermarkEnabled,true);assert.equal(on.productionRevision,initial.productionRevision);
+ const file=path.join(dir,'production.json'),legacy=JSON.parse(await readFile(file,'utf8'));delete legacy.watermarkEnabled;await writeFile(file,JSON.stringify(legacy));
+ const restored=await ProductionInputs.open(dir);assert.equal(restored.status().watermarkEnabled,true);assert.equal(restored.finalInputsHash(),initial.productionRevision);
+ await writeFile(file,JSON.stringify({...legacy,watermarkEnabled:'false'}));await assert.rejects(ProductionInputs.open(dir),/SAVED_PRODUCTION_INVALID/);
+});
 test('attempt failure history is bounded and retains only diagnostic identifiers and codes',()=>{
  const a={id:'01234567-89ab-cdef-0123-456789abcdef',sequence:1,state:'failed',error:{stage:'script',code:'PROVIDER_FAILED',detail:'untrusted response'},extra:'not retained'};
  const result=normalizeAuthoring({version:1,failures:[a]});assert.deepEqual(result.failures,[{id:a.id,sequence:1,state:'failed',error:{stage:'script',code:'PROVIDER_FAILED'}}]);

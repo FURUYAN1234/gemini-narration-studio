@@ -1,3 +1,4 @@
+import {resolveSourceUrls} from '../source-plan.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp, readFile, readdir, rm, writeFile} from 'node:fs/promises';
@@ -11,7 +12,7 @@ import {themeTokens} from '../themes.mjs';
 import {atomicWrite} from '../atomic-write.mjs';
 import {loadLocalFont} from '../font-loader.mjs';
 
-const row = {id:'intro', caption:'APIで動画を作ります。', speech:'エー・ピー・アイで動画を作ります。'};
+const row = {id:'intro', caption:'APIで動画を作ります。', speech:'えー・ぴー・あいでどうがをつくります。'};
 
 test('JSON response parsing distinguishes envelope text failures without exposing response content',()=>{
  const response=parts=>({candidates:[{finishReason:'STOP',content:{parts}}]});
@@ -154,7 +155,7 @@ test('renderer adapter copies reviewed audio and refuses manifests after a readi
   const {s,dir}=await setup(t,async()=>wav());s.setKey('test-only-key');await s.approve('intro',s.status().revision);await s.generate(['intro']);await s.markListened('intro',s.status().revision);await s.exportManifest();
   await (await ProductionInputs.open(dir)).finalize(s.status());
   const publicDir=path.join(dir,'public');const data=await prepareReviewedAudio({sourceDir:dir,publicDir});assert.equal(data.rows[0].caption,row.caption);assert.equal(data.rows[0].frames,1);assert.ok(data.rows[0].src.startsWith('narration/'));
-  await s.updateRow('intro',{speech:'新しい読み'});
+  await s.updateRow('intro',{speech:'あたらしいよみ'});
   await assert.rejects(prepareReviewedAudio({sourceDir:dir,publicDir}),/READING_REVIEW_REQUIRED/);
 });
 test('appending a row and changing title preserve previous approvals and audio candidates',async t=>{
@@ -206,14 +207,14 @@ test('pre-theme reviewed export migrates without re-synthesis; stale export neve
 
 test('reference intake: source planning accepts a URL without instructions and rejects empty or unread URLs without retry',async t=>{
  const dir=await mkdtemp(path.join(tmpdir(),'studio-reference-'));t.after(()=>rm(dir,{recursive:true,force:true}));
- const session=await NarrationSession.open({outputDir:dir});session.setKey('test-only-key');let calls=0,retrieved=true;
+ let calls=0,retrieved=true;const session=await NarrationSession.open({outputDir:dir,sourceResolver:bundle=>resolveSourceUrls(bundle,{lookup:async()=>[{address:'93.184.216.34',family:4}],request:async()=>({status:retrieved?200:503,headers:{'content-type':'text/html'},bytes:Buffer.from('<article><p>Actual fixture source content about ordinary tools.</p></article>')})})});session.setKey('test-only-key');
  const url='https://example.com/article';
  const result={visualStyle:'白地に青い文字',title:'資料の説明',titleSpeech:'しりょうのせつめい',summary:'資料を解説',voice:'Kore',voiceReason:'明瞭な説明',motion:{version:1,style:'editorial',intensity:'standard'},sources:[{id:'url-0',summary:'参考資料'}],rows:[{purpose:'detail',caption:'資料を説明します。',speech:'しりょうをせつめいします。',title:'資料',points:[],imageFile:'',sourceIds:['url-0']}]};
  t.mock.method(globalThis,'fetch',async()=>{calls++;return new Response(JSON.stringify({candidates:[{finishReason:'STOP',urlContextMetadata:{urlMetadata:[{retrievedUrl:url,urlRetrievalStatus:retrieved?'URL_RETRIEVAL_STATUS_SUCCESS':'URL_RETRIEVAL_STATUS_ERROR'}]},content:{parts:[{text:JSON.stringify(result)}]}}]}),{status:200,headers:{'Content-Type':'application/json'}});});
  const brief={scriptMode:'ai',assetMode:'provided',instructions:'',script:'',references:{text:'',urls:[url]}};
  assert.equal((await session.planSources(brief,[],()=>{})).script,result.rows[0].caption);assert.equal(calls,1);
  await assert.rejects(session.planSources({...brief,references:{text:'',urls:[]}},[],()=>{}),/REFERENCE_REQUIRED/);assert.equal(calls,1);
- retrieved=false;await assert.rejects(session.planSources(brief,[],()=>{}),/SOURCE_URL_NOT_RETRIEVED/);assert.equal(calls,2);
+ retrieved=false;await assert.rejects(session.planSources(brief,[],()=>{}),/SOURCE_URL_FETCH_FAILED/);assert.equal(calls,1);
 });
 
 test('script authoring: AI theme is a typed opt-in, supplies instructions once, and never rewrites an existing script implicitly',async t=>{

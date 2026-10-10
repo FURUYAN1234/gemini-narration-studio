@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {normalizeReferences,normalizeBrief,ProductionInputs} from '../production.mjs';
+import {normalizeReferences,normalizeBrief,ProductionInputs,normalizeScriptReadings,normalizeTitleReading} from '../production.mjs';
 import {collectSources,buildSourcePlanRequest,normalizeSourcePlan,MAX_SOURCE_BYTES} from '../source-plan.mjs';
 import {NarrationSession,VOICES,classifyGoogleFailure,redactProviderDiagnostic,prepareGooglePayload,buildDraftRequest} from '../core.mjs';
 import {startServer} from '../server.mjs';
@@ -40,7 +40,7 @@ test('request sends actual bounded material contents, no file system paths or ex
 });
 test('source plan rejects invented citations, missing retrieval evidence, stale readings, unknown images/voices',async()=>{
  const bundle=await collectSources(brief,[],()=>{});const valid=normalizeSourcePlan(output,bundle,VOICES);assert.equal(valid.storyboard.title,output.title);assert.equal(valid.readings[0].speech,output.rows[0].speech);
- for(const mutate of [r=>r.rows[0].sourceIds=['made-up'],r=>delete r.rows[0].sourceIds,r=>r.rows[0].sourceIds=[],r=>r.rows[0].speech='漢字',r=>r.sources=[]]){const changed=structuredClone(output);mutate(changed);assert.throws(()=>normalizeSourcePlan(changed,bundle,VOICES));}
+ for(const mutate of [r=>r.rows[0].sourceIds=['made-up'],r=>delete r.rows[0].sourceIds,r=>r.rows[0].sourceIds=[],r=>r.sources=[]]){const changed=structuredClone(output);mutate(changed);assert.throws(()=>normalizeSourcePlan(changed,bundle,VOICES));}
  const url='https://example.com/',urlBundle={sources:[{id:'url-0',label:url,kind:'url'}],urls:[url]},r={...structuredClone(output),sources:[{id:'url-0',summary:'入口の説明'}]};r.rows[0].sourceIds=['url-0'];
  assert.throws(()=>normalizeSourcePlan(r,urlBundle,VOICES),/SOURCE_URL_NOT_RETRIEVED/);
  assert.throws(()=>normalizeSourcePlan(r,urlBundle,VOICES,{urlMetadata:[{retrievedUrl:url,urlRetrievalStatus:'URL_RETRIEVAL_STATUS_ERROR'}]}),/SOURCE_URL_NOT_RETRIEVED/);
@@ -122,7 +122,8 @@ test('JSON mode retains the full output contract and mandatory local guards with
  const audio={model:'tts',input:'text'},image={generationConfig:{responseModalities:['IMAGE']}};
  assert.equal(prepareGooglePayload(audio),audio);assert.equal(prepareGooglePayload(image),image);
  const bundle=await collectSources(brief,[],()=>{});
- for(const change of [r=>r.rows[0].sourceIds=['unknown'],r=>r.rows[0].speech='漢字']){const invalid=structuredClone(output);change(invalid);assert.throws(()=>normalizeSourcePlan(invalid,bundle,VOICES));}
+ const candidate=normalizeSourcePlan({...output,rows:[{...output.rows[0],speech:'漢字'}]},bundle,VOICES);assert.equal(candidate.script,output.rows[0].caption);assert.ok(candidate.warnings.some(w=>w.stage==='reading'));assert.throws(()=>normalizeScriptReadings(candidate.script,candidate.readings),/HIRAGANA_READING_REQUIRED/);
+ for(const change of [r=>r.rows[0].sourceIds=['unknown']]){const invalid=structuredClone(output);change(invalid);assert.throws(()=>normalizeSourcePlan(invalid,bundle,VOICES));}
 });
 
 test('malformed source output reports only structural facts and never private values',async()=>{
@@ -137,10 +138,10 @@ test('malformed source output reports only structural facts and never private va
  assert.equal(normalizeSourcePlan(output,bundle,VOICES).script,output.rows[0].caption);
 });
 
-test('title reading is requested with the script and survives source normalization; malformed readings are rejected',async()=>{
+test('title reading is requested with the script and survives source normalization; incomplete title readings stay as candidates and are rejected at readiness',async()=>{
  const bundle=await collectSources(brief,[],()=>{}),raw={...output,titleSpeech:'いりぐちから、はじめよう'};
  const result=normalizeSourcePlan(raw,bundle,VOICES);assert.deepEqual(result.titleReading,{caption:output.title,speech:raw.titleSpeech});
- for(const titleSpeech of ['', '入口から始めよう', 'AIでつくる'])assert.throws(()=>normalizeSourcePlan({...raw,titleSpeech},bundle,VOICES),/TITLE_READING_REQUIRED/);
+ for(const titleSpeech of ['', '入口から始めよう', 'AIでつくる']){const candidate=normalizeSourcePlan({...raw,titleSpeech},bundle,VOICES);assert.equal(candidate.script,result.script);assert.ok(candidate.warnings.some(w=>w.stage==='title-reading'));assert.throws(()=>normalizeTitleReading(candidate.titleReading),/TITLE_READING_REQUIRED/);}
  const request=buildDraftRequest({brief:{...brief,scriptMode:'ai'}});assert.ok(request.generationConfig.responseJsonSchema.required.includes('titleSpeech'));
  const readingOnly=buildDraftRequest({brief:{...brief,scriptMode:'existing'}});assert.ok(!readingOnly.generationConfig.responseJsonSchema.required.includes('titleSpeech'));
 });

@@ -4,7 +4,7 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
-import {ProductionInputs} from '../production.mjs';
+import {ProductionInputs,STUDIO_WATERMARK,normalizeDraftScriptReadings,normalizeScriptReadings} from '../production.mjs';
 import {NarrationSession} from '../core.mjs';
 import {startServer} from '../server.mjs';
 
@@ -15,14 +15,63 @@ test('source evidence survives later saves and changed captions lose only their 
  await p.saveBrief({...p.status().brief,script,sourceEvidence});assert.equal((await ProductionInputs.open(dir)).status().brief.sourceEvidence.bindings.length,1);
  await p.saveBrief({...p.status().brief,script:'編集した本文。'});assert.equal(p.status().brief.sourceEvidence.bindings.length,0);assert.equal(p.status().brief.sourceEvidence.sources.length,1);
 });
+test('authoring progress is live and indeterminate while the provider runs, and clears on success or failure',async t=>{
+ for(const fails of [false,true]){
+  let started,release;const entered=new Promise(r=>started=r),wait=new Promise(r=>release=r);
+  const studio=await draftStudio(t,async()=>{started();await wait;if(fails)throw Error('PROVIDER_FAILED');return {rows:[{caption:'一般的な説明。',speech:'いっぱんてきなせつめい。'}]};});
+  const running=studio.post('draft',studio.input);await entered;
+  const live=await studio.status();assert.equal(live.busy,true);assert.equal(live.authoringProgress.operation,'compose');assert.match(live.authoringProgress.phase,/台本|読み/);assert.equal(live.authoringProgress.total,undefined);
+  release();const response=await running;assert.equal(response.status,fails?409:200);assert.equal((await studio.status()).authoringProgress,null);assert.equal((await studio.status()).busy,false);
+ }
+});
+
 async function draftStudio(t,provider){
- const dir=await directory(t),session=await NarrationSession.open({outputDir:dir,draftProvider:provider});session.setKey('test-only-key');
+ const dir=await directory(t),session=await NarrationSession.open({outputDir:dir,draftProvider:provider,provider:async()=>{throw Error('unexpected test synthesis');}});session.setKey('test-only-key');
  const service=await startServer({session,port:0,sampleDir:path.join(dir,'samples'),bundledSampleDir:path.join(dir,'empty')});t.after(()=>service.close());
  const boot=await(await fetch(service.url+'/api/bootstrap')).json(),status=await(await fetch(service.url+'/api/status')).json();
  const post=(route,input)=>fetch(service.url+'/api/'+route,{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':boot.token},body:JSON.stringify(input)});
  const input={operation:'compose',requestId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',sequence:1,projectId:status.projectId,instanceId:boot.instanceId,revision:status.revision,productionRevision:status.productionRevision,consent:true,brief:{scriptMode:'ai',assetMode:'provided',instructions:'一般的な説明',script:'',autoDirection:false}};
  return {dir,session,service,post,input,token:boot.token,status:async()=>await(await fetch(service.url+'/api/status')).json()};
 }
+
+test('first draft response preserves the script and canonicalizes kana locally without another provider request',async t=>{
+ let calls=0;const studio=await draftStudio(t,async()=>{calls++;return {rows:[{caption:'端末を紹介します。',speech:'タンマツヲショウカイシマス。'}]};});
+ const response=await studio.post('draft',studio.input),result=await response.json();assert.equal(response.status,200);assert.equal(calls,1);assert.equal(result.script,'端末を紹介します。');assert.equal(result.readings[0].speech,'たんまつをしょうかいします。');assert.equal(result.saved,true);assert.equal(result.attempt.state,'complete');
+ assert.equal((await studio.status()).production.brief.script,result.script);assert.equal((await studio.status()).rows.length,0);
+});
+
+test('draft kana normalization is phonetic only; kanji, numerals and sentence mismatch remain unresolved candidates',()=>{
+ for(const speech of ['ヴァイオリンを、ひきます。','ｳﾞｧｲｵﾘﾝを、ひきます。','ゔぁいおりんを、ひきます。'])assert.equal(normalizeDraftScriptReadings('楽器を弾きます。',[{caption:'楽器を弾きます。',speech}])[0].speech,'ゔぁいおりんを、ひきます。');
+ for(const speech of ['楽器をひきます。','3かい、ひきます。','ひきます。やすみます。']){const candidate=normalizeDraftScriptReadings('楽器を弾きます。',[{caption:'楽器を弾きます。',speech}]);assert.equal(candidate[0].speech,speech);assert.throws(()=>normalizeScriptReadings('楽器を弾きます。',candidate),/HIRAGANA_READING_REQUIRED|READING_SENTENCE_MISMATCH/);}
+ assert.throws(()=>normalizeDraftScriptReadings('別の字幕。',[{caption:'楽器を弾きます。',speech:'ひきます。'}]),/STALE_SCRIPT_READINGS/);
+});
+
+test('title reading defects preserve the first script while candidate-bound title import cannot approve or synthesize them',async t=>{
+ let calls=0;const studio=await draftStudio(t,async()=>{calls++;return {title:'情報の届け方',titleSpeech:'情報のとどけかた。',rows:[{caption:'伝えます。',speech:'つたえます。'}]};});
+ const result=await(await studio.post('draft',studio.input)).json();assert.equal(result.script,'伝えます。');assert.equal(result.saved,true);assert.ok(result.warnings.some(w=>w.stage==='title-reading'));assert.equal(calls,1);
+ await studio.post('title',{title:result.titleReading.caption});let state=await studio.status();const fields={...STUDIO_WATERMARK,title:result.titleReading.caption,speech:result.titleReading.speech,endSeconds:4,revision:state.revision,productionRevision:state.productionRevision};
+ const forged=await studio.post('bookends',{...fields,speech:'別の読み。',readingCandidate:true});assert.equal(forged.status,409);
+ const added=await studio.post('bookends',{...fields,readingCandidate:true});assert.equal(added.status,200);state=await studio.status();assert.equal(state.titleReadingPreparationRequired,true);assert.equal(state.rows[0].reviewed,false);assert.equal(state.rows[0].readingPreparationRequired,true);
+ const approval=await studio.post('approve',{id:state.rows[0].id,revision:state.revision});assert.equal(approval.status,409);assert.equal((await approval.json()).error,'HIRAGANA_READING_REQUIRED');
+ const saved=await studio.post('bookends',{...fields,speech:'じょうほうのとどけかた。',revision:state.revision,productionRevision:state.productionRevision});assert.equal(saved.status,200);state=await studio.status();assert.equal(state.titleReadingPreparationRequired,false);assert.equal(state.rows[0].reviewed,false);assert.equal(calls,1);
+});
+
+test('first draft preserves incomplete reading candidates but blocks approval and synthesis until the affected reading is corrected',async t=>{
+ let calls=0;const studio=await draftStudio(t,async()=>{calls++;return {rows:[{caption:'設定します。',speech:'せっていします。'},{caption:'画面を確認します。',speech:'画面を、かくにんします。'}]};});
+ const response=await studio.post('draft',studio.input),result=await response.json();assert.equal(response.status,200);assert.equal(calls,1);assert.equal(result.saved,true);assert.equal(result.attempt.state,'partial');assert.ok(result.warnings.some(w=>w.stage==='reading'));assert.equal(result.readings[1].speech,'画面を、かくにんします。');
+ let current=await studio.status();const adopted=await studio.post('adopt-script',{script:result.script,readings:result.readings,projectId:current.projectId,instanceId:current.instanceId,revision:current.revision,productionRevision:current.productionRevision});assert.equal(adopted.status,200);current=await studio.status();assert.equal(current.rows[1].readingPreparationRequired,true);
+ const bad=await studio.post('approve',{id:current.rows[1].id,revision:current.revision});assert.equal(bad.status,409);assert.equal((await bad.json()).error,'HIRAGANA_READING_REQUIRED');assert.equal((await studio.status()).rows[1].reviewed,false);
+ assert.throws(()=>studio.session.validateGeneration(current.rows.map(r=>r.id)),/READING_REVIEW_REQUIRED|HIRAGANA_READING_REQUIRED/);assert.equal(calls,1);
+ await studio.post('row',{id:current.rows[1].id,caption:current.rows[1].caption,speech:'がめんを、かくにんします。'});current=await studio.status();for(const row of current.rows){await studio.post('approve',{id:row.id,revision:(await studio.status()).revision});}current=await studio.status();assert.equal(current.rows.every(r=>r.reviewed),true);assert.equal(studio.session.validateGeneration(current.rows.map(r=>r.id)).length,2);assert.equal(calls,1);
+ const reopened=await ProductionInputs.open(studio.dir);assert.equal(reopened.status().authoring.lastAttempt.result.script,result.script);
+});
+
+test('ready but unconfirmed readings cannot trigger another paid preparation',async t=>{
+ let calls=0;const studio=await draftStudio(t,()=>{calls++;throw Error('must not generate');});
+ await studio.session.adoptScript('説明。',{readings:[{caption:'説明。',speech:'せつめい。'}],expectedRevision:studio.session.revision()});
+ const current=await studio.status(),response=await studio.post('prepare-readings',{...studio.input,operation:'prepare-readings',revision:current.revision,productionRevision:current.productionRevision,brief:{scriptMode:'existing',script:'説明。',autoDirection:false}});
+ assert.equal(response.status,409);assert.equal((await response.json()).error,'READING_PREPARATION_NOT_NEEDED');assert.equal(calls,0);assert.equal((await studio.status()).rows[0].reviewed,false);
+});
 
 test('user trigger: composing a script prepares supplied and generated images before returning the result, with no later generate click',async t=>{
  const studio=await draftStudio(t,()=>{throw Error('source planning should be used');}),png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=','base64');

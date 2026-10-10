@@ -4,7 +4,7 @@ export function musicSignature(current){return JSON.stringify({title:current.tit
 export function musicTimeline(current){
  if(!current.rows?.length||current.rows.some(r=>!r.reviewed||!r.audioCurrent||!Number.isFinite(r.audio?.durationSeconds)||r.audio.durationSeconds<=0))throw new Error('AUDIO_REQUIRED');
  let from=0;const fps=30,gapFrames=current.pauseSeconds===undefined?7:Math.round(current.pauseSeconds*fps);if(!Number.isFinite(gapFrames)||gapFrames<0||gapFrames>90)throw new Error('INVALID_CUT_PAUSE');const rows=current.rows.map(r=>{const frames=Math.ceil(r.audio.durationSeconds*fps),row={id:r.id,from,frames,caption:r.caption};from+=frames+gapFrames;return row;});
- if(current.bookends){if(!Number.isFinite(current.bookends.endSeconds)||current.bookends.endSeconds<2||current.bookends.endSeconds>10)throw new Error('INVALID_BOOKENDS');from+=Math.round(current.bookends.endSeconds*fps);}
+ if(current.bookends){if(!Number.isFinite(current.bookends.endSeconds)||current.bookends.endSeconds<2||current.bookends.endSeconds>10)throw new Error('INVALID_BOOKENDS');if(current.bookends.endingEnabled!==false)from+=Math.round(current.bookends.endSeconds*fps);}
  if(from/fps>1200)throw new Error('MUSIC_DURATION_LIMIT');return {fps,durationInFrames:from,rows};
 }
 export function buildMusicRequest(current,direction=''){

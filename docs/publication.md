@@ -1,22 +1,9 @@
-# 公開準備 v1.2.0
+# Publication v1.3.0 / 公開 v1.3.0
 
-現在の配布は非公開GitHub Release。note用原稿は `note-draft.md` で管理し、noteへの保存・公開状態は別途確認する。個人の制作画像・音声・動画を原稿やGitへ無断で添付しない。
+Name: Narrated Video Maker / ナレーション動画メーカー. Public repository and Pages download guide; Windows batch execution is required. / 公開名はナレーション動画メーカー。リポジトリとPages導入案内を公開し、実行にはWindowsバッチが必要です。
 
-## 用意する成果物
+The user approved the existing FURU terms on 2026-10-10. LICENSE applies starting with this release and preserves third-party conditions. / 本人が2026-10-10に既存FURU利用条件の適用を承認。LICENSEはこの版から添付し、第三者条件を保持します。
 
-- README: Windows x64、初回の自動導入、保存場所、素材先行フロー、読み確認、画像・BGM・タイトル・ED、API送信と料金発生の場面。
-- 起動バッチと `scripts/bootstrap.ps1`: Node.js/npmの検出、不足時の公式ZIP取得・固定SHA-256確認、既存環境の再利用。Remotion/Reactと描画ブラウザは既存の `launch.mjs` が導入。
-- GitHub Release: v1.2.0、英日説明、ソースZIP。秘密情報・制作物・node_modulesを配布前監査で拒否。
-- note用原稿: 公開待ちの記事本文。記事内のリンクは現在非公開であることを明示。
+Create a new note article with a generated cover, real current screenshots, beginner download/extract/batch/API/resume steps and native supported link embeds. Publish Facebook with friends-except audience; X is inline Markdown copy only, explicitly excluded from posting. Verify live URLs and actual article/post content before reporting completion. / noteに新規記事、生成サムネイル、現行実画面、初心者向け導入と再開手順、対応リンクの埋込を掲載。Facebookは友達（一部除外）、XはMarkdown表示のみで実投稿を除外。公開URLと実本文を確認して完了とします。
 
-## 実際の一般公開時に行うこと
-
-一般公開は別操作。現在の正式リリース契約は非公開を検証するため、先にGitHubだけ公開へ切り替えない。
-
-1. 公開対象とアプリ本体の利用許諾条件を決める。現時点では本体にオープンソースライセンスを付与していない。Remotion等の第三者条件は別途適用される。
-2. 既存履歴と配布ZIPの秘密情報・個人情報・権利を再確認し、正式な配布契約を一般公開方針に合わせて更新する。
-3. GitHubの可視性とReleaseの匿名アクセスを検証する。ローカルサーバー必須のためGitHub Pagesでこのアプリ本体を動かす想定はない。
-4. noteの記事本文・リンク・画像・利用条件を再確認し、公開操作後に本文を読み返す。非公開の案内文は実際の状態に合わせて更新する。
-5. 公開告知を行う場合は、note・X・Facebookの指示と各投稿の確認手順に従う。今回の準備段階では投稿しない。
-
-初回導入の通信先: Node.js公式配布、npmレジストリ、Remotionが使うChrome Headless Shell配布元。動画作成APIはGoogle。失敗時に他社の生成サービスへ切り替えない。
+The sole current coordination record is docs/superpowers/plans/2026-10-08-narration-workflow-review.md in the parent workspace. / 現在の調整記録は親workspaceの同planです。

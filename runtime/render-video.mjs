@@ -4,7 +4,7 @@ import {promisify} from 'node:util';
 import {execFile} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
-import {prepareReviewedAudio} from './client.mjs';
+import {prepareReviewedAudio,preparePreviewAudio} from './client.mjs';
 import {themeTokens} from './themes.mjs';
 import {ProductionInputs} from './production.mjs';
 import {fullDecodeVideo,extractVideoAudio,renderErrorCode} from './video.mjs';
@@ -26,7 +26,7 @@ try{
   const cancellation=makeCancelSignal();cancelRender=cancellation.cancel;checkCanceled();
   const browserExecutable=await existingBrowser(rendererRoot),work=path.join(sourceDir,'video','project'),publicDir=path.join(work,'public');
   report({stage:'preparing',progress:0});await mkdir(publicDir,{recursive:true});
-  const data=await prepareReviewedAudio({sourceDir,publicDir}),production=await ProductionInputs.open(sourceDir),theme=await themeTokens(data.presentation.theme);
+  const data=await (args.includes('--preview')?preparePreviewAudio({sourceDir,publicDir}):prepareReviewedAudio({sourceDir,publicDir})),production=await ProductionInputs.open(sourceDir),theme=await themeTokens(data.presentation.theme);
   const design=presentationDesign(data.presentation);if(design)data.design=design;
   const motion=presentationMotion(data.presentation);if(motion)data.motion=motion;
   const scenes=production.status().visuals||await readFile(path.join(sourceDir,'video-scenes.json'),'utf8').then(JSON.parse).catch(error=>{if(error.code==='ENOENT')return {};throw error;});

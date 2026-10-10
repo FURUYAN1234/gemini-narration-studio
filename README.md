@@ -1,142 +1,161 @@
-# Gemini Narration Studio / Gemini ナレーション・スタジオ v1.2.7
+# Narrated Video Maker / ナレーション動画メーカー v1.3.0
 
-A Windows x64 local app for turning materials and scripts into narrated, subtitled MP4 videos. Review Japanese readings, create Gemini speech, check each cut's image and audio, then export locally. Distribution currently uses a private GitHub repository; access requires an invitation.
+> **Source code available; free to use.** API fees and third-party terms apply separately. / **ソースコード公開・利用無料。** API利用料と第三者の条件は別途適用されます。
 
-素材・台本から、読みの確認、Gemini音声、カットごとの画像と音声の見直し、字幕付きMP4の保存までを行うWindows x64用ローカルアプリです。現在は非公開GitHubで配布しており、アクセスには招待が必要です。
+Turn reference materials and scripts into 16:9 videos with Japanese narration, captions, pictures, motion and automatic BGM on Windows. / 参考資料と台本から、日本語ナレーション、字幕、画像、動き、自動BGMのある16:9動画をWindowsで作ります。
 
-## Start / 起動する
+[Download the latest release / 最新版をダウンロード](https://github.com/FURUYAN1234/gemini-narration-studio/releases/latest) · [Public installation guide / 公開導入ページ](https://furuyan1234.github.io/gemini-narration-studio/)
 
-1. Download **Source code (zip)** from the [latest Release](https://github.com/FURUYAN1234/gemini-narration-studio/releases/latest) and extract the whole ZIP to a writable folder. / [最新Release](https://github.com/FURUYAN1234/gemini-narration-studio/releases/latest)の **Source code (zip)** を書き込み可能なフォルダーへすべて展開します。
-2. Double-click `start_narration_studio.bat`. It reuses Node.js 22+ and npm, or installs official Node.js 22.23.3 into your user folder when needed. No administrator rights or system PATH changes are required. / バッチをダブルクリックします。Node.js 22以上とnpmは再利用し、不足時は公式のNode.js 22.23.3を利用者専用フォルダーへ導入します。管理者権限やシステムPATHの変更は不要です。
-3. Missing Remotion/React dependencies and the rendering browser are downloaded. The app opens at `http://127.0.0.1:6181/`. Initial setup needs internet access and may take several minutes. / 動画処理ライブラリと描画ブラウザーを不足時に取得して画面を開きます。初回は接続が必要で、数分かかる場合があります。
-4. Enter your Gemini API key at the top before using Google services. The key stays in server memory and is never saved to disk. / Googleを使う処理の前に画面上部へGemini APIキーを入力します。キーは起動中のメモリだけに保持し、ファイルへ保存しません。
+![Current app screen / 現在のアプリ実画面](docs/screenshots/workflow-current.jpg)
 
-Keep the terminal window open while using the app; Ctrl+C exits. The maintained copy on the author's PC is `C:\gemini-narration-studio-main`; other users can run the extracted ZIP from any writable folder. A studio already serving the same production folder is reused. Unrelated apps and studios using other data are not stopped.
+## Requirements / 用意するもの
 
-利用中は黒いウィンドウを開いたままにし、終了時はCtrl+Cを押します。開発元PCの正式コピーは `C:\gemini-narration-studio-main` です。利用者は任意の書き込み可能な場所から起動できます。同じ制作データのスタジオが起動済みなら再利用し、他のアプリや別データのプロセスは停止しません。
+Use Windows 10 or 11, x64, a writable local folder, an internet connection and your own Gemini API key. ARM and macOS are unverified. / Windows 10または11のx64版、書き込み可能な保存場所、インターネット接続、ご自身のGemini APIキーを用意してください。ARM版とmacOSは動作未確認です。
 
-Production data lives in `%USERPROFILE%\GeminiNarrationStudio`; finished MP4s go to Windows Downloads. App updates do not replace production data. A custom location can be set with `start_narration_studio.bat --output "D:\Video"`.
+The public website is a download and installation guide. Video processing runs on your PC after launching the batch file. Git, Python and a separately installed voice engine are unnecessary. / 公開サイトはダウンロードと導入案内です。動画処理はバッチで起動したPC上で行います。Git、Python、別の音声エンジンの導入は不要です。
 
-制作データは `%USERPROFILE%\GeminiNarrationStudio`、完成MP4はWindowsの「ダウンロード」に保存します。本体の更新で制作データを置き換えません。別の保存場所は `start_narration_studio.bat --output "D:\動画制作"` のように指定できます。
+## Download and launch / ダウンロードとバッチ起動
 
-### Setup and troubleshooting / 初回準備とトラブル対応
+1. Open the latest Release above. Under Assets, choose **Source code (zip)**. / 上の最新版ダウンロードを開き、Assets欄の **Source code (zip)** をクリックします。
+2. In Windows Downloads, right-click the ZIP and choose **Extract All**. Do not run files inside the ZIP. / WindowsのダウンロードでZIPを右クリックし、**すべて展開**を選びます。ZIP内のまま起動しないでください。
+3. Move the extracted folder to a writable location, for example `C:\VideoTools\gemini-narration-studio-1.3.0`. Open the inner folder containing `package.json`. / 展開したフォルダーを、たとえば `C:\VideoTools\gemini-narration-studio-1.3.0` に移します。`package.json` がある内側のフォルダーを開きます。
+4. Double-click **start_narration_studio.bat**. If extensions are hidden, it may appear as **start_narration_studio**, with type Windows Batch File. / **start_narration_studio.bat** をダブルクリックします。拡張子が非表示なら **start_narration_studio** と表示され、種類はWindowsバッチファイルです。
+5. Keep the black terminal window open. The first launch prepares missing Node.js/npm, video libraries and the rendering browser; wait for completion. / 黒いウィンドウを開いたままにします。初回は不足するNode.js/npm、動画処理ライブラリ、描画ブラウザーを準備するので、完了まで待ちます。
+6. The app opens at `http://127.0.0.1:6181/`. If the browser does not open, enter that address manually after the terminal reports READY. / `http://127.0.0.1:6181/` にアプリが開きます。開かなければ、黒いウィンドウにREADYが出た後、そのアドレスをブラウザーへ入力します。
 
-Portable Node.js is stored under `%LOCALAPPDATA%\GeminiNarrationStudio\runtime`; rendering dependencies and the browser live in `node_modules`. Node.js ZIPs must match the SHA-256 from the [official distribution](https://nodejs.org/dist/v22.23.3/) before extraction. Git, Python, VOICEVOX and Hugging Face are not required. Read terminal errors and fix connectivity or folder permissions before retrying; consult your administrator for company restrictions. Do not bypass Windows warnings blindly. `--setup-only` performs setup without opening the studio.
+Only obtain the ZIP from the official repository. If Windows displays a warning, verify the source and filename before deciding whether to run it; ask your administrator on managed PCs. / ZIPは公式リポジトリから取得してください。Windowsが警告を出した場合は入手元とファイル名を確認して実行を判断し、管理されたPCでは管理者へ相談してください。
 
-Node.jsは利用者専用のruntimeフォルダー、動画処理ライブラリと描画ブラウザーは `node_modules` に保存します。ZIPは[公式配布](https://nodejs.org/dist/v22.23.3/)のSHA-256と照合し、不一致なら展開・実行しません。Git・Python・VOICEVOX・Hugging Faceは不要です。エラーでは黒いウィンドウの理由を確認し、接続やフォルダーの権限を直してください。企業PCの制限は管理者へ相談し、Windowsの警告を無条件に解除しないでください。準備だけなら `--setup-only` を使えます。
+Node.js is installed for the current user only when absent; the official ZIP hash is checked. The first setup needs network access and disk space, and can take several minutes. / Node.jsがなければ利用者専用フォルダーへ導入し、公式ZIPのハッシュを照合します。初回準備には通信と空き容量が必要で、数分以上かかる場合があります。
 
-## Templates / 動画テンプレート
+## API setup / APIキーの登録
 
-Compare twelve layouts below the materials/script section. The four additions adapt layout, spacing and color principles from [Hallmark](https://github.com/Nutlope/hallmark) for subtitled 16:9 video.
+Create or manage a key in [Google AI Studio](https://aistudio.google.com/api-keys); consult the [official key guide](https://ai.google.dev/gemini-api/docs/api-key). / [Google AI Studio](https://aistudio.google.com/api-keys)でキーを作成・確認します。操作は[Google公式のキー案内](https://ai.google.dev/gemini-api/docs/api-key)も確認してください。
 
-素材と台本の下で12種類の見本を比較できます。新しい4種類には[Hallmark](https://github.com/Nutlope/hallmark)の構成・余白・色の統一という考え方を、字幕のある16:9動画向けに取り入れました。
+Open the API section at the top, enter the key in the app and register it. Use the connection check before sending materials. A registered key alone does not prove access to every generation model. / アプリ上部のAPI欄を開き、キーを入力して登録します。素材を送信する前に接続確認を行ってください。登録済みの表示だけで全生成モデルの利用権限があるとは限りません。
 
-| Template / テンプレート | Composition / 構成 |
-|---|---|
-| Broadsheet / ニュース紙面 | Wide headline with explanation and image below. / 横長の大見出しと下段の説明・画像。 |
-| Gallery / 展示ギャラリー | Large artwork and supporting points. / 広い画像と下段の要点。 |
-| Flow / 流れ解説 | Artwork beside a vertical numbered sequence. / 素材の横に番号付き要点を縦に配置。 |
-| Briefing / ブリーフィング | Heading above point cards and artwork. / 上段の見出しと下段の要点カード・画像。 |
+The key is held only in the local server's memory, and must be entered again after that server exits. Never put it into scripts, screenshots, chat or a shared ZIP. / キーはローカルサーバーのメモリだけで保持し、サーバー終了後は再入力が必要です。台本、スクリーンショット、チャット、共有ZIPへ入れないでください。
 
-![New template examples / 追加テンプレートの実画面](docs/screenshots/templates.jpg)
+## Make your first video / はじめての動画制作
 
-Select a preview; moving to the next step saves the design. Comparing/selecting templates uses no generation API. New layouts retain their structure during motion rendering and reveal points over time. Existing readings/audio remain available. Sealed projects allow preview browsing; create a separate revision to change the finished video.
+1. Add images, PDF, UTF-8 text, audio, video, reference text or public URLs in **素材と台本を用意する**. Adding files alone does not send them to Google. / **素材と台本を用意する**で画像、PDF、UTF-8テキスト、音声、動画、参考本文や公開URLを追加します。追加だけではGoogleへ送信されません。
+2. Write what to explain, or use your own script. AI script/image creation sends the selected materials and instructions to Google; generation may incur API fees. / 説明したい内容を書くか、ご自身の台本を使います。AIで台本・画像を作る操作では選んだ資料と指示をGoogleへ送り、API料金が発生する場合があります。
+3. Check the resulting script, load it into the cuts and choose a voice. The 180 bundled standard voice samples can be compared without new generation. / 結果の台本を確認してカットへ読み込み、声を選びます。同梱の標準サンプル180件は新たに生成せず比較できます。
+4. Check each cut's picture, displayed caption and reading. Correct names, numbers and pronunciations; replace pictures by dropping a file onto that cut. Press **全文の読みを確定** after reviewing. / 各カットの絵、表示字幕、読みを確認します。名前、数字、読み方を直し、画像はそのカットへファイルをドロップして差し替えられます。確認後に **全文の読みを確定** を押します。
+5. Press **動画を作成**. Missing narration and BGM are prepared automatically, then the video is rendered locally; existing valid audio and BGM are reused. / **動画を作成** を押します。不足するナレーションとBGMを自動で用意してからPC上で動画を作り、作成済みの有効な音声とBGMは再利用します。
+6. Play the completed video and check the picture, captions, pronunciation and BGM. Confirm it only after that review; MP4 and M4A are saved to Windows Downloads. / 完成動画を再生して画像、字幕、読み方、BGMを確認します。確認後に確定し、MP4とM4AはWindowsのダウンロードに保存されます。
 
-見本を選ぶと、次のSTEPへ進む際に保存します。比較・選択では生成APIを使いません。新しい構成は動きを有効にしても維持され、要点を順に表示します。保存済みの読み・音声は再利用できます。最終確定済みの制作では見本の比較だけが可能で、動画を変更するには修正版を作ります。
+![Picture and reading review / 絵と読みを確認する実画面](docs/screenshots/cut-review-current.jpg)
 
-## Materials and planning / 素材と構成案
+The pictures are real app screens; their example script is for demonstrating operation, and is not independently fact-checked. Motion animates still artwork and layouts; it does not create new acting by depicted people. / 掲載画像は実際のアプリ画面です。例の台本は操作説明用で、内容の事実検証を示すものではありません。演出は静止画や配置を動かす方式で、描かれた人物の新しい演技を生成する機能ではありません。
 
-Add images, PDF, UTF-8 TXT, audio, video, reference text or public URLs, then describe the video. The initial script plan sends these inputs and instructions to Gemini 3.5 Flash once: up to 12 MB and 20 files combined, plus 10 URLs. URL Context must report successful retrieval before a plan is accepted. Login-only pages and recursive crawling are unsupported. Failures do not automatically retry or delete existing scripts/audio.
+## Captions, music and corrections / 字幕・音楽・修正
 
-画像・PDF・UTF-8 TXT・音声・動画、参考本文、公開URLを追加します。資料があれば制作指示は空欄でも使えます。構成作成では入力と指示をGemini 3.5 Flashへ1回送信します。合計12MB・20ファイル、URL10件までです。URL Contextの取得成功記録がなければ構成案を適用しません。ログインが必要なページやリンク先の自動探索には対応せず、自動再試行や既存台本・音声の削除も行いません。
+Captions use bounded, word-aware balanced lines across all templates, retaining every character. Long subtitles shrink to fit their lane. BGM is automatic and its level drops during narration. / 字幕は全テンプレートで単語を考慮した均等な行割りを使い、文字を削らず枠内へ収めます。長い字幕は文字を縮小します。BGMは自動で付き、ナレーション中に音量を下げます。
 
-The plan includes captions, hiragana readings, headings, points, source attribution, image assignments/focus and title/voice proposals. Choose automatic or manual title/voice selection; titles remain editable. Check source summaries and each cut's references. Each cut also has a context, detail or summary purpose and a shared visual-style proposal carried into planned image prompts. These explanatory-video principles draw on [Director Skills](https://github.com/kangarooking/director-skills). Timing follows actual synthesized speech. The script-generation operation prepares the assigned and missing images before presenting its result. Speech synthesis and final video approval remain separate. Older saved projects remain readable. Generate a draft above the script editor, review/edit it, or explicitly regenerate below it. Automatic direction is ON for new projects: the same drafting request returns a title, one of the twelve validated templates and motion settings, with a layout thumbnail. Switching OFF keeps manual adjustments open, including after saving, without a provider call. The final STEP01 button saves the script and direction and proceeds to voice selection. Existing scripts can be used; missing readings/direction are disclosed as one preparation request. Regenerated scripts replace the accepted cuts without duplication and reuse exactly unchanged speech audio. A URL-only entry in the script box is treated as a reference, never as narration.
+Use the optional cut-level image or script correction controls when needed. They state whether an API is used. To edit a finalized production, press **最終確定を解除して編集を再開**; this retains its assets and does not itself generate anything. / 必要なカットの画像や台本の修正欄を使います。API利用の有無は各操作に表示します。確定後の編集は **最終確定を解除して編集を再開** を押します。素材を引き継ぎ、この操作だけでは生成しません。
 
-字幕・ひらがなの読み・見出し・要点・出典・画像の割り当てと注目位置・タイトル・声を提案します。タイトルと声は自動／手動を選べ、タイトルは手修正できます。資料要約と各カットの出典を確認してください。各カットに全体像・詳細・要約の役割と共通の視覚方針を提案し、配色・外見・図の表記を生成予定の画像指示へ反映します。[Director Skills](https://github.com/kangarooking/director-skills)の素材分析・分鏡・一貫性の考え方を解説動画に合わせています。時間は実音声に合わせます。台本生成では、画像の割り当てと不足画像の生成まで済ませて結果を提示します。音声作成と最終確認は別に行い、既存の制作も開けます。台本欄の上で案を生成し、確認・修正後、必要なら下のボタンで明示的に再生成します。新規制作は自動演出がONで、同じ台本生成の1回でタイトル・12種からのテンプレート選択・動きを返し、見本を表示します。OFFでは手動調整欄を開いたまま、APIなしで保存できます。01末尾のボタンは台本と演出を保存して声選びへ進みます。既存台本も使え、読みや自動演出が未準備なら1回の準備処理を明示します。再生成した台本はカットを重複させず取り込み、同じ字幕・読みの音声は保持します。台本欄にURLだけを貼った場合も、読み上げ用の文章ではなく参考資料として扱います。
+## Save, resume and start again / 保存・再開・新しい制作
 
-![Script preparation and next step / 台本準備から声選びへ](docs/screenshots/workflow.jpg)
+Working data is stored in `%USERPROFILE%\GeminiNarrationStudio`; exported MP4/M4A files are in Downloads. There is no production-history menu. / 作業データは `%USERPROFILE%\GeminiNarrationStudio`、書き出したMP4/M4Aはダウンロードに保存します。制作履歴のメニューはありません。
 
-![Manual template preview; unsaved UI verification, no API generation / 手動のテンプレート見本（未保存の画面検証・API生成なし）](docs/screenshots/manual-direction.jpg)
+**Normal batch launch starts a new production and clears the previous working data.** To resume your current work, open Command Prompt in the extracted folder and run the following command. Exported files in Downloads remain. / **通常のバッチ起動は新しい制作を開始し、前の作業データをクリアします。** 作業を再開したい場合は、展開フォルダーでコマンドプロンプトを開き、次を実行します。ダウンロードの書き出し済みファイルは残ります。
 
-### Supplied and generated artwork / 提供画像と生成画像
+```bat
+start_narration_studio.bat --resume
+```
 
-Provided-only mode prohibits image generation. Mixed mode selects relevant images and proposes generation only for missing artwork; not every reference needs to appear. Script generation prepares missing images with Gemini before displaying the result. Review the actual image in each cut and adopt it locally; only unwanted images need individual regeneration. Image-only changes reuse unchanged script/audio. With no references, image planning can add one text request; each missing image uses one image request in the same operation. A partial failure retains the script and successful images and is never reported as complete. Failures preserve completed assets without retrying automatically. Image focus can zoom toward a labeled area; replacing artwork clears its old focus. Check names and explanations too. Headings/points are editable without an API call. These controls do not generate new actions for pictured people or remove backgrounds.
+In PowerShell, prefix the command with ` .\`. / PowerShellでは先頭に `.\` を付け、`.\start_narration_studio.bat --resume` を実行します。
 
-提供素材のみでは画像を生成しません。混合モードは関連する画像を選び、不足したカットに生成案を用意します。資料をすべて映す必要はありません。台本生成の処理で不足画像を作ってから結果を表示します。各カットの実画像を見てAPIなしで採用し、気になる画像だけ個別に再生成できます。参考資料がない場合は画像計画に追加1回、不足画像は1枚につき1回のAPIを同じ処理内で使います。途中失敗では台本と成功画像を保持し、完了とは扱いません。画像だけの変更は台本・音声を再利用し、失敗時も完成済み素材を残して自動再試行しません。注目位置とラベルで指定箇所へ寄れます。差し替え時は古い注目位置を解除するので、人物名や説明も確認してください。見出し・要点はAPIなしで編集できます。人物の新しい動作や背景除去は生成しません。
+Use **制作をクリアして新しく始める** only after saving what you need. To exit, finish the current processing and press Ctrl+C in the black terminal window. / 必要なものを保存してから **制作をクリアして新しく始める** を使ってください。終了するには実行中の処理を終え、黒いウィンドウでCtrl+Cを押します。
 
-### Script input / 台本入力
+## Troubleshooting / 困ったとき
 
-Choose an AI draft, manual input/paste, or an AI rewrite of the current script. Manual mode hides the AI instructions and sending controls. A reference alone or a theme is enough for a new draft; choose “Let AI choose the theme” explicitly to leave both unspecified. The result field accepts corrections, editing, clearing, new typing and pasting. Saving a draft and adopting it for the next step use no generation API. In step 3, enter missing readings yourself or explicitly prepare them with one API request, then confirm the readings before creating audio. A rejected optional image or presentation proposal does not discard validated narration. Requests and validated results are saved on the server; an unsaved-result warning offers a local save retry without another generation.
+- **No browser window:** after READY appears, open `http://127.0.0.1:6181/`. Keep the terminal open. / **画面が開かない：** READY表示後に `http://127.0.0.1:6181/` を開きます。黒いウィンドウは閉じないでください。
+- **Setup stopped:** read the error in the terminal; check connection, proxy and folder write permission. Do not repeatedly run generation. / **準備が止まる：** 黒いウィンドウのエラーを確認し、接続、プロキシ、保存場所の書き込み権限を見直します。生成を何度も押さないでください。
+- **API failure:** check the chosen project's billing, quota and model access. Web subscriptions do not replace the API settings. / **APIエラー：** 使用プロジェクトの課金設定、利用枠、モデルへのアクセスを確認します。Web版の契約だけでAPI設定が済むわけではありません。
+- **Already running:** reuse the existing local app; if another program owns the port, check its identity before stopping it. / **起動済み：** 既存のアプリ画面を使います。別のプログラムがポートを使っている場合は、何のプログラムか確認してから終了を判断します。
 
-AIで新しく作る、自分で入力・貼り付ける、入力した台本をAIで整える、のいずれかを選びます。手入力ではAI指示欄と送信操作を隠します。新規AI作成は資料だけ・テーマだけでも可能で、何も指定しない場合は「テーマからAIに任せる」を明示して選びます。結果欄で修正・編集・全削除・新規手入力・貼り付けができます。入力・下書き保存・「この台本を採用して声選びへ」では生成APIを使いません。①の編集本文が採用済みカットを置き換え、同じ台本を二度採用しても追記しません。読みが未準備なら③で手入力するか、「未確認の読みをAIで準備（API 1回）」を選び、確認後に読みを確定して音声を作ります。画像・演出案だけが条件に合わない場合も、有効な台本を保持して未適用の項目を表示します。入力と検証済み結果はサーバーに保存し、保存失敗時は未保存の結果を表示して、追加生成なしで保存し直せます。
+## API fees and third-party software / API料金と第三者ソフトウェア
 
-## Voice and reading review / 声と読みの確認
+AI drafting, missing-image creation, narration and BGM creation can incur separate provider fees. File replacement, local editing, bundled sample playback and rendering with prepared assets do not generate new provider content. Failed requests are not automatically retried. / AI台本作成、不足画像の作成、ナレーション、BGMの作成では外部API料金がかかる場合があります。画像の手動差し替え、ローカル編集、同梱サンプル再生、準備済み素材の動画描画は新規の生成APIを使いません。失敗時の自動再試行はありません。
 
-Prepare written captions and corresponding hiragana pronunciation, then choose the voice and pitch. The app bundles 180 samples: 30 voices across two models and three pitch settings. Comparison uses no API request. Pitch is a speaking-style instruction, not a precise semitone adjustment. Review each cut's image, caption and reading in STEP03, then use the narration action. It creates missing speech and optional BGM and advances to STEP04 for listening and video generation. It never records listening, seals the project or renders automatically; final confirmation follows actual review. Corrections may use the API and regenerate only affected assets. Local hints do not prove correct pronunciation. Final confirmation seals the reviewed inputs and renders locally.
+The local video renderer uses Remotion. Its license depends on your organization and use; review [Remotion licensing](https://www.remotion.dev/docs/license) and [third-party notices](THIRD_PARTY_NOTICES.md). / PC上の動画描画にはRemotionを使います。組織や利用方法によりライセンス条件が異なるため、[Remotionの条件](https://www.remotion.dev/docs/license)と[第三者の表記](THIRD_PARTY_NOTICES.md)を確認してください。
 
-通常表記の字幕と対応するひらがなの読みを整え、声とピッチを選びます。全30声×2モデル×3ピッチの180サンプルを同梱し、比較ではAPIを使いません。ピッチは話し方への指示で、正確な半音指定ではありません。③で画像・字幕・読みを見直し、ナレーション作成で必要な音声と任意のBGMを作って④の試聴・動画生成へ進みます。試聴済みの記録・最終確定・動画生成は自動で行いません。実音声とBGMを確認後、「確認して動画を生成」を押してください。修正はAPIを使う場合があり、必要な素材だけを作り直します。確認候補の表示は読みの正解を保証しません。最終確認で内容を固定してローカルで描画します。
+## Terms & Output Rights / 利用条件・作品の権利
 
-![Cut pause before overall corrections / 全体への修正指示より前にカット間を設定](docs/screenshots/music-controls.jpg)
+The governing text is the [FURU Application Terms](LICENSE), revised 2026-10-08. / 正本は [FURU アプリ利用条件](LICENSE)（2026-10-08改定）です。
 
-### Using Codex / Codexから使う
+### Scope and applicability / 対象と適用範囲
 
-The personal `gemini-video-narration` Skill reuses an existing session or starts `node C:\gemini-narration-studio-main\launch.mjs --no-browser` in the Codex in-app browser. Ordinary local use shares the same scripts, audio and materials. Enter keys in the app, never in chat. Work can be paused, and earlier stages can create separate revisions while retaining completed originals.
+These terms apply to the program, bundled prompts and accompanying documentation in versions distributed with or explicitly subject to them, only to material FURU has authority to license. These materials are the Covered Software. Third-party code, models, assets, external services, separately bundled projects and separately licensed parts retain their own terms. Merely being introduced in an article does not make something subject to these terms. / 本条件は、本条件を添付し、または配布元で適用対象として明示した版のプログラム、同梱プロンプト、付属文書のうち、FURUが許諾権限を持つ部分に適用します。以下、これらを「対象ソフトウェア」といいます。第三者のコード、モデル、素材、外部サービス、同梱の別プロジェクト、別のライセンスが明示された部分には、それぞれの条件が適用されます。紹介記事に掲載されていることだけを理由に、本条件の対象になることはありません。
 
-個人Skill `gemini-video-narration` は既存セッションを再利用し、必要時にアプリを起動してCodex内ブラウザーへ表示します。通常起動と同じ台本・音声・素材を使います。キーはチャットへ渡さずアプリに入力してください。制作の中断や前工程からの修正版作成ができ、元の完成済み制作は残ります。
+This revision dated October 8, 2026 applies to distributions that include or explicitly identify this revision. It does not apply retroactively to existing release ZIPs or earlier versions. Check the LICENSE and applicable scope of the version you obtained. / 2026年10月8日改定の本条件は、この改定条件を添付または明示した配布版から適用します。既存のリリースZIPや過去版へ遡及適用しません。取得した版に添付されたLICENSEと適用範囲を確認してください。
 
-## Motion / 画面の動き
+### Use without application or permission / 申請せずにできること
 
-Headings wrap at Japanese and English word boundaries and adjust font size to fit the available area without omitting text.
+You may run, copy, examine and modify the Covered Software free of charge for personal, business, internal and commissioned work. Integration into internal-only systems and connections to other tools in your own production process are also allowed. Ordinary use requires no application, prior contact or permission from FURU. / 対象ソフトウェアを、個人利用、業務利用、社内利用、受託制作のために無料で実行、複製、調査、改変できます。社内だけで使用するシステムへの組み込みや、自分の制作工程で他のツールと連携させることもできます。通常利用のための申請、事前連絡、FURUの許可は必要ありません。
 
-見出しは日本語・英語の語の区切りで改行し、全文を省略せず、表示領域に合わせて文字サイズを調整します。
+Free integration into your own or another party's apps or services, and free provision to third parties, require no application, prior contact or permission from FURU outside the paid provision and bundling cases below. Preserve notices, terms and modification disclosures as described under Free sharing and introductions. Advertising revenue or voluntary donations alone do not count as paid provision. Requiring payment, purchase or membership fees to use the Covered Software or its functions does require prior permission. / 「事前に許可が必要なこと」の有料提供・有料商品への同梱等に該当しない、自社・他社のアプリや第三者向けサービスへの無料の組み込み・無料提供も、申請・事前連絡・FURUの許可は不要です。「無料の共有と解説」の表示・条件保持・改変明示の条件を守ってください。広告収益や任意の寄付があることだけでは有料提供としません。ただし、対象ソフトウェアやその機能の利用条件として料金、購入、会員費等の支払いを求める場合は、「事前に許可が必要なこと」の対象です。
 
-Choose cinema (zoom/depth), typography (large text/transitions), editorial (lines/points) or quiet slides, with gentle, standard or bold motion. Moving to the next step saves the choice. New projects start with cinema; old projects retain their previous display until changed. Selected colors are reused, and the four new templates preserve their structure. Backgrounds, images and text animate locally without speech/image regeneration, extra models or external animation services. This does not create people's actions or 3D geometry. The silent preview supports play/pause and reduced-motion preferences; it is not the final video. Subtitle/point timing is estimated from speech pauses and reading length. AI designs may propose colors, placement and motion; an explicitly saved quiet-slide choice remains in force. Sealed videos require a revision for changes.
+You may publish, sell, monetize through advertising and deliver text, images, comics, videos and other works you create using the Covered Software as a tool. No fee, application, individual permission or credit to FURU is required for these works. External API and service fees, and the licensing or credit obligations of assets, voices and dependencies, remain separate. / 対象ソフトウェアを道具として制作した文章、画像、漫画、動画その他の成果物は、公開、販売、広告収益化、納品に利用できます。これらについて、FURUへの利用料、申請、個別許可、FURUのクレジット表記は必要ありません。外部APIや第三者サービスの料金、素材・音声・依存ソフトウェア等のライセンスやクレジット義務は別途確認してください。
 
-シネマ（寄りと奥行き）、タイポグラフィ（大きな文字と展開）、図解（線と要点）、静かなスライドから選び、控えめ・標準・大きくの強さを選び、次のSTEPへ進む際に保存します。新規制作はシネマ、既存制作は変更するまで従来の表示です。配色を引き継ぎ、新しい4種類は構成を維持します。背景・画像・文字をこのPCで動かし、演出変更だけでは音声・画像を再生成せず、追加モデルや外部の動画サービスも使いません。人物の動作や3D形状の生成は含みません。見本は音声なしの簡易表示で再生・停止と動きを減らす設定に対応し、完成動画そのものではありません。字幕・要点の時間は音声の間と読みの長さからの推定です。AIデザインは配色・配置・動きを提案できますが、保存した静かなスライド設定は維持します。確定済み動画の変更には修正版を使います。
+### Uses requiring prior permission / 事前に許可が必要なこと
 
-Cut transitions offer 13 families / 35 shape and direction variants. AI can propose the sequence and its surfaces in the existing script/design request: the next cut's image or the chosen background, accent or heading color. Local rendering avoids repeated solid tones, keeps images aligned through tile/clock effects, reserves subtitle space and preserves speech timing. Older plans vary images and palette colors without an extra API call. Quiet slides disable these effects; short cuts suppress them. Finished videos remain unchanged until a separate revision is rendered.
+The following uses require prior permission from FURU. / 次の利用には、FURUの事前の許可が必要です。
 
-カットの切替は13系統・方向や形の違いを含めて35種類です。AIが既存の台本・デザイン設計の応答で、内容や繰り返しを考慮し、次のカットの実画像・背景色・アクセント色・文字色から切替案を選べます。描画時に同じ単色の連続を避け、タイルや時計形でも画像の向きと位置を保ち、字幕領域と音声の時間を変えません。旧データも追加のAPI呼び出しなしで画像と配色を使い分けます。「静かなスライド」では無効、短いカットでは抑制します。完成済み動画は修正版を別途生成するまで変わりません。
+- Selling, reselling or distributing the Covered Software or modified versions for a fee. / 対象ソフトウェアやその改変版を販売、転売、有料配布すること。
 
-## Music, title and credits / BGM・タイトル・クレジット
+- Integrating code or functions of the Covered Software into your own or another party's paid products, paid apps or paid services for provision to third parties. Internal-only integration and tool connections within your own production process are outside this restriction. / 対象ソフトウェアのコードや機能を、自社・他社の有料商品、有料アプリ、有料サービスに組み込んで第三者へ提供すること。社内だけで使うシステムへの組み込みと、自分の制作工程でのツール連携は、この制限に含みません。
 
+- Allowing third parties to use the Covered Software's functions through a website, API or other mechanism in exchange for payment. / 対象ソフトウェアの機能を、Webサービス、API、その他の仕組みを通じて第三者が利用できるようにし、その利用に対して料金を受け取ること。
 
-New projects enable BGM by default. Set the cut pause after cut review and before overall correction instructions; the BGM switch remains above narration creation. The narration button first creates speech, then requests one Lyria 3.5 track if BGM is enabled and missing or stale. Switching BGM alone makes no generation request; OFF preserves the saved track and excludes it from the video. Style instructions are optional; the prompt asks for instrumental music, but listen to verify no vocals. Your key needs Lyria access. Choose a level or remove music. The renderer crossfades short tracks, ducks during speech and fades at the beginning/end; long tracks end with the video. Errors do not switch services or automatically retry. Script/audio changes make old music unconfirmed; review and reuse with the no-API action where applicable, or create a revision after sealing. New cut pauses default to 0.8 seconds; older projects retain their saved duration. Pause/level changes do not regenerate speech/music. Existing BGM appears before folded recreation controls.
+- Providing copies or modified versions of the Covered Software as part of, an appendix to or a benefit of paid information products, teaching materials, courses, memberships or sales packages. Downloads restricted to purchasers, students or members, and benefits described as free, are included. / 対象ソフトウェアの複製や改変版を、有料の情報商材、教材、講座、会員サービス、販売パッケージの一部・付録・特典として提供すること。購入者・受講者・会員に限定したダウンロード提供や、無料の付録・特典という名目の場合も含みます。
 
-新規制作はBGMがONです。カット確認の後、全体への修正指示の前にカット間の余白を設定します。BGMスイッチはナレーション作成の上にあります。作成ボタンで音声を作り、ONでBGMが未作成・変更済みなら、続けてLyria 3.5を1回使います。切替だけでは生成せず、OFFでは保存済みの曲を保持して動画から外します。曲調は任意指定で、空欄なら自動です。歌なしを指示しますが、実際に歌声がないことは試聴して確認してください。Lyriaの利用権限が必要です。音量を選ぶかBGMなしに戻せます。短い曲はクロスフェードでつなぎ、ナレーション中に減音し、開始・終了をフェードします。長い曲は動画尺で終わります。他社切り替えや自動再課金はありません。台本・音声が変わると古いBGMでの確定を止め、確認後にAPIなしで再利用するか、確定済みなら修正版を作ります。カット間は新規制作で0.8秒、既存では保存値を維持し、余白・音量変更では再生成しません。作成済みBGMを先に表示し、再作成は下に折りたたみます。
+Renaming, extracting parts, changing format or switching to download distribution does not avoid these conditions. Restrictions apply only to reproduction, adaptation and other uses of material FURU has rights to. General ideas, production techniques, independently developed implementations and uses permitted by law are not restricted. / 名称の変更、一部の抜き出し、形式の変換、ダウンロード提供への変更によって、この条件を回避することはできません。ただし、制限できる範囲は、FURUが権利を持つ部分の複製・翻案その他の利用に限られます。一般的なアイデア、制作手法、独自に開発した実装まで独占するものではなく、法令上認められる利用も制限しません。
 
-The opening-title/ending section stores title text, its hiragana reading, ending name, URL, author and duration without an API call. Approve the title's reading and synthesize only that speech; body audio is reused. Ending credits align subtly lower-right. The author mark uses `@creation-year/author`; the saved year remains unchanged on later exports/revisions. Recheck title audio, credits and any BGM reuse before sealing.
+Taking a commission, using the Covered Software yourself as a tool, and selling or delivering the completed work do not require this permission. / 利用者が制作の依頼を受け、自分で対象ソフトウェアを使い、完成した作品を販売・納品する行為には、この許可は必要ありません。
 
-冒頭タイトル・エンドクレジット欄では表示タイトル・ひらがなの読み・EDの名前とURL・作者名・表示秒数をAPIなしで保存できます。タイトルの読みを確認してその音声だけを作り、本編の音声は再利用します。EDは右下に控えめに表示し、作者マークは `@作成年/作者名` です。保存した年は翌年の再出力・修正版でも変わりません。タイトル音声・クレジット・BGMの再利用を確認してから確定します。
+### Permission by email / メールでの問い合わせと許可
 
-## Export and saved projects / 出力と保存した制作
+For a use requiring prior permission, contact FURU with the app concerned, intended use, recipients and whether payment is involved. / 事前許可が必要な利用を希望する場合は、対象のアプリ、利用方法、提供先、料金の有無を添えてFURUへお問い合わせください。
 
-The script-generation operation selects supplied images and generates missing images before presenting the script and actual images. Adopt the displayed images locally without another API call. Individual regeneration or file replacement is optional; unchanged script and audio are retained. File selection, drag-and-drop, unassignment and removal from the material list are available inside the image adjustment controls. Removed material files remain on disk.
+If FURU replies by email or another recorded method explicitly granting permission and stating its scope, you may use the software within that scope. No paper contract or seal is required. / FURUがメール等の記録の残る方法で、利用を許可する旨と対象範囲を返信した場合、その範囲で利用できます。紙の契約書や押印は必要ありません。
 
-台本生成の処理で提供画像を割り当て、不足画像を作り、台本と実画像を提示します。確認後の採用はAPIなしで行います。個別の再生成・手動差し替えは気になるときだけ使い、変更しない台本と音声は保持します。画像の調整欄でファイル選択・ドロップ・割り当て解除ができ、素材一覧からも外せます。元の素材ファイルは残ります。
+Sending an inquiry, receiving an automatic acknowledgment or receiving no reply does not grant permission. Consult FURU again before going beyond the permitted purpose, provision method or scope. Individually agreed terms take precedence. / 問い合わせの送信、受付の自動返信、返答がないことだけでは、許可を得たことにはなりません。許可された用途、提供形態、対象範囲を超えて利用する場合は、改めてご相談ください。個別に合意した条件がある場合は、その合意を優先します。
 
-Once narration is ready, the full-length player appears automatically as one seekable audio track, including cut pauses. The explicit narration submission button replaces the separate consent checkbox; voice selection and reading confirmation are still required.
+### Free sharing and introductions / 無料の共有と解説
 
-音声がそろうと、カット間の余白を含む一本の全文プレーヤーを表示します。再生位置は自由に移動できます。音声生成は送信内容を明記したボタンで実行し、別の同意チェックは不要です。声の決定と読みの確認は引き続き必要です。
+Free redistribution, free integration and free provision outside the paid cases above are allowed if copyright notices, these terms and third-party licenses are retained and modifications are identified. Services that do not distribute the software must display these notices and conditions on an information page accessible to users. Do not imply that an unofficial version, product or service is official, endorsed or affiliated with FURU. / 「事前に許可が必要なこと」に該当しない無料再配布、無料の組み込み、無料提供は、著作権表示、本条件、第三者ライセンスを保持し、改変した場合は変更した旨を明示することで認めます。ソフトウェアを配布しないサービスでは、利用者が確認できる説明ページ等にこれらを表示してください。FURUの公式版、公認商品、提携サービスであると誤認させる表示はできません。
 
-Final confirmation prepares the exact reviewed assets, renders the video, checks streams and full decoding, and saves uniquely named MP4 and standalone M4A files to Downloads with matching hashes. The M4A contains the same narration and BGM as the video. The finished player and both download links appear after success. “別の制作を始める” starts an empty project and returns to the top; it does not render a video. Reopen earlier work from the saved-project menu. Unsaved edits and active processing block switching; the key remains in memory until server exit and completed originals are preserved.
+Independently authored Web articles, paid note articles, explanations, reviews, introductions and courses, whether paid or free, require no permission, prior contact or fee to FURU when copies or modified versions of the Covered Software are not included in the product. App screenshots and operation videos for introduction or explanation may be included insofar as FURU can authorize them. Ordinary links to distribution pages and lawful quotation are allowed. Check third-party rights in works or assets shown in screenshots and videos separately. / 自分で作成したWeb記事、note等の有料記事、解説、レビュー、紹介記事、講座は、有料・無料を問わず、対象ソフトウェアの複製や改変版を商品に含めなければ、FURUへの許可、事前連絡、FURUへの利用料は不要です。紹介・解説のためにFURUが権利を持つアプリの操作画面や操作動画を掲載すること、公式配布ページへの通常のリンク、法令上認められる引用も認めます。画面や動画に含まれる第三者の作品・素材等の権利は別途確認してください。
 
-最終確認後、確定素材を用意して描画し、映像・音声情報と全デコードを検査します。ハッシュ一致を確認し、固有名のMP4と単独音声M4Aを両方ダウンロードへ自動保存します。M4Aには動画と同じナレーション・BGMが入ります。成功後は完成プレーヤーと両ファイルの保存リンクを表示します。「別の制作を始める」は空の制作を始めて先頭へ戻る操作で、動画生成とは別です。以前の制作は保存メニューから開きます。未保存の編集・処理中は切り替えを止め、キーは終了までメモリに保持し、完成済みの元作品は残します。
+### Output rights and third-party terms / 作品の権利と第三者の条件
 
-![Actual video completion / 実アプリの動画完成画面](docs/screenshots/finished.jpg)
+Using the Covered Software does not cause FURU to acquire rights in your outputs or cause these terms to apply to your outputs. / 対象ソフトウェアを利用したことを理由に、FURUが利用者の成果物の権利を取得したり、本条件を成果物に適用したりすることはありません。
 
-## Distribution and backup / 配布とバックアップ
+If what you provide as an output includes copies or modifications of the Covered Software itself, these terms still apply to those parts. / ただし、成果物として提供するものに対象ソフトウェアそのものの複製・改変が含まれる場合、その部分には本条件が適用されます。
 
-GitHub Pages is disabled. Release ZIPs contain the app, third-party notices, standard samples and documentation screenshots, excluding credentials and personal scripts/artwork/audio/videos. Antigravity full backup includes this app's Git recovery data, C-drive version evidence and safe files in the default production folder. Backup is a separate operation, not triggered by deployment. Custom `--output` folders need separate backup coverage. Keys must be entered again after restoration.
+Whether copyright exists in an output and who owns it depend on law, creative contributions, contracts and other circumstances. FURU does not grant or guarantee clearance of third-party rights or AI service terms. / 成果物に著作権が成立するか、誰に権利が帰属するかは、法令、創作への関与、契約その他の事情によって決まります。FURUは、第三者の権利やAIサービスの条件まで許諾・保証するものではありません。
 
-GitHub Pagesは無効です。配布ZIPにはアプリ・第三者の案内・標準サンプル・説明用キャプチャを含め、認証情報や個人の台本・制作画像・音声・動画は含めません。AntigravityフルバックアップにGit復旧情報、Cドライブ版の証拠、既定の制作フォルダー内の安全なファイルを登録しています。バックアップはデプロイとは別操作です。別の `--output` は別途対象にする必要があり、復元後はキーを再入力します。
+### Earlier versions and existing permissions / 過去版と既存の許諾
 
-Use `npm ci`, `npm test` and `npm run build` for development. Copy shared-runtime updates using the root `scripts/sync_narration_distribution.mjs`, validate, bump the version and use the established release transaction. Read [third-party terms](THIRD_PARTY_NOTICES.md). The app itself currently has no open-source license; repository visibility does not change third-party obligations.
+These terms do not revoke or narrow valid prior permissions granted under MIT, Creative Commons or other terms. Where earlier permissions remain valid for earlier versions or inherited parts, those parts may still be used under those earlier terms. / 過去にMIT、Creative Commonsその他の条件で有効に付与された許諾を、本条件によって取り消したり狭めたりすることはありません。過去版や引き継がれた部分について、従前の許諾が有効な場合は、その条件に従って利用できます。
 
-開発時は `npm ci`・`npm test`・`npm run build` を使います。共有Runtimeの更新はルートの同期スクリプトで配布版へ反映し、検査・バージョン更新後に正式な配布手順を実行します。[第三者の条件](THIRD_PARTY_NOTICES.md)を確認してください。本体にオープンソースライセンスは現在設定しておらず、公開設定で第三者条件が変わることもありません。
+Changes to the terms must identify the affected version and scope. An article or README update alone does not change permissions for a version obtained earlier or individually agreed permissions. / 条件を変更する場合は、対象の版と適用範囲を明示します。記事やREADMEの更新だけで、過去に取得した版の許諾や個別に合意した許可を変更することはありません。
 
-## API use and publication / API利用と公開
+See [previous notices and applicable scope](docs/licenses/previous-notices.md). / [以前の表示と適用範囲](docs/licenses/previous-notices.md)もご確認ください。
 
-Planning, corrections, speech, image and music generation send data to Google and may incur charges; review disclosed inputs and request counts. Keys are not saved, but materials/scripts/generated work remain in the production folder. Check rights and personal information before sending. Cached samples, local motion and MP4 assembly do not call a generation API. The [article draft](docs/note-draft.md) and [publication checklist](docs/publication.md) describe future public delivery. Saving a draft here does not publish it on note or social media.
+### Provision conditions / 提供条件
 
-構成・修正・音声・画像・BGM生成ではGoogleへの送信とAPI料金が発生する場合があるため、画面の対象・回数を確認してください。キーは保存しませんが、素材・台本・生成物は制作フォルダーへ保存します。送信前に権利と個人情報を確認してください。保存済みサンプル・ローカル演出・MP4組み立てでは生成APIを使いません。[note記事原稿](docs/note-draft.md)と[公開準備](docs/publication.md)は今後の一般公開用です。原稿の保存はnoteやSNSへの投稿・公開ではありません。
+The Covered Software is provided as is. To the extent permitted by law, operation, fitness for a particular purpose, originality of outputs and non-infringement are not guaranteed. FURU is not liable for damage arising from use except where liability cannot be excluded by law. / 対象ソフトウェアは現状のまま提供します。法令で認められる範囲で、動作、特定目的への適合性、成果物の独自性や第三者権利の非侵害を保証しません。法令上免除できない責任を除き、FURUは利用に起因する損害について責任を負いません。
+
+These are custom source-available terms. Restrictions on productization mean that they are not an open-source license under the OSI definition. / 本条件はソースコードを公開する独自の利用条件です。商品化等に制限があるため、OSIの定義によるオープンソースライセンスではありません。
+
+---
+
+
+## Release history / 更新履歴
+
+- **v1.3.0:** first public distribution under the new name; balanced subtitles, automatic BGM, simpler creation controls, thumbnail references and no production-history menu. / **v1.3.0：** 新名称で一般公開。字幕の行割り、自動BGM、動画作成操作、参考画像サムネイルを整理し、制作履歴メニューを撤去しました。
+
+[Previous releases / 過去のリリース](https://github.com/FURUYAN1234/gemini-narration-studio/releases)

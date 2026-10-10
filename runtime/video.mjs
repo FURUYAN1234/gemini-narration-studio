@@ -41,10 +41,10 @@ export async function findRendererRoot(sourceDir){
     if(path.dirname(root)===root)return null;
   }
 }
-export function runRenderer({sourceDir,rendererRoot,output,onProgress,signal}){
+export function runRenderer({sourceDir,rendererRoot,output,onProgress,signal,preview=false}){
   return new Promise((resolve,reject)=>{
     if(signal?.aborted)return reject(new Error('CANCELED'));
-    const child=spawn(process.execPath,[path.join(here,'render-video.mjs'),'--source',sourceDir,'--renderer-root',rendererRoot,'--output',output],{cwd:rendererRoot,windowsHide:true,stdio:['ignore','pipe','pipe','ipc']});
+    const child=spawn(process.execPath,[path.join(here,'render-video.mjs'),'--source',sourceDir,'--renderer-root',rendererRoot,'--output',output,...(preview?['--preview']:[])],{cwd:rendererRoot,windowsHide:true,stdio:['ignore','pipe','pipe','ipc']});
     const cancel=()=>{if(child.connected)child.send({type:'cancel'},()=>{});};signal?.addEventListener('abort',cancel,{once:true});
     let buffer='',code='VIDEO_RENDER_FAILED';
     child.stdout.on('data',chunk=>{buffer+=chunk.toString();if(buffer.length>65536)buffer=buffer.slice(-65536);let end;while((end=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,end);buffer=buffer.slice(end+1);try{const event=JSON.parse(line);if(event.error&&/^[A-Z_]+$/.test(event.error))code=event.error;else onProgress(event);}catch{}}});
@@ -57,21 +57,25 @@ export class StudioVideo {
   constructor({sourceDir,rendererRoot,downloadsDir,runner=runRenderer}){Object.assign(this,{sourceDir,rendererRoot,downloadsDir,runner});this.state={running:false,stage:'idle',progress:0,error:null,result:null};}
   static async open(options){const video=new StudioVideo(options);try{const saved=JSON.parse(await readFile(video.record(),'utf8'));video.state=saved.running?{running:false,stage:'failed',progress:0,error:'VIDEO_RENDER_INTERRUPTED',result:null}:saved;}catch{}return video;}
   record(){return path.join(this.sourceDir,'video-render.json');}
-  status(revision){return {...this.state,available:!!this.rendererRoot,result:this.state.result?.revision===revision?this.state.result:null};}
+  status(revision,inputsHash){return {...this.state,available:!!this.rendererRoot,result:this.state.result?.revision===revision&&(!this.state.result.inputsHash||inputsHash===undefined||this.state.result.inputsHash===inputsHash)?this.state.result:null};}
   async save(){await writeFile(this.record(),JSON.stringify(this.state,null,2));}
-  start({revision,title}){
+  start({revision,title,preview=false,inputsHash}){
     if(this.state.running)throw new Error('BUSY');
-    if(this.state.result?.revision===revision&&this.state.result.audio)return {started:false,cached:true};
+    if(this.state.result?.revision===revision&&this.state.result.inputsHash===inputsHash&&this.state.result.audio)return {started:false,cached:true};
     if(!this.rendererRoot)throw new Error('VIDEO_RENDERER_REQUIRED');
     this.controller=new AbortController();this.state={running:true,stage:'preparing',progress:0,error:null,result:null,steps:['preparing']};
-    this.completion=this.render({revision,title});return {started:true};
+    this.completion=this.render({revision,title,preview,inputsHash});return {started:true};
+  }
+  async confirmReview({revision,inputsHash}){
+    if(this.state.running||this.state.result?.reviewState!=='pending')throw new Error('VIDEO_NOT_READY');
+    this.state.result={...this.state.result,revision,inputsHash,reviewState:'confirmed'};await this.save();return this.status(revision,inputsHash);
   }
   cancel(){if(!this.state.running)return false;this.state.canceling=true;this.controller?.abort();return true;}
-  async render({revision,title}){
+  async render({revision,title,preview,inputsHash}){
     const signal=this.controller.signal,check=()=>signal.throwIfAborted(),runId=randomUUID(),videoDir=path.join(this.sourceDir,'video'),temporary=path.join(videoDir,runId+'.mp4');
     try{
       await mkdir(videoDir,{recursive:true});await this.save();
-      check();await this.runner({sourceDir:this.sourceDir,rendererRoot:this.rendererRoot,output:temporary,signal,onProgress:event=>{
+      check();await this.runner({sourceDir:this.sourceDir,rendererRoot:this.rendererRoot,output:temporary,signal,preview,onProgress:event=>{
         if(signal.aborted)return;
         if(!stages.includes(event.stage)||['saving','complete'].includes(event.stage))return;
         if(stages.indexOf(event.stage)<stages.indexOf(this.state.stage))return;
@@ -89,7 +93,7 @@ export class StudioVideo {
       await copyFile(path.join(videoDir,file),savedPath,constants.COPYFILE_EXCL);
       if(digest(await readFile(savedPath))!==sha256)throw new Error('VIDEO_SAVE_HASH_MISMATCH');
       const audioName=filename.replace(/^動画-/, '音声-').replace(/\.mp4$/,'.m4a'),audioPath=path.join(folder,audioName);check();await copyFile(path.join(videoDir,audioFile),audioPath,constants.COPYFILE_EXCL);if(digest(await readFile(audioPath))!==audioHash)throw new Error('AUDIO_SAVE_HASH_MISMATCH');
-      check();this.state={...this.state,running:false,canceling:false,stage:'complete',progress:1,error:null,result:{revision,file,filename,savedPath,audio:{file:audioFile,filename:audioName,savedPath:audioPath,sha256:audioHash,bytes:audioBytes.length},bytes:bytes.length,sha256,completedAt:new Date().toISOString()}};
+      check();this.state={...this.state,running:false,canceling:false,stage:'complete',progress:1,error:null,result:{revision,...(inputsHash?{inputsHash}:{}),...(preview?{reviewState:'pending'}:{}),file,filename,savedPath,audio:{file:audioFile,filename:audioName,savedPath:audioPath,sha256:audioHash,bytes:audioBytes.length},bytes:bytes.length,sha256,completedAt:new Date().toISOString()}};
       this.state.steps.push('complete');await this.save();
     }catch(error){this.state={...this.state,running:false,canceling:false,stage:signal.aborted?'canceled':'failed',error:signal.aborted?'VIDEO_RENDER_CANCELED':/^[A-Z_]+$/.test(error.message)?error.message:error.code==='EACCES'?'VIDEO_SAVE_DENIED':'VIDEO_RENDER_FAILED',result:null};await this.save();}
   }

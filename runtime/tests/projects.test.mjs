@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {mkdtemp,readFile,rm,readdir,mkdir,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {NarrationSession} from '../core.mjs';
@@ -23,28 +23,44 @@ async function fixture(t){
 }
 test('new video isolates a sealed project, preserves its files/key, and allows design and palette selection',async t=>{
  const f=await fixture(t),old=await f.status(),oldToken=f.token();
- const created=await f.post('new-project',{sessionId:old.sessionId,revision:old.revision});assert.equal(created.code,200);
- const next=created.data;assert.notEqual(next.sessionId,old.sessionId);assert.equal(next.rows.length,0);assert.equal(next.production.finalization,null);assert.equal(next.production.assets.length,0);assert.equal(next.keyConfigured,true);assert.equal(next.video.result,null);assert.equal(next.projects.length,2);
+ const created=await f.post('new-project',{sessionId:old.sessionId,revision:old.revision,discardPrevious:true});assert.equal(created.code,200);
+ const next=created.data;assert.notEqual(next.sessionId,old.sessionId);assert.equal(next.rows.length,0);assert.equal(next.production.finalization,null);assert.equal(next.production.assets.length,0);assert.equal(next.keyConfigured,true);assert.equal(next.video.result,null);assert.equal(next.projects,undefined);
  await f.refresh();assert.equal((await f.post('presentation',{revision:next.revision,presentation:{theme:'black',mode:'template',template:'blueprint'}})).code,200);
  assert.equal((await f.post('title',{title:'Second project'},oldToken)).data.error,'CSRF_TOKEN_REQUIRED');
  assert.deepEqual(await readFile(path.join(f.dir,'job.json')),f.original);assert.deepEqual(await readFile(path.join(f.dir,'production.json')),f.seal);
  const current=await f.status();assert.equal(current.presentation.template,'blueprint');assert.equal(current.presentation.theme,'black');
- assert.equal((await f.post('project',{id:'original',sessionId:current.sessionId,revision:current.revision})).code,200);await f.refresh();
- assert.equal((await f.status()).production.finalization.revision,old.revision);assert.equal((await f.post('title',{title:'Forbidden'})).data.error,'VIDEO_FINALIZED');
+ assert.equal((await f.post('project',{id:'original',sessionId:current.sessionId,revision:current.revision})).code,404);assert.equal((await f.status()).projectId,next.projectId);
  assert.equal((await readFile(path.join(f.dir,'projects',next.projectId,'job.json'),'utf8')).includes('test-project-key'),false);
 });
-test('active project persists across server restart and a saved project can be reopened',async t=>{
- const f=await fixture(t),old=await f.status(),created=await f.post('new-project',{sessionId:old.sessionId,revision:old.revision});assert.equal(created.code,200);await f.refresh();
+test('active project persists across server restart without a past-production menu',async t=>{
+ const f=await fixture(t),old=await f.status(),created=await f.post('new-project',{sessionId:old.sessionId,revision:old.revision,discardPrevious:true});assert.equal(created.code,200);await f.refresh();
  await f.post('title',{title:'Saved second project'});const id=(await f.status()).projectId;await f.restart();
- const current=await f.status();assert.equal(current.projectId,id);assert.equal(current.title,'Saved second project');assert.equal(current.keyConfigured,false);assert.equal(current.projects.length,2);
- assert.equal((await f.post('project',{id:'original',sessionId:current.sessionId,revision:current.revision})).code,200);
+ const current=await f.status();assert.equal(current.projectId,id);assert.equal(current.title,'Saved second project');assert.equal(current.keyConfigured,false);assert.equal(current.projects,undefined);
+ assert.equal((await f.post('project',{id:'original',sessionId:current.sessionId,revision:current.revision})).code,404);
 });
-test('new/switch actions reject missing token, stale state, traversal and active work without changing project',async t=>{
+test('new actions reject missing token, stale state, traversal and active work without changing project',async t=>{
  const f=await fixture(t),old=await f.status();
- assert.equal((await f.post('new-project',{sessionId:old.sessionId,revision:old.revision},'wrong')).code,403);
+ assert.equal((await f.post('new-project',{sessionId:old.sessionId,revision:old.revision,discardPrevious:true},'wrong')).code,403);
  assert.equal((await f.post('new-project',{sessionId:old.sessionId,revision:'stale'})).data.error,'STALE_REVISION');
  assert.equal((await f.post('new-project',{sessionId:'other',revision:old.revision})).data.error,'SESSION_MISMATCH');
- assert.equal((await f.post('project',{id:'../outside',sessionId:old.sessionId,revision:old.revision})).data.error,'INVALID_PROJECT');
- f.session.busy=true;assert.equal((await f.post('new-project',{sessionId:old.sessionId,revision:old.revision})).data.error,'BUSY');f.session.busy=false;
+ assert.equal((await f.post('project',{id:'../outside',sessionId:old.sessionId,revision:old.revision})).code,404);
+ f.session.busy=true;assert.equal((await f.post('new-project',{sessionId:old.sessionId,revision:old.revision,discardPrevious:true})).data.error,'BUSY');f.session.busy=false;
  assert.equal((await f.status()).sessionId,old.sessionId);assert.deepEqual(await readFile(path.join(f.dir,'job.json')),f.original);
+});
+
+test('past productions have no listing or reopen endpoint and cannot affect the active production',async t=>{
+ const f=await fixture(t),old=await f.status();assert.equal(old.projects,undefined);
+ const result=await f.post('project',{id:'original',sessionId:old.sessionId,revision:old.revision});assert.equal(result.code,404);assert.equal(result.data.error,'NOT_FOUND');assert.equal((await f.status()).projectId,old.projectId);
+});
+
+test('clearing into a new production retains one active workspace, survives restart and preserves downloaded videos',async t=>{
+ const f=await fixture(t),old=await f.status();let created=await f.post('new-project',{sessionId:old.sessionId,revision:old.revision,discardPrevious:true});assert.equal(created.code,200);await f.refresh();
+ const previous=created.data;await f.post('title',{title:'作業中'});await mkdir(path.join(f.dir,'downloads'),{recursive:true});await writeFile(path.join(f.dir,'downloads','finished.mp4'),'downloaded artifact');
+ const current=await f.status();assert.equal((await f.post('new-project',{sessionId:current.sessionId,revision:current.revision})).data.error,'PROJECT_CLEAR_CONFIRMATION_REQUIRED');assert.equal((await f.status()).projectId,previous.projectId);
+ created=await f.post('new-project',{sessionId:current.sessionId,revision:current.revision,discardPrevious:true});assert.equal(created.code,200);await f.refresh();assert.deepEqual(await readdir(path.join(f.dir,'projects')),[created.data.projectId]);assert.equal(await readFile(path.join(f.dir,'downloads','finished.mp4'),'utf8'),'downloaded artifact');
+ await f.restart();assert.equal((await f.status()).projectId,created.data.projectId);assert.equal((await f.status()).projects,undefined);
+});
+
+test('startup never reads unrelated past-production files',async t=>{
+ const f=await fixture(t);const unrelated=path.join(f.dir,'projects','11111111-1111-4111-8111-111111111111');await mkdir(unrelated);await writeFile(path.join(unrelated,'job.json'),'invalid old history');await f.restart();assert.equal((await f.status()).projectId,'original');assert.equal((await f.status()).projects,undefined);
 });

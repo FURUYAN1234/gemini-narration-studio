@@ -121,7 +121,7 @@ function wordChunks(text){
  const chunks=[];let opening='';
  for(const {segment}of wordSegmenter.segment(text)){
   if(/^[\p{Ps}\p{Pi}]+$/u.test(segment)){opening+=segment;continue;}
-  const previous=chunks.at(-1),attached=/^(?:の|に|を|が|は|へ|と|で|や|も|な)$/.test(segment)||/^[\p{Pe}\p{Pf}、。，．！？!?：:；;％%]+$/u.test(segment)||previous&&/\d$/.test(previous)&&/^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]{1,2}$/u.test(segment);
+  const previous=chunks.at(-1),attached=previous&&/[\p{Script=Han}]$/u.test(previous)&&/^[\p{Script=Han}]+$/u.test(segment)||/^(?:の|に|を|が|は|へ|と|で|や|も|な)$/.test(segment)||/^[\p{Pe}\p{Pf}、。，．！？!?：:；;％%]+$/u.test(segment)||previous&&/\d$/.test(previous)&&/^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]{1,2}$/u.test(segment);
   if(attached&&previous&&!/[\r\n]$/.test(previous)&&!opening)chunks[chunks.length-1]+=segment;
   else{chunks.push(opening+segment);opening='';}
  }
@@ -141,7 +141,7 @@ export function fitText(text,{width,height,maxSize,lineHeight=1.2,balance=false}
   }
   if(line)lines.push(line);return lines;
  };
- let size=balance?Math.min(maxSize,Math.max(1,Math.floor(width/Math.max(1,...chunks.map(chunk=>chunk.units))))):maxSize,lines=wrap(size);
+ let size=Math.min(maxSize,Math.max(1,Math.floor(width/Math.max(1,...chunks.map(chunk=>chunk.units))))),lines=wrap(size);
  while(lines.length*size*lineHeight>height&&size>1){size=Math.max(1,size-1);lines=wrap(size);}
  return {lines,size};
 }

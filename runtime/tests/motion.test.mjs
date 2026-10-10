@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizeMotion,sceneDirection,motionFrame,fitText,pointSchedule,normalizeImageFocus,focusFrame,IMAGE_FOCUS_SCHEMA} from '../motion.mjs';
+test('continuous Japanese compounds stay together in narrow previews and rendered headings',()=>{
+ for(const text of ['自分で行う！発信者情報開示請求','知っておきたい個人情報保護制度','使いやすい画像生成機能'])for(const width of [180,560,820]){
+  const fit=fitText(text,{width,height:250,maxSize:72,lineHeight:1.4,balance:true});
+  assert.equal(fit.lines.join(''),text);
+  for(const compound of text.match(/[\p{Script=Han}]{2,}/gu)||[])assert.ok(fit.lines.some(line=>line.includes(compound)),compound+' split across lines');
+  assert.ok(fit.lines.length*fit.size*1.4<=250);
+  assert.ok(fit.lines.every(line=>[...line].length*fit.size<=width));
+ }
+ const ordinary=fitText('道具を選んで、楽しく作る。',{width:400,height:250,maxSize:72,balance:true});assert.equal(ordinary.lines.join(''),'道具を選んで、楽しく作る。');assert.ok(ordinary.lines.length>1);
+});
 test('headlines wrap at Japanese word boundaries and keep ordinary alternative titles readable',()=>{
  assert.deepEqual(fitText('3つの小さな工夫',{width:800,height:300,maxSize:112,balance:true}).lines,['3つの','小さな工夫']);
  for(const text of ['3つの小さな工夫','お気に入りの1冊','手軽な準備で楽しむ']){

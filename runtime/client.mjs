@@ -14,16 +14,18 @@ export async function importJob(file,base='http://127.0.0.1:6181',{sessionId,rep
   const result=await fetch(base+'/api/job',{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':token},body:JSON.stringify({job,sessionId,expectedRevision:state.revision,confirmReplace:replace})});
   const value=await result.json();if(!result.ok)throw new Error(value.error);return value;
 }
-export async function prepareReviewedAudio({sourceDir,publicDir,fps=30,gapFrames}) {
+export async function prepareReviewedAudio(options){return prepareAudio({...options,preview:false});}
+export async function preparePreviewAudio(options){return prepareAudio({...options,preview:true});}
+async function prepareAudio({sourceDir,publicDir,fps=30,gapFrames,preview}) {
   if(!Number.isInteger(fps)||fps<1||fps>120)throw new Error('INVALID_TIMING');
   const production=await ProductionInputs.open(sourceDir);production.assertNoCorrections();
   const storedPause=production.status().pauseSeconds,storedGap=storedPause===undefined?7:Math.round(storedPause*fps);if(gapFrames===undefined)gapFrames=storedGap;if(!Number.isInteger(gapFrames)||gapFrames<0||(storedPause!==undefined&&gapFrames!==storedGap))throw new Error('INVALID_TIMING');
-  const manifest=JSON.parse(await readFile(path.join(sourceDir,'narration-manifest.json'),'utf8'));
+  const manifest=JSON.parse(await readFile(path.join(sourceDir,preview?'narration-preview-manifest.json':'narration-manifest.json'),'utf8'));
   // Re-open the current persisted job; an old manifest cannot bypass later edits.
   const {NarrationSession}=await import('./core.mjs');
-  const session=await NarrationSession.open({outputDir:sourceDir});const current=await session.exportManifest({persist:false});
-  production.assertCutsConfirmed(session.status().rows);
-  production.assertFinalization(session.status());
+  const session=await NarrationSession.open({outputDir:sourceDir});const current=await (preview?session.exportPreviewManifest({persist:false}):session.exportManifest({persist:false}));
+  if(preview){production.assertNoPendingImages(session.status());production.assertBookends(session.status());if(manifest.reviewState!=='pending'||manifest.productionRevision!==production.finalInputsHash())throw new Error('STALE_AUDIO_MANIFEST');}
+  else{production.assertCutsConfirmed(session.status().rows);production.assertFinalization(session.status());}
   production.assertMusicCurrent(session.status());
   // The first studio version had no presentation field. Accept only that exact
   // default-theme migration; all reading/audio guards above still apply.
@@ -42,5 +44,5 @@ export async function prepareReviewedAudio({sourceDir,publicDir,fps=30,gapFrames
     const subtitles=buildSubtitleCues({caption:row.caption,speech:row.speech,bytes,fps,frames});
     await copyFile(source,path.join(publicDir,src));rows.push({...row,src,from,frames,subtitles});from+=frames+gapFrames;
   }
-  const bookends=production.ending();const ending=bookends?{...bookends,from,frames:Math.round(bookends.endSeconds*fps)}:undefined;const result={...current,title:bookends?.titleRowId===rows[0]?.id?rows[0].caption:current.title,fps,gapFrames,durationInFrames:from+(ending?.frames||0),rows,...(ending?{bookends:ending}:{})};await writeFile(path.join(publicDir,'narration.json'),JSON.stringify(result,null,2),'utf8');return result;
+  const bookends=production.ending();const ending=bookends?{...bookends,from,frames:bookends.endingEnabled===false?0:Math.round(bookends.endSeconds*fps)}:undefined;const result={...current,title:bookends?.titleRowId===rows[0]?.id?rows[0].caption:current.title,fps,gapFrames,durationInFrames:from+(ending?.frames||0),rows,...(ending?{bookends:ending}:{})};await writeFile(path.join(publicDir,'narration.json'),JSON.stringify(result,null,2),'utf8');return result;
 }

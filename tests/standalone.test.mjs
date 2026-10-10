@@ -1,3 +1,7 @@
+import * as launcher from '../launch.mjs';
+import {NarrationSession} from '../runtime/core.mjs';
+import {ProductionInputs} from '../runtime/production.mjs';
+import {startServer} from '../runtime/server.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -20,6 +24,24 @@ test('portable launch keeps persistent data outside replaceable release copy',()
   assert.equal(config.output,path.join('C:/Users/Test User','GeminiNarrationStudio'));
   assert.equal(options(['--output','C:/Data With Spaces']).output,path.resolve('C:/Data With Spaces'));
 });
+test('batch defaults to a fresh production while explicit resume/output retains a selected session',()=>{
+ assert.equal(options([]).startupMode,'new');
+ assert.equal(options(['--resume']).startupMode,'resume');
+ assert.equal(options(['--output','C:/Selected']).startupMode,'resume');
+});
+test('running studio launch isolates a new production, explicit resume retains it, and busy reuse changes nothing',async t=>{
+ const priorCwd=process.cwd(),home=await mkdtemp(path.join(os.tmpdir(),'studio-launch-reuse-')),dir=path.join(home,'GeminiNarrationStudio');t.after(()=>{process.chdir(priorCwd);return rm(home,{recursive:true,force:true});});
+ const session=await NarrationSession.open({outputDir:dir});session.setKey('fixture-key');await session.appendRow({id:'old',caption:'前の字幕。',speech:'まえのじまく。'});
+ const production=await ProductionInputs.open(dir);await production.addAsset('前の画像.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jZioAAAAASUVORK5CYII=','base64'));
+ const oldJob=await readFile(path.join(dir,'job.json')),oldProduction=await readFile(path.join(dir,'production.json'));const service=await startServer({session,port:0,videoRendererRoot:dir,launcherStatus:{app:'gemini-narration-studio',output:dir,...await launcher.runtimeIdentity()}});t.after(()=>service.close());const args=['--no-browser','--port',service.url.split(':').at(-1)];
+ session.busy=true;await assert.rejects(launcher.launch(args,home),/BUSY/);session.busy=false;
+ await launcher.launch(args,home);const created=await(await fetch(service.url+'/api/status')).json();assert.notEqual(created.projectId,'original');assert.equal(created.rows.length,0);assert.equal(created.production.assets.length,0);assert.equal(created.keyConfigured,true);
+ await launcher.launch([...args,'--resume'],home);const resumed=await(await fetch(service.url+'/api/status')).json();assert.equal(resumed.projectId,created.projectId);assert.equal(resumed.rows.length,0);
+ const boot=await(await fetch(service.url+'/api/bootstrap')).json(),switched=await fetch(service.url+'/api/project',{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':boot.token},body:JSON.stringify({id:'original',sessionId:resumed.sessionId,revision:resumed.revision})});assert.equal(switched.status,404);
+ const reopened=await launcher.reuseStudio(service.url,'resume');assert.equal(reopened.projectId,created.projectId);assert.equal(reopened.production.assets.length,0);
+ assert.equal((await(await fetch(service.url+'/api/status')).json()).projectId,created.projectId);assert.deepEqual(await readFile(path.join(dir,'job.json')),oldJob);assert.deepEqual(await readFile(path.join(dir,'production.json')),oldProduction);
+});
+
 test('reject invalid launch arguments',()=>{
   for(const args of [['--port','0'],['--port','6181.2'],['--port','70000'],['--output'],['--api-key','secret']])assert.throws(()=>options(args));
 });

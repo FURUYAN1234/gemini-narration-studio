@@ -62,3 +62,13 @@ test('voice selection retains prepared images while rejecting the old approval s
  assert.equal((await send('approve-images',{revision:afterReading.revision,productionRevision:afterReading.productionRevision,proposalId:beforeReading.id,consent:true})).code,409);
  assert.equal((await send('approve-images',{revision:afterReading.revision,productionRevision:afterReading.productionRevision,proposalId:afterReading.imageProposal.id,consent:true})).code,200);assert.equal(calls,2);
 });
+
+test('preview rendering validates current audio and production without pretending it was listened to',async t=>{
+ const f=await setup(t),{preparePreviewAudio,prepareReviewedAudio}=await import('../client.mjs');
+ await f.production.saveBrief({...f.production.status().brief,assetMode:'provided'});
+ const manifest=await f.session.exportPreviewManifest({persist:false});await writeFile(path.join(f.dir,'narration-preview-manifest.json'),JSON.stringify({...manifest,productionRevision:f.production.finalInputsHash()}));
+ const options={sourceDir:f.dir,publicDir:path.join(f.dir,'preview-public')};const data=await preparePreviewAudio(options);assert.equal(data.reviewState,'pending');assert.equal(data.rows.every(r=>r.audioListened===false),true);assert.equal(f.session.status().rows.some(r=>r.listenedCurrent),false);
+ await assert.rejects(f.session.exportManifest({persist:false}),/AUDIO_LISTEN_REQUIRED/);
+ await f.production.savePause(.5);await assert.rejects(preparePreviewAudio(options),/STALE_AUDIO_MANIFEST/);
+ await f.production.savePause(.8);await f.session.updateRow('first',{caption:'変更した字幕。',speech:'へんこうしたじまく。'});await assert.rejects(preparePreviewAudio(options),/READING_REVIEW_REQUIRED|AUDIO_REQUIRED/);
+});
