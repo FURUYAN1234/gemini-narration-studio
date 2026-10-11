@@ -140,3 +140,5 @@
 #api-required-alert{margin:16px 0;max-width:100%;background:var(--panel);border:2px solid var(--accent);color:var(--fg)}
 
 .activity-progress{margin:16px 0;padding:14px 16px;border:1px solid var(--border);border-radius:8px;background:var(--panel)}.activity-progress p{margin-bottom:8px;color:var(--fg);font-size:14px;line-height:1.6}.activity-progress progress{display:block;width:100%;height:14px;accent-color:var(--accent)}
+
+.explanation-preview{padding:18px;border:1px solid var(--border,#789);border-radius:12px;background:var(--panel,#14243a)}.explanation-preview>strong{display:block;margin-bottom:14px}.explanation-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.explanation-item{min-width:0;padding:12px;border:1px solid #7995b866;border-radius:8px;overflow-wrap:anywhere}.explanation-item>span,.explanation-item>strong{display:block}.explanation-item>strong{font-size:1.5em;margin-top:8px}.explanation-bar{height:12px;margin-top:12px;background:#6bbbd8;border-radius:3px}.explanation-preview[data-explanation="bar"] .explanation-items,.explanation-preview[data-explanation="stat"] .explanation-items{grid-template-columns:1fr}

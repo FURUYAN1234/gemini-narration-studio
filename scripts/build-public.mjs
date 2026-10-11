@@ -11,6 +11,7 @@ export async function buildPublic(root){
  await writeFile(new URL('../dist/index.html',root),html);
  await cp(new URL('../docs/screenshots/',root),new URL('../dist/screenshots/',root),{recursive:true});
  await cp(new URL('../public/LICENSE.txt',root),new URL('../dist/LICENSE.txt',root));
+ await cp(new URL('../docs/narration-guide.pdf',root),new URL('../dist/narration-guide.pdf',root));
  return html;
 }
 if(process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.url)await buildPublic(import.meta.url);

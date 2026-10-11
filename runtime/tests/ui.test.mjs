@@ -11,6 +11,26 @@ import {fitText} from '../motion.mjs';
 const appSource = (await readFile(new URL('../ui/app.mjs', import.meta.url), 'utf8')).replace(/^import .*\.mjs';\r?\n/gm,'');
 const html = await readFile(new URL('../ui/index.html', import.meta.url), 'utf8');
 
+test('explanation switch persists auto/off without generation and is locked after finalization',async()=>{
+ const ui=await setup();assert.ok(ui.get('explain-scenes'));
+ ui.get('explain-scenes').checked=true;await ui.get('explain-scenes').emit('change');
+ assert.equal(ui.requests.filter(r=>r.route==='presentation').at(-1).input.presentation.explainScenes,'auto');
+ ui.get('explain-scenes').checked=false;await ui.get('explain-scenes').emit('change');
+ assert.equal(ui.requests.filter(r=>r.route==='presentation').at(-1).input.presentation.explainScenes,'off');
+ assert.equal(ui.requests.some(r=>['generate','source-plan','generate-image','draft-script'].includes(r.route)),false);
+ ui.externalFinalize();await ui.poll();assert.equal(ui.get('explain-scenes').disabled,true);
+});
+
+test('a diagram-only cut explains that images are optional while ordinary cuts retain missing-image guidance',async()=>{
+ const explanation={type:'stat',unit:'',items:[{label:'参加者',value:'25人',quote:'参加者は25人'}]};
+ const ui=await setup({rows:[{id:'one',caption:'参加者は25人です。',speech:'さんかしゃはにじゅうごにんです。',cutVisual:{title:'参加者',points:[],explanation}}]});
+ ui.get('explain-scenes').checked=true;await ui.get('explain-scenes').emit('change');
+ const text=()=>[...ui.get('rows').walk()].map(e=>e.textContent).join('\n');
+ assert.match(text(),/このカットは図解で表示します。画像の追加は任意です/);assert.doesNotMatch(text(),/このカットの画像は未準備/);
+ ui.get('explain-scenes').checked=false;await ui.get('explain-scenes').emit('change');assert.match(text(),/このカットの画像は未準備/);
+ assert.equal(ui.requests.some(r=>['generate','source-plan','generate-image','draft-script'].includes(r.route)),false);
+});
+
 test('automatic BGM has no settings or separate listening panels and one video creation button',async()=>{
  assert.doesNotMatch(html,/id="(?:music-tools|music-enabled|music-direction|music-level|generate-music|remove-music|reuse-music|music-player|music-listening|full-audio|full-audio-info|full-listening-title)"/);
  const ui=await setup();assert.equal(ui.get('generate-all').textContent,'動画を作成');assert.equal(ui.requests.some(r=>['generate','generate-music'].includes(r.route)),false);

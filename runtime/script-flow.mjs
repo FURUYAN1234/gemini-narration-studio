@@ -1,5 +1,5 @@
 export const FRESH_BRIEF={scriptMode:'ai',assetMode:'mixed',instructions:'',script:'',references:{text:'',urls:[]},themeAuto:false,autoDirection:true,titleMode:'auto',voiceMode:'auto'};
-export const FRESH_PRESENTATION={theme:'moon',mode:'template',template:'cinema',motion:{version:1,style:'cinematic',intensity:'standard'}};
+export const FRESH_PRESENTATION={explainScenes:'auto',theme:'moon',mode:'template',template:'cinema',motion:{version:1,style:'cinematic',intensity:'standard'}};
 export const parseScriptParts=text=>String(text||'').split(/\r?\n/).map(value=>value.trim()).filter(Boolean);
 export function scriptActionState(input){
  const {mode,script='',instructions='',hasReferences=false,themeAuto=false,keyConfigured=false,busy=false,finalized=false,inputErrors={}}=input;

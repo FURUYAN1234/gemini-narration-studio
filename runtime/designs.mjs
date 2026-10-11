@@ -41,6 +41,7 @@ export function normalizeDesign(input){
 }
 export function normalizePresentation(input={theme:'moon'}){
  if(!input||!['moon','black','white'].includes(input.theme))throw new Error('INVALID_THEME');
+ if(Object.hasOwn(input,'explainScenes')){const {explainScenes,...rest}=input;if(!['auto','off'].includes(explainScenes))throw new Error('INVALID_EXPLANATION_MODE');return {...normalizePresentation(rest),explainScenes};}
  if(Object.hasOwn(input,'motion')){const {motion,...rest}=input;return {...normalizePresentation(rest),motion:motion===null?null:normalizeMotion(motion)};}
  if(input.mode===undefined){if(Object.keys(input).some(key=>key!=='theme'))throw new Error('INVALID_PRESENTATION');return {theme:input.theme};}
  if(input.mode==='template'){if(!VIDEO_TEMPLATES.some(t=>t.id===input.template)||Object.keys(input).some(key=>!['theme','mode','template'].includes(key)))throw new Error('INVALID_TEMPLATE');return {theme:input.theme,mode:'template',template:input.template};}

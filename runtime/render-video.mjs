@@ -1,3 +1,4 @@
+import {resolveExplanation} from './explain-scenes.mjs';
 import {readFile,writeFile,mkdir,copyFile,stat,readdir} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import {promisify} from 'node:util';
@@ -35,11 +36,12 @@ try{
     const asset=production.cutImage(row);
     if(asset){await writeFile(path.join(publicDir,'cuts',asset.file),await production.readAsset(asset.file));row.image='cuts/'+asset.file;row.layout='split';}
     const visual=scenes[row.id]||{};if(visual.imageFocus)row.imageFocus=visual.imageFocus;row.title=typeof visual.title==='string'?visual.title.slice(0,200):row.scene||data.title;
+    row.explanation=resolveExplanation({...row,explanation:visual.explanation},data.presentation.explainScenes);
     row.points=Array.isArray(visual.points)?visual.points.filter(v=>typeof v==='string').slice(0,6).map(v=>v.slice(0,160)):[];
   }
   const music=production.effectiveMusic();if(music){await writeFile(path.join(publicDir,'cuts',music.file),await production.readAsset(music.file));data.music={src:'cuts/'+music.file,durationSeconds:music.durationSeconds,level:music.level};}
   await writeFile(path.join(publicDir,'video-data.json'),JSON.stringify({data,theme}));
-  for(const name of ['presentation.tsx','motion-presentation.tsx','motion.mjs','music.mjs','font-loader.mjs','subtitles.mjs'])await copyFile(path.join(here,name),path.join(work,name));
+  for(const name of ['presentation.tsx','explain-presentation.tsx','explain-scenes.mjs','motion-presentation.tsx','motion.mjs','music.mjs','font-loader.mjs','subtitles.mjs'])await copyFile(path.join(here,name),path.join(work,name));
   for(const name of ['NotoSansJP.ttf','NotoSansJP-OFL.txt','reveal-LICENSE.txt'])await copyFile(path.join(here,'vendor',name),path.join(publicDir,'narration',name));
   const entry=path.join(work,'main.tsx');await writeFile(entry,"import React from 'react';import {registerRoot} from 'remotion';import {NarratedPresentationComposition} from './presentation';import payload from './public/video-data.json';registerRoot(()=> <NarratedPresentationComposition data={payload.data} theme={payload.theme}/>);\n");
   checkCanceled();report({stage:'bundling',progress:0});
@@ -55,7 +57,7 @@ try{
   if(!video||!audio||video.width!==composition.width||video.height!==composition.height||Math.abs(Number(metadata.format.duration)-composition.durationInFrames/composition.fps)>0.25)throw new Error('VIDEO_MEDIA_QA_FAILED');
   const audioOutput=output.replace(/\.mp4$/,'.m4a');
   await extractVideoAudio(ffmpeg,output,audioOutput,{signal:controller.signal});checkCanceled();
-  await writeFile(path.join(sourceDir,'video','media-qa.json'),JSON.stringify({fullDecode:true,frames:composition.durationInFrames,fps:composition.fps,metadata,provider:data.provider,settings:data.settings,...(data.music?{music:data.music}:{}),...(data.bookends?{bookends:data.bookends}:{}),rows:data.rows.map(r=>({id:r.id,image:r.image,file:r.file,frames:r.frames})),renderedAt:new Date().toISOString()},null,2));report({stage:'verifying',progress:1});
+  await writeFile(path.join(sourceDir,'video','media-qa.json'),JSON.stringify({fullDecode:true,frames:composition.durationInFrames,fps:composition.fps,metadata,provider:data.provider,settings:data.settings,...(data.music?{music:data.music}:{}),...(data.bookends?{bookends:data.bookends}:{}),rows:data.rows.map(r=>({id:r.id,image:r.image,file:r.file,frames:r.frames,explanation:r.explanation?.type})),renderedAt:new Date().toISOString()},null,2));report({stage:'verifying',progress:1});
 }catch(error){
   // This local renderer never receives credentials. Keep bounded, redacted
   // diagnostics on disk so encoding failures can be diagnosed without UI logs.

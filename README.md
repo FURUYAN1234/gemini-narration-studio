@@ -1,12 +1,31 @@
-# Narrated Video Maker / ナレーション動画メーカー v1.3.0
+# Narrated Video Maker / ナレーション動画メーカー v1.3.1
 
 > **Source code available; free to use.** API fees and third-party terms apply separately. / **ソースコード公開・利用無料。** API利用料と第三者の条件は別途適用されます。
 
 Turn reference materials and scripts into 16:9 videos with Japanese narration, captions, pictures, motion and automatic BGM on Windows. / 参考資料と台本から、日本語ナレーション、字幕、画像、動き、自動BGMのある16:9動画をWindowsで作ります。
 
-[Download the latest release / 最新版をダウンロード](https://github.com/FURUYAN1234/gemini-narration-studio/releases/latest) · [Public installation guide / 公開導入ページ](https://furuyan1234.github.io/gemini-narration-studio/)
+[Download the latest release / 最新版をダウンロード](https://github.com/FURUYAN1234/gemini-narration-studio/releases/latest) · [Public installation guide / 公開導入ページ](https://furuyan1234.github.io/gemini-narration-studio/) · [Japanese beginner PDF / はじめての方向けPDF](docs/narration-guide.pdf)
 
 ![Current app screen / 現在のアプリ実画面](docs/screenshots/workflow-current.jpg)
+
+## Explain with pictures and diagrams / 画像と図解で伝える
+
+Create product introductions, activity reports and lessons from your own materials. Pictures can accompany explanatory layouts. / 手持ちの写真や文章から、商品紹介、活動報告、学習用の解説を作れます。写真と図解を組み合わせることもできます。
+
+| Diagram / 図解 | Example / 使い方の例 |
+| --- | --- |
+| Comparison / 比較 | Put two characteristics side by side, such as curved and straight outlines. / 円の「曲線」と多角形の「直線」を並べて説明します。 |
+| Steps / 手順 | Reveal an ordered process as narration progresses. / 「輪郭を見る→辺を数える→名前を確かめる」を順に見せます。 |
+| Highlighted number / 数字強調 | Give a key number a clear visual focus. / 「一回転は360度」の360度を大きく表示します。 |
+| Bar chart / 棒グラフ | Compare quantities that share one unit. / 三角形3辺・四角形4辺・六角形6辺を長さで比較します。 |
+
+![Four explanatory scenes from an actual generated video / 実際に作成した動画の4種類の図解](docs/screenshots/explanation-scenes.png)
+
+These frames come from a 32-second narrated video created through the app from a short mathematics reference text, without image generation. / 上の画像は、短い算数の参考本文からアプリで作成した約32秒のナレーション動画です。画像生成を使わず、4種類の図解を使っています。
+
+**内容に合わせた図解を使う（おすすめ）** is on for a new production. Leave it on when asking AI to plan from materials, then review each cut's diagram, caption and reading. AI selects diagrams only where suitable; not every cut needs one. / 新しく作るときは **内容に合わせた図解を使う（おすすめ）** がONです。参考資料からAIで台本を作り、カットごとの図解・字幕・読みを確認します。内容に適した場面で図解が選ばれ、すべてのカットに付くとは限りません。
+
+Diagram-only cuts do not require pictures. Turning the diagram switch off uses the ordinary layout; this switch alone makes no generation request. Diagram text and numbers are checked against the current caption. Check the original source yourself. Reveals use estimated subtitle timing, not exact word alignment. / 図解だけのカットは画像なしでも作れます。OFFなら通常のレイアウトになり、切り替えだけでは生成APIを呼びません。図解の文字や数値は現在の字幕と照合しますが、資料自体の正しさは利用者が確認してください。表示は推定した字幕タイミングに合わせるため、単語単位の厳密な同期ではありません。
 
 ## Requirements / 用意するもの
 
@@ -18,7 +37,7 @@ The public website is a download and installation guide. Video processing runs o
 
 1. Open the latest Release above. Under Assets, choose **Source code (zip)**. / 上の最新版ダウンロードを開き、Assets欄の **Source code (zip)** をクリックします。
 2. In Windows Downloads, right-click the ZIP and choose **Extract All**. Do not run files inside the ZIP. / WindowsのダウンロードでZIPを右クリックし、**すべて展開**を選びます。ZIP内のまま起動しないでください。
-3. Move the extracted folder to a writable location, for example `C:\VideoTools\gemini-narration-studio-1.3.0`. Open the inner folder containing `package.json`. / 展開したフォルダーを、たとえば `C:\VideoTools\gemini-narration-studio-1.3.0` に移します。`package.json` がある内側のフォルダーを開きます。
+3. Move the extracted folder to a writable location, for example `C:\VideoTools\gemini-narration-studio`. Open the inner folder containing `package.json`. / 展開したフォルダーを、たとえば `C:\VideoTools\gemini-narration-studio` に移します。`package.json` がある内側のフォルダーを開きます。
 4. Double-click **start_narration_studio.bat**. If extensions are hidden, it may appear as **start_narration_studio**, with type Windows Batch File. / **start_narration_studio.bat** をダブルクリックします。拡張子が非表示なら **start_narration_studio** と表示され、種類はWindowsバッチファイルです。
 5. Keep the black terminal window open. The first launch prepares missing Node.js/npm, video libraries and the rendering browser; wait for completion. / 黒いウィンドウを開いたままにします。初回は不足するNode.js/npm、動画処理ライブラリ、描画ブラウザーを準備するので、完了まで待ちます。
 6. The app opens at `http://127.0.0.1:6181/`. If the browser does not open, enter that address manually after the terminal reports READY. / `http://127.0.0.1:6181/` にアプリが開きます。開かなければ、黒いウィンドウにREADYが出た後、そのアドレスをブラウザーへ入力します。
@@ -79,7 +98,9 @@ Use **制作をクリアして新しく始める** only after saving what you ne
 
 AI drafting, missing-image creation, narration and BGM creation can incur separate provider fees. File replacement, local editing, bundled sample playback and rendering with prepared assets do not generate new provider content. Failed requests are not automatically retried. / AI台本作成、不足画像の作成、ナレーション、BGMの作成では外部API料金がかかる場合があります。画像の手動差し替え、ローカル編集、同梱サンプル再生、準備済み素材の動画描画は新規の生成APIを使いません。失敗時の自動再試行はありません。
 
-The local video renderer uses Remotion. Its license depends on your organization and use; review [Remotion licensing](https://www.remotion.dev/docs/license) and [third-party notices](THIRD_PARTY_NOTICES.md). / PC上の動画描画にはRemotionを使います。組織や利用方法によりライセンス条件が異なるため、[Remotionの条件](https://www.remotion.dev/docs/license)と[第三者の表記](THIRD_PARTY_NOTICES.md)を確認してください。
+The local video renderer uses Remotion 4.0.534. Its license depends on your organization and use; review [Remotion licensing](https://www.remotion.dev/docs/license) and [third-party notices](THIRD_PARTY_NOTICES.md). / PC上の動画描画にはRemotion 4.0.534を使います。組織や利用方法によりライセンス条件が異なるため、[Remotionの条件](https://www.remotion.dev/docs/license)と[第三者の表記](THIRD_PARTY_NOTICES.md)を確認してください。
+
+Remotion 4.0.534 permits free use by individuals, for-profit organizations with up to three employees, and nonprofits. Organizations outside its free eligibility need a Company License. Review the exact [versioned terms](https://github.com/remotion-dev/remotion/blob/v4.0.534/LICENSE.md) before use. / Remotion 4.0.534は、個人、従業員3人以下の営利組織、非営利組織などを無料利用の対象としています。対象外の組織にはCompany Licenseが必要です。FURU本体の利用が無料でも、この条件は別に適用されます。導入前に[対象バージョンの条件](https://github.com/remotion-dev/remotion/blob/v4.0.534/LICENSE.md)を確認してください。
 
 ## Terms & Output Rights / 利用条件・作品の権利
 
@@ -168,9 +189,3 @@ This app is one component in a broader AI-assisted manga and story production wo
 | AI Voice Comic Maker / AI音声コミックメーカー | Voice comic video generation / フルボイス動画化 | [ai-voice-comic-maker](https://github.com/FURUYAN1234/ai-voice-comic-maker) |
 | Monogatari Buzz Maker / 物語バズメーカー | Trend research and creative planning / トレンド調査・創作企画 | [viral-radar](https://github.com/FURUYAN1234/viral-radar) |
 | Narration Video Maker / ナレーション動画メーカー | Video generation with narration, subtitles, and BGM / ナレーション・字幕・BGM付き動画生成 | [gemini-narration-studio](https://github.com/FURUYAN1234/gemini-narration-studio) |
-
-## Release history / 更新履歴
-
-- **v1.3.0:** first public distribution under the new name; balanced subtitles, automatic BGM, simpler creation controls, thumbnail references and no production-history menu. / **v1.3.0：** 新名称で一般公開。字幕の行割り、自動BGM、動画作成操作、参考画像サムネイルを整理し、制作履歴メニューを撤去しました。
-
-[Previous releases / 過去のリリース](https://github.com/FURUYAN1234/gemini-narration-studio/releases)

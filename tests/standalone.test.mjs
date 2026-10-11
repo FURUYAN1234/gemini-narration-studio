@@ -138,3 +138,9 @@ test('release audit rejects private state or installed packages forcibly staged 
     }
   } finally {assert.equal(path.dirname(root),os.tmpdir());await rm(root,{recursive:true,force:true});}
 });
+
+test('only the public manual PDF is distributable and false PDFs are rejected',async t=>{
+ assert.equal(allowedFile('docs/narration-guide.pdf'),true);
+ for(const name of ['docs/private.pdf','docs/../private.pdf','docs/narration-guide.pdf.exe'])assert.equal(allowedFile(name),false);
+ const dir=await mkdtemp(path.join(os.tmpdir(),'narration-pdf-'));t.after(()=>rm(dir,{recursive:true,force:true}));await mkdir(path.join(dir,'docs'));await writeFile(path.join(dir,'docs/narration-guide.pdf'),'<html>wrong</html>');await assert.rejects(audit(dir),/DOCUMENTATION_PDF_INVALID/);
+});
