@@ -1,4 +1,4 @@
-# Narrated Video Maker / ナレーション動画メーカー v1.3.1
+# Narrated Video Maker / ナレーション動画メーカー v1.3.2
 
 > **Source code available; free to use.** API fees and third-party terms apply separately. / **ソースコード公開・利用無料。** API利用料と第三者の条件は別途適用されます。
 
