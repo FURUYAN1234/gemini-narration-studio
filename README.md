@@ -6,6 +6,8 @@ Turn reference materials and scripts into 16:9 videos with Japanese narration, c
 
 [Download the latest release / 最新版をダウンロード](https://github.com/FURUYAN1234/gemini-narration-studio/releases/latest) · [Public installation guide / 公開導入ページ](https://furuyan1234.github.io/gemini-narration-studio/) · [Japanese beginner PDF / はじめての方向けPDF](docs/narration-guide.pdf)
 
+Use **使い方マニュアル（PDF）** in the app header to read the bundled guide in a separate tab and save it from the PDF viewer. / アプリ上部の **使い方マニュアル（PDF）** から別タブで読めます。保存はPDFビューアーから行えます。ネット接続やAPIキーは不要です。
+
 ![Current app screen / 現在のアプリ実画面](docs/screenshots/workflow-current.jpg)
 
 ## Explain with pictures and diagrams / 画像と図解で伝える

@@ -8,7 +8,7 @@
 
 ## ダウンロードと導入案内
 
-手元で読みたい方は、導入・操作・料金と利用条件をまとめたPDFも使えます。
+手元で読みたい方は、導入・操作・料金と利用条件をまとめたPDFも使えます。 アプリ上部の「使い方マニュアル（PDF）」で開き、PDFの画面から保存できます。
 
 https://furuyan1234.github.io/gemini-narration-studio/narration-guide.pdf
 

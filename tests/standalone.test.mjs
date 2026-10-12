@@ -144,3 +144,31 @@ test('only the public manual PDF is distributable and false PDFs are rejected',a
  for(const name of ['docs/private.pdf','docs/../private.pdf','docs/narration-guide.pdf.exe'])assert.equal(allowedFile(name),false);
  const dir=await mkdtemp(path.join(os.tmpdir(),'narration-pdf-'));t.after(()=>rm(dir,{recursive:true,force:true}));await mkdir(path.join(dir,'docs'));await writeFile(path.join(dir,'docs/narration-guide.pdf'),'<html>wrong</html>');await assert.rejects(audit(dir),/DOCUMENTATION_PDF_INVALID/);
 });
+
+// The guide is a fixed bundled file; reading/saving it must not need a key.
+test('manual opens the bundled PDF without a duplicate save control or exposed paths',async t=>{
+ const {NarrationSession}=await import('../runtime/core.mjs');
+ const {startServer}=await import('../runtime/server.mjs');
+ const {mkdtemp,rm,readFile}=await import('node:fs/promises');
+ const {tmpdir}=await import('node:os');
+ const {fileURLToPath}=await import('node:url');
+ const folder=await mkdtemp(path.join(tmpdir(),'narration-manual-'));
+ const session=await NarrationSession.open({outputDir:folder});
+ const appRoot=fileURLToPath(new URL('../',import.meta.url));
+ const service=await startServer({session,port:0,videoRendererRoot:appRoot});
+ t.after(async()=>{await service.close();await rm(folder,{recursive:true,force:true});});
+ const expected=await readFile(path.join(appRoot,'docs/narration-guide.pdf'));
+ for(const [suffix,disposition] of [['','inline'],['?file=LICENSE','inline']]){
+  const res=await fetch(service.url+'/narration-guide.pdf'+suffix);assert.equal(res.status,200);
+  assert.equal(res.headers.get('content-type'),'application/pdf');
+  assert.equal(res.headers.get('x-content-type-options'),'nosniff');
+  assert.equal(res.headers.get('content-disposition'),disposition+'; filename="narration-guide.pdf"');
+  assert.deepEqual(Buffer.from(await res.arrayBuffer()),expected);
+ }
+ assert.equal((await fetch(service.url+'/docs/LICENSE')).status,404);
+ assert.equal((await fetch(service.url+'/narration-guide.pdf',{headers:{Origin:'https://foreign.invalid'}})).status,403);
+ const html=await(await fetch(service.url+'/')).text();
+ assert.match(html,/<header[^>]*>[\s\S]*使い方マニュアル（PDF）[\s\S]*画面の配色[\s\S]*<\/header>/);
+ assert.match(html,/href="\/narration-guide.pdf" target="_blank" rel="noopener noreferrer"/);
+ assert.doesNotMatch(html,/manual-save|マニュアルPDFをダウンロード|↓ 保存/);
+});

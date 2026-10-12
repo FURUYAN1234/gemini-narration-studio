@@ -114,6 +114,13 @@ export async function startServer({session,port=6181,startupMode='resume',sample
       const route=new URL(req.url,url).pathname;
       if(req.headers.origin&&req.headers.origin!==url)return json(res,403,{error:'FOREIGN_ORIGIN'});
       if(req.method==='GET'){
+        if(route==='/narration-guide.pdf'){
+          if(!rendererRoot)return json(res,404,{error:'MANUAL_NOT_FOUND'});
+          let bytes;try{bytes=await readFile(path.join(rendererRoot,'docs','narration-guide.pdf'));}catch(error){if(error.code==='ENOENT')return json(res,404,{error:'MANUAL_NOT_FOUND'});throw error;}
+          res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Length',bytes.length);
+          res.setHeader('Content-Disposition','inline; filename="narration-guide.pdf"');
+          return res.end(bytes);
+        }
         if(route==='/api/bootstrap')return json(res,200,{token,instanceId});
         if(route==='/api/status')return json(res,200,{...status(),audioInspection:{available:true,model:INSPECTION_MODEL,maxAudioBytes:10_000_000}});
         if(route==='/api/production')return json(res,200,production.status());
