@@ -2,6 +2,10 @@
 
 > **Source code available; free to use.** API fees and third-party terms apply separately. / **ソースコード公開・利用無料。** API利用料と第三者の条件は別途適用されます。
 
+[![ナレーション動画メーカー 配布ページを開く。リンク先: https://furuyan1234.github.io/gemini-narration-studio/](docs/assets/demo-site-button.png)](https://furuyan1234.github.io/gemini-narration-studio/)
+
+Public installation guide / 導入・配布ページ: [https://furuyan1234.github.io/gemini-narration-studio/](https://furuyan1234.github.io/gemini-narration-studio/)
+
 Turn reference materials and scripts into 16:9 videos with Japanese narration, captions, pictures, motion and automatic BGM on Windows. / 参考資料と台本から、日本語ナレーション、字幕、画像、動き、自動BGMのある16:9動画をWindowsで作ります。
 
 [Download the latest release / 最新版をダウンロード](https://github.com/FURUYAN1234/gemini-narration-studio/releases/latest) · [Public installation guide / 公開導入ページ](https://furuyan1234.github.io/gemini-narration-studio/) · [Japanese beginner PDF / はじめての方向けPDF](docs/narration-guide.pdf)
