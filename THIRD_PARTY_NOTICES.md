@@ -13,8 +13,8 @@ Browser setup uses the official [Remotion ensureBrowser API](https://www.remotio
 
 ## Application code and independent terms
 
-The explanatory-scene implementation in runtime/explain-scenes.mjs and runtime/explain-presentation.tsx is original application code under the FURU Application Terms. OpenMontage supplied conceptual inspiration only; its source, templates, assets and packages are not copied, imported or bundled in this distribution. The separately installed OpenMontage project carries its own [AGPL-3.0 license](https://github.com/calesthio/OpenMontage/blob/main/LICENSE) and is not required to use this app.
+The explanatory-scene implementation in runtime/explain-scenes.mjs and runtime/explain-presentation.tsx is original application code under the MIT license in LICENSE. OpenMontage supplied conceptual inspiration only; its source, templates, assets and packages are not copied, imported or bundled in this distribution. The separately installed OpenMontage project carries its own [AGPL-3.0 license](https://github.com/calesthio/OpenMontage/blob/main/LICENSE) and is not required to use this app.
 
-FURU terms do not replace any third-party terms. Remotion 4.0.534 grants free eligibility to individuals, for-profit organizations with up to three employees, nonprofits, and evaluation before commercial use; other entities need a Company License. The exact versioned license above controls; do not infer permission to relicense or resell Remotion from the FURU terms. Check the current official license/FAQ for your situation.
+The MIT license for FURU's code does not replace any third-party terms. Remotion 4.0.534 grants free eligibility to individuals, for-profit organizations with up to three employees, nonprofits, and evaluation before commercial use; other entities need a Company License. The exact versioned license above controls; do not infer permission to relicense or resell Remotion from FURU's MIT license. Check the current official license/FAQ for your situation.
 
-図解機能はFURU利用条件による独自実装です。OpenMontageは演出の考え方の参考であり、コード・テンプレート・素材・パッケージを取り込んでいません。別途導入したOpenMontageのAGPL-3.0と、本アプリの利用条件を混同しないでください。Remotion、React、フォント等の条件と著作権表示はそれぞれ保持します。
+図解機能はMITライセンスによるFURUの独自実装です。OpenMontageは演出の考え方の参考であり、コード・テンプレート・素材・パッケージを取り込んでいません。別途導入したOpenMontageのAGPL-3.0と、FURU本体のMITライセンスを混同しないでください。Remotion、React、フォント等の条件と著作権表示はそれぞれ保持します。
