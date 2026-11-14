@@ -152,7 +152,7 @@
 .emergency-controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 0}.emergency-controls .help{flex:1;min-width:220px}
 button.emergency-stop{background:#b91c1c;color:#fff;border:2px solid #fca5a5;font-weight:800}
 button.emergency-stop:not(:disabled):hover{background:#dc2626;color:#fff}
-button.emergency-stop:disabled{background:#743132;color:#fff;border-color:#bf7c7c;opacity:1;cursor:not-allowed}
+button.emergency-stop:disabled{background:#4b5563;color:#fff;border-color:#9ca3af;opacity:1;cursor:not-allowed}
 button.emergency-stop:focus-visible{outline:3px solid #fde047;outline-offset:3px}
 
 /* Global emergency control stays above content and overlays without crowding the header. */

@@ -1196,3 +1196,18 @@ test('video failure replaces active generation status and does not claim complet
  const ui=await setup({rows:[{id:'one',caption:'字幕。',speech:'よみ。',reviewed:true,audio:{file:'one.wav'},audioCurrent:true}]});await ui.get('generate-all').emit('click');
  ui.externalVideo({running:false,stage:'failed',error:'VIDEO_RENDER_FAILED',result:null});await ui.poll();assert.match(ui.get('message').textContent,/動画を作成できません/);assert.doesNotMatch(ui.get('message').textContent,/作成しています|作成が完了/);
 });
+
+test('disabled emergency stop is neutral gray and readable while active stays red',async()=>{
+ const css=await readFile(new URL('../ui/style.css',import.meta.url),'utf8');
+ const disabled=css.match(/button\.emergency-stop:disabled\s*\{([^}]+)\}/)?.[1];assert.ok(disabled);
+ const active=css.match(/button\.emergency-stop\s*\{([^}]+)\}/)?.[1];assert.ok(active);
+ const rgb=hex=>{const h=hex.length===3?hex.split('').map(x=>x+x).join(''):hex;return [0,2,4].map(n=>parseInt(h.slice(n,n+2),16));};
+ const color=body=>rgb(body.match(/background:\s*#([a-f0-9]+)/i)[1]);
+ const gray=color(disabled),red=color(active);
+ assert.ok(Math.max(...gray)-Math.min(...gray)<=32,'disabled background is neutral gray, not muted red');
+ assert.ok(red[0]>red[1]*2&&red[0]>red[2]*2,'active remains red');
+ const lum=gray.map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((v,c,i)=>v+c*[.2126,.7152,.0722][i],0);
+ assert.ok(1.05/(lum+.05)>=4.5,'white disabled text contrast');
+ assert.match(disabled,/color:\s*#fff/);assert.match(disabled,/opacity:\s*1(?:;|$)/);assert.match(disabled,/cursor:\s*not-allowed/);
+ assert.match(css,/#emergency-stop\s*\{[^}]*top:20px;[^}]*right:12px;/);
+});
