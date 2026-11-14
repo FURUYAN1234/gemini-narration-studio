@@ -172,3 +172,15 @@ test('manual opens the bundled PDF without a duplicate save control or exposed p
  assert.match(html,/href="\/narration-guide.pdf" target="_blank" rel="noopener noreferrer"/);
  assert.doesNotMatch(html,/manual-save|マニュアルPDFをダウンロード|↓ 保存/);
 });
+
+test('the published distribution button has an exact validated image allowlist',async()=>{
+ assert.equal(allowedFile('docs/assets/demo-site-button.png'),true);
+ assert.equal(allowedFile('docs/assets/demo-site-button.svg'),true);
+ for(const file of ['docs/assets/private.png','docs/assets/private.svg','docs/assets/.env.png','docs/assets/../demo-site-button.png','docs/assets/demo-site-button.png.js'])assert.equal(allowedFile(file),false,file);
+ const root=await mkdtemp(path.join(os.tmpdir(),'narration-button-image-'));
+ try{
+  await mkdir(path.join(root,'docs/assets'),{recursive:true});
+  await writeFile(path.join(root,'docs/assets/demo-site-button.png'),'<script>not an image</script>');
+  await assert.rejects(audit(root),/DOCUMENTATION_IMAGE_INVALID/);
+ }finally{await rm(root,{recursive:true,force:true});}
+});

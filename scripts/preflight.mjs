@@ -7,6 +7,7 @@ import {validateAsset} from '../runtime/production.mjs';
 export function allowedFile(relative) {
   if(/(^|\/)(\.git|node_modules|output|data|dist)(\/|$)/.test(relative))return false;
   if(/(^|\/)(\.env[^/]*|\.npmrc|job\.json|production\.json|active-project\.json|video-receipt\.json|credentials[^/]*|auth\.json)$/.test(relative))return false;
+  if(['docs/assets/demo-site-button.png','docs/assets/demo-site-button.svg'].includes(relative))return true;
   return /^(package(-lock)?\.json|\.gitignore|\.gitattributes|start_narration_studio\.bat|launch\.mjs|LICENSE|index\.html|public\/LICENSE\.txt|README\.md|THIRD_PARTY_NOTICES\.md|scripts\/(bootstrap\.ps1|[^/]+\.mjs)|tests\/[^/]+\.test\.mjs|docs\/(narration-guide\.pdf|deploy\.md|publication\.md|note-draft\.md|licenses\/previous-notices\.md|releases\/v\d+\.\d+\.\d+\.md|screenshots\/[A-Za-z0-9_-]+\.(png|jpg|jpeg|webp))|runtime\/[^/]+\.(mjs|tsx)|runtime\/tests\/[^/]+\.test\.mjs|runtime\/ui\/(app\.mjs|index\.html|style\.css)|runtime\/vendor\/[A-Za-z0-9_.\/-]+)$/.test(relative);
 }
 export function validateDependencyAudit(result) {
@@ -35,11 +36,11 @@ export async function audit(root,{tracked=false}={}) {
         const pdf=await readFile(path.join(root,rel));
         if(pdf.subarray(0,5).toString()!=='%PDF-'||!pdf.subarray(-1024).toString().includes('%%EOF'))throw new Error('DOCUMENTATION_PDF_INVALID');
       }
-      if(rel.startsWith('docs/screenshots/')){
+      if(rel.startsWith('docs/screenshots/')||rel==='docs/assets/demo-site-button.png'){
         try{validateAsset(entry.name,await readFile(path.join(root,rel)));}
         catch{throw new Error('DOCUMENTATION_IMAGE_INVALID: '+rel);}
       }
-      if(/\.(json|mjs|tsx|md|html|css|bat|ps1)$/.test(rel)) {
+      if(/\.(json|mjs|tsx|md|html|css|bat|ps1|svg)$/.test(rel)) {
         const text=await readFile(path.join(root,rel),'utf8');
         if(/AIza[\w-]{35}|sk-(?:proj-)?[A-Za-z0-9_-]{24,}|gh[pousr]_[A-Za-z0-9]{30,}/.test(text))throw new Error('RELEASE_SECRET_REJECTED');
         if(rel.startsWith('runtime/vendor/voice-samples/')&&rel.endsWith('.json')) {
