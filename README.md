@@ -1,5 +1,9 @@
 [![Operation guide / 操作 PDF](https://img.shields.io/badge/PDF-Operation%20%2F%20操作-087c86)](https://furuyan1234.github.io/gemini-narration-studio/narration-guide.pdf) [![API setup / API設定 PDF](https://img.shields.io/badge/PDF-API%20setup%20%2F%20API設定-087c86)](https://furuyan1234.github.io/gemini-narration-studio/narration-api-guide.pdf)
 
+[![Read the application manual PDF / 操作マニュアルPDFを読む](docs/assets/manual-pdf-banner.png)](https://furuyan1234.github.io/gemini-narration-studio/narration-guide.pdf)
+
+Operation guide / 操作ガイド: Open the PDF to review the application workflow and controls. / PDFで制作の流れと操作方法を確認できます。
+
 Read both Japanese A4 guides from the app header or the public installation page. / 日本語A4の操作・API設定ガイドは、アプリ上部と公開導入ページから別タブで開けます。
 
 # Narrated Video Maker / ナレーション動画メーカー v1.3.3
@@ -7,6 +11,13 @@ Read both Japanese A4 guides from the app header or the public installation page
 > **MIT License; your outputs remain yours.** You may use, modify, redistribute and sell the app, including in paid products and services, without individual permission from FURU. Retain the copyright and MIT license notices in copies or substantial portions of the software. External API fees and third-party terms are separate. / **アプリはMITライセンス。成果物の権利は従来どおり利用者に帰属します。** アプリの利用・改変・再配布・販売、有料商品やサービスへの組み込みに、FURUへの個別許可は不要です。ソフトウェアの複製または重要な部分には著作権表示とMITの許諾表示を残してください。外部API料金と第三者の条件は別です。
 
 [![ナレーション動画メーカー 配布ページを開く。リンク先: https://furuyan1234.github.io/gemini-narration-studio/](docs/assets/demo-site-button.png)](https://furuyan1234.github.io/gemini-narration-studio/)
+
+[![Download the Windows local app ZIP / Windows用ローカルアプリZIPをダウンロード](docs/assets/local-download-banner.png)](https://github.com/FURUYAN1234/gemini-narration-studio/archive/refs/heads/main.zip)
+
+**Local app ZIP / ローカルアプリZIP:** Download and extract the entire ZIP, then double-click `start_narration_studio.bat` on Windows. Windows 10/11 x64, internet access and your own Gemini API key are required. The launcher prepares missing Node.js/npm. Internet access and the selected provider's API key are required for AI API features; API charges are separate. / ZIP全体をダウンロードしてすべて展開し、Windowsで `start_narration_studio.bat` をダブルクリックします。Windows 10/11 x64・Gemini APIキー。AIのAPI機能にはインターネット接続と利用する事業者のAPIキーが必要で、API利用料金は別途かかります。
+
+The public website is an installation guide. Run the batch file on your PC to create narration and videos. / 公開サイトは導入案内です。ナレーション・動画の制作はPC上でバッチを起動して行います。
+
 
 Public installation guide / 導入・配布ページ: [https://furuyan1234.github.io/gemini-narration-studio/](https://furuyan1234.github.io/gemini-narration-studio/)
 
