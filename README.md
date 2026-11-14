@@ -69,6 +69,8 @@ Node.js is installed for the current user only when absent; the official ZIP has
 
 ## API setup / APIキーの登録
 
+This app uses **Gemini Developer API only**. Prepare a Gemini API key from Google AI Studio; **OpenAI API keys cannot be used**. / このアプリは **Gemini Developer API専用**です。Google AI StudioでGemini APIキーを用意してください。**OpenAI APIキーは使えません**。
+
 Create or manage a key in [Google AI Studio](https://aistudio.google.com/api-keys); consult the [official key guide](https://ai.google.dev/gemini-api/docs/api-key). / [Google AI Studio](https://aistudio.google.com/api-keys)でキーを作成・確認します。操作は[Google公式のキー案内](https://ai.google.dev/gemini-api/docs/api-key)も確認してください。
 
 Open the API section at the top, enter the key in the app and register it. Use the connection check before sending materials. A registered key alone does not prove access to every generation model. / アプリ上部のAPI欄を開き、キーを入力して登録します。素材を送信する前に接続確認を行ってください。登録済みの表示だけで全生成モデルの利用権限があるとは限りません。
