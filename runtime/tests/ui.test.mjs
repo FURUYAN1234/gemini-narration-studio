@@ -285,7 +285,7 @@ for(const step of ['planning','connection','reading','finish'])test(step+' allow
  await ui.get('resume-workflow').emit('click');assert.equal(ui.get(step).hidden,false);assert.equal(ui.get('workflow-paused').hidden,true);assert.equal(ui.location.hash,'#'+step);assert.equal(ui.textArea('one','speech').value,'保存前のよみ');assert.equal(ui.get('production-instructions').value,'保存前の制作指示');
 });
 test('workflow interruption is available before reading approvals and saved paused view reloads without a provider request',async()=>{
- const empty=await setup({rows:[]});empty.restart();await empty.poll();assert.equal(empty.get('cancel-planning').disabled,false);await empty.get('cancel-planning').emit('click');assert.equal(empty.get('workflow-paused').hidden,false);
+ const empty=await setup({rows:[]});empty.restart();await empty.poll();assert.equal(empty.get('cancel-planning').disabled,true);assert.equal(empty.get('cancel').disabled,true);await empty.edit(empty.get('production-instructions'),'未保存の制作指示');assert.equal(empty.get('cancel-planning').disabled,false);assert.equal(empty.get('cancel-planning').textContent,'制作画面を一時退避');await empty.get('cancel-planning').emit('click');assert.equal(empty.get('workflow-paused').hidden,false);
  const restored=await setup({pausedStep:'reading'});assert.equal(restored.get('workflow-paused').hidden,false);assert.equal(restored.get('reading').hidden,true);await restored.get('resume-workflow').emit('click');assert.equal(restored.location.hash,'#reading');assert.equal(restored.requests.some(r=>['generate','cancel','draft'].includes(r.route)),false);
  assert.doesNotMatch(html,/<a href="#reading">全文確認へ進む<\/a>/);
 });
@@ -1135,4 +1135,28 @@ test('switching automatic direction on does not present a retained proposal as n
  const ui=await setup({rows:[],sourcePlan});await ui.edit(ui.get('source-text'),'参考本文');await ui.get('generate-script').emit('click');assert.equal(ui.get('direction-sample').hidden,false);
  ui.get('auto-direction').checked=false;await ui.get('auto-direction').emit('change');ui.get('auto-direction').checked=true;await ui.get('auto-direction').emit('change');assert.equal(ui.get('direction-sample').hidden,true);assert.doesNotMatch(ui.get('direction-info').textContent,/AIの提案/);assert.equal(ui.requests.filter(r=>r.route==='source-plan').length,1);
  await ui.sendScript({confirmOverwrite:true});assert.equal(ui.get('direction-sample').hidden,false);
+});
+
+
+test('emergency stop is disabled at idle, enabled during AI wait, and separate from idle workflow pause',async()=>{
+ const ui=await setup({rows:[]});
+ assert.equal(ui.get('emergency-stop').disabled,true);
+ assert.equal(ui.get('cancel-planning').disabled,true);
+ ui.externalBusy(true);await ui.poll();
+ assert.equal(ui.get('emergency-stop').disabled,false);
+ assert.match(ui.get('emergency-stop').textContent,/緊急停止/);
+ assert.equal(ui.get('emergency-stop').classList.contains('emergency-stop'),true);
+ await ui.get('emergency-stop').emit('click');
+ assert.equal(ui.requests.filter(r=>r.route==='cancel').length,1);
+ assert.equal(ui.get('emergency-stop').disabled,true);
+ assert.equal(ui.requests.some(r=>r.route==='unapprove'),false);
+});
+
+test('empty initial API setup hides the emergency dock and reservation, while local work or real activity keeps it reachable',async()=>{
+ const ui=await setup({rows:[]});await ui.get('clear-key').emit('click');
+ assert.equal(ui.get('emergency-controls').hidden,true);assert.equal(ui.get('emergency-stop').disabled,true);
+ ui.externalBusy(true);await ui.poll();assert.equal(ui.get('emergency-controls').hidden,false);assert.equal(ui.get('emergency-stop').disabled,false);
+ ui.externalBusy(false);await ui.poll();assert.equal(ui.get('emergency-controls').hidden,true);
+ const local=await setup();await local.get('clear-key').emit('click');assert.equal(local.get('emergency-controls').hidden,false);assert.equal(local.get('emergency-stop').disabled,true);
+ ui.get('api-key').value='fixture-value';await ui.get('key-form').emit('submit');assert.equal(ui.get('emergency-controls').hidden,false);assert.equal(ui.get('emergency-stop').disabled,true);
 });

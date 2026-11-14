@@ -6,7 +6,7 @@ Operation guide / 操作ガイド: Open the PDF to review the application workfl
 
 Read both Japanese A4 guides from the app header or the public installation page. / 日本語A4の操作・API設定ガイドは、アプリ上部と公開導入ページから別タブで開けます。
 
-# Narrated Video Maker / ナレーション動画メーカー v1.3.3
+# Narrated Video Maker / ナレーション動画メーカー v1.3.4
 
 > **MIT License; your outputs remain yours.** You may use, modify, redistribute and sell the app, including in paid products and services, without individual permission from FURU. Retain the copyright and MIT license notices in copies or substantial portions of the software. External API fees and third-party terms are separate. / **アプリはMITライセンス。成果物の権利は従来どおり利用者に帰属します。** アプリの利用・改変・再配布・販売、有料商品やサービスへの組み込みに、FURUへの個別許可は不要です。ソフトウェアの複製または重要な部分には著作権表示とMITの許諾表示を残してください。外部API料金と第三者の条件は別です。
 
@@ -170,3 +170,14 @@ This app is one component in a broader AI-assisted manga and story production wo
 | Japanese Narration / 日本語おまかせナレーション | Voice consultation and speech synthesis / 声の相談・音声生成 | [GitHub](https://github.com/FURUYAN1234/ComfyUI-Local-Narration-Japanese) · [Guide / 解説](https://note.com/happy_duck780/n/nda7ed302d544) |
 | MangaScreen JP / 日本語操作・原寸出力対応版 | Manga lines, fills and screentones / 漫画の線画・ベタ・網点処理 | [GitHub](https://github.com/FURUYAN1234/ComfyUI-MangaScreen-JP) · [Guide / 解説](https://note.com/happy_duck780/n/n5c89a250fb82) |
 | Codex Usage / Codex 残量 | Windows usage overlay / Windows用の利用枠表示ツール | [GitHub / ソースコード](https://github.com/FURUYAN1234/codex-usage-overlay) |
+
+
+### Emergency stop and workflow pause / 緊急停止と制作の中断
+
+Use the red “緊急停止（処理を中止）” during AI communication or video processing. It is disabled when idle or already stopped. Existing scripts, materials and audio are preserved; provider-side processing or billing cancellation is not guaranteed. / AI通信・動画処理中は画面右上に固定した赤い「緊急停止（処理を中止）」を押せます。待機中・停止済みは無効です。台本・素材・音声を保持しますが、API提供元での処理・課金停止は保証しません。
+
+The separate “制作画面を一時退避” control pauses the idle production view, and “制作を再開” returns to it. It does not submit another AI request or undo approved readings. / 別操作の「制作画面を一時退避」は待機中の制作画面を一時退避し、「制作を再開」で戻ります。AI再送信や確定した読みの取り消しは行いません。
+
+Initial empty API setup hides the emergency control and its reserved space; active requests and an opened/local workspace retain the normal stop control. / 初期のAPI未設定・空の制作では表示せず、キー設定後・既存のローカル制作・処理中に表示します。
+
+An empty setup disables workflow pause as well. Once the production has content, “制作画面を一時退避” retains the local view; active work uses emergency cancellation. / 空の初期設定では一時退避も無効です。内容のある制作では「制作画面を一時退避」で入力を保持し、処理中は緊急停止へ切り替わります。

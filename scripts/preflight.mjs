@@ -7,8 +7,8 @@ import {validateAsset} from '../runtime/production.mjs';
 export function allowedFile(relative) {
   if(/(^|\/)(\.git|node_modules|output|data|dist)(\/|$)/.test(relative))return false;
   if(/(^|\/)(\.env[^/]*|\.npmrc|job\.json|production\.json|active-project\.json|video-receipt\.json|credentials[^/]*|auth\.json)$/.test(relative))return false;
-  if(['docs/assets/demo-site-button.png','docs/assets/demo-site-button.svg'].includes(relative))return true;
-  return /^(package(-lock)?\.json|\.gitignore|\.gitattributes|start_narration_studio\.bat|launch\.mjs|LICENSE|index\.html|public\/LICENSE\.txt|README\.md|THIRD_PARTY_NOTICES\.md|scripts\/(bootstrap\.ps1|[^/]+\.mjs)|tests\/[^/]+\.test\.mjs|docs\/(narration-(?:api-)?guide\.pdf|manuals\/(?:build_api_guide\.py|api_guide_content\.json|README\.md)|deploy\.md|publication\.md|note-draft\.md|licenses\/(?:previous-notices\.md|furu-application-terms-2026-10-08\.txt)|releases\/v\d+\.\d+\.\d+\.md|screenshots\/[A-Za-z0-9_-]+\.(png|jpg|jpeg|webp))|runtime\/[^/]+\.(mjs|tsx)|runtime\/tests\/[^/]+\.test\.mjs|runtime\/ui\/(app\.mjs|index\.html|style\.css)|runtime\/vendor\/[A-Za-z0-9_.\/-]+)$/.test(relative);
+  if(['docs/assets/demo-site-button.png','docs/assets/demo-site-button.svg','docs/assets/local-download-banner.png','docs/assets/manual-pdf-banner.png'].includes(relative))return true;
+  return /^(package(-lock)?\.json|\.gitignore|\.gitattributes|start_narration_studio\.bat|launch\.mjs|LICENSE|index\.html|public\/LICENSE\.txt|README\.md|THIRD_PARTY_NOTICES\.md|scripts\/(bootstrap\.ps1|[^/]+\.mjs)|tests\/[^/]+\.test\.mjs|docs\/(narration-(?:api-)?guide\.pdf|manuals\/(?:build_api_guide\.py|update_operation_guide\.py|api_guide_content\.json|README\.md)|deploy\.md|publication\.md|note-draft\.md|licenses\/(?:previous-notices\.md|furu-application-terms-2026-10-08\.txt)|releases\/v\d+\.\d+\.\d+\.md|screenshots\/[A-Za-z0-9_-]+\.(png|jpg|jpeg|webp))|runtime\/[^/]+\.(mjs|tsx)|runtime\/tests\/[^/]+\.test\.mjs|runtime\/ui\/(app\.mjs|index\.html|style\.css)|runtime\/vendor\/[A-Za-z0-9_.\/-]+)$/.test(relative);
 }
 export function validateDependencyAudit(result) {
   const counts=result?.metadata?.vulnerabilities;
@@ -36,7 +36,7 @@ export async function audit(root,{tracked=false}={}) {
         const pdf=await readFile(path.join(root,rel));
         if(pdf.subarray(0,5).toString()!=='%PDF-'||!pdf.subarray(-1024).toString().includes('%%EOF'))throw new Error('DOCUMENTATION_PDF_INVALID');
       }
-      if(rel.startsWith('docs/screenshots/')||rel==='docs/assets/demo-site-button.png'){
+      if(rel.startsWith('docs/screenshots/')||['docs/assets/demo-site-button.png','docs/assets/local-download-banner.png','docs/assets/manual-pdf-banner.png'].includes(rel)){
         try{validateAsset(entry.name,await readFile(path.join(root,rel)));}
         catch{throw new Error('DOCUMENTATION_IMAGE_INVALID: '+rel);}
       }

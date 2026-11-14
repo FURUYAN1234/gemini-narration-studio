@@ -192,3 +192,9 @@ test('the published distribution button has an exact validated image allowlist',
   await assert.rejects(audit(root),/DOCUMENTATION_IMAGE_INVALID/);
  }finally{await rm(root,{recursive:true,force:true});}
 });
+
+test('release allows only the named public README banners and operation supplement source',()=>{
+ for(const name of ['local-download-banner.png','manual-pdf-banner.png'])assert.equal(allowedFile('docs/assets/'+name),true);
+ assert.equal(allowedFile('docs/manuals/update_operation_guide.py'),true);
+ for(const name of ['private.png','local-download-banner.png.js','../local-download-banner.png'])assert.equal(allowedFile('docs/assets/'+name),false);
+});
