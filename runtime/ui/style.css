@@ -145,3 +145,5 @@
 
 /* The manual remains reachable before setup and at every production step. */
 .top{min-height:84px;height:auto;flex-wrap:wrap;padding-top:14px;padding-bottom:14px;gap:16px}.manual-links{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.manual-button{display:inline-flex;align-items:center;min-height:44px;padding:10px 14px;border:1px solid var(--border);border-radius:9px;color:var(--fg);background:var(--panel);text-decoration:none;font-size:13px;font-weight:700;white-space:nowrap}.manual-button:hover{border-color:var(--accent)}@media(max-width:460px){.manual-links{width:100%;gap:12px}.manual-button{font-size:12px}}
+
+@media (max-width: 360px) { .manual-links { width:100%; flex-direction:column; align-items:stretch; } .manual-button { width:100%; justify-content:center; } }

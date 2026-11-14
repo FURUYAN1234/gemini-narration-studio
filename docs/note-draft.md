@@ -169,3 +169,11 @@ https://www.remotion.dev/docs/license
 漫画画像に台詞やカメラ演出を付けたい場合は、AI Voice Comic Makerも使えます。こちらは漫画画像からの動画制作を紹介した記事です。
 
 https://note.com/happy_duck780/n/ndc6533c1512f
+
+
+## v1.3.3追記候補（公開前）
+
+操作ガイドに加え、Gemini APIの準備、課金、キーの保持範囲、工程別の送信内容をまとめたAPI設定ガイドもPDFで読めます。アプリ上部・導入ページのボタンから別タブで開き、PDFビューアーから保存できます。既存本文・画像・埋め込みを保持し、次のPDFリンクを追記します。
+
+API設定ガイド（PDF）
+https://furuyan1234.github.io/gemini-narration-studio/narration-api-guide.pdf

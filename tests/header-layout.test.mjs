@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {openBrowser} from '@remotion/renderer';
 
-test('header centers mixed-size title text and retains one readable manual link at wide and narrow widths',async t=>{
+test('header centers mixed-size title text and retains two readable PDF guide links at wide and narrow widths',async t=>{
  const root=path.resolve(import.meta.dirname,'..');
  const html=await readFile(path.join(root,'runtime/ui/index.html'),'utf8');
  const css=await readFile(path.join(root,'runtime/ui/style.css'),'utf8');
@@ -20,10 +20,10 @@ test('header centers mixed-size title text and retains one readable manual link 
    const title=document.querySelector('.brand span'),brand=title.parentElement,manual=document.querySelector('.manual-button');
    const rect=e=>{const r=document.createRange();r.selectNodeContents(e);return r.getBoundingClientRect();};
    const text=rect(title),box=brand.getBoundingClientRect(),button=manual.getBoundingClientRect();
-   return {offset:Math.abs((text.top+text.bottom-box.top-box.bottom)/2),width:innerWidth,scrollWidth:document.documentElement.scrollWidth,manualLeft:button.left,manualRight:button.right,manualCount:document.querySelectorAll('.manual-button').length,extra:document.querySelectorAll('.manual-save').length};
+   return {offset:Math.abs((text.top+text.bottom-box.top-box.bottom)/2),width:innerWidth,scrollWidth:document.documentElement.scrollWidth,manualLeft:button.left,manualRight:button.right,buttons:[...document.querySelectorAll('.manual-button')].map(e=>({left:e.getBoundingClientRect().left,right:e.getBoundingClientRect().right,href:e.getAttribute('href'),target:e.target})),manualCount:document.querySelectorAll('.manual-button').length,extra:document.querySelectorAll('.manual-save').length};
   });
   assert.ok(observed.offset<2,JSON.stringify({width,...observed}));
-  assert.equal(observed.manualCount,1);assert.equal(observed.extra,0);
+  assert.equal(observed.manualCount,2);assert.deepEqual(observed.buttons.map(b=>b.href),['/narration-guide.pdf','/narration-api-guide.pdf']);for(const b of observed.buttons){assert.equal(b.target,'_blank');assert.ok(b.left>=0&&b.right<=width,JSON.stringify({width,b}));}assert.equal(observed.extra,0);
   assert.ok(observed.manualLeft>=0&&observed.manualRight<=width);assert.ok(observed.scrollWidth<=width);
  }
 });

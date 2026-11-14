@@ -46,7 +46,7 @@ test('reject invalid launch arguments',()=>{
   for(const args of [['--port','0'],['--port','6181.2'],['--port','70000'],['--output'],['--api-key','secret']])assert.throws(()=>options(args));
 });
 test('distribution permits source and samples but rejects private state and settings',()=>{
-  for(const file of ['launch.mjs','scripts/bootstrap.ps1','docs/publication.md','docs/note-draft.md','package-lock.json','runtime/core.mjs','runtime/vendor/voice-samples/abc.wav','runtime/vendor/sources.json'])assert.equal(allowedFile(file),true,file);
+  for(const file of ['docs/licenses/furu-application-terms-2026-10-08.txt','launch.mjs','scripts/bootstrap.ps1','docs/publication.md','docs/note-draft.md','package-lock.json','runtime/core.mjs','runtime/vendor/voice-samples/abc.wav','runtime/vendor/sources.json'])assert.equal(allowedFile(file),true,file);
   for(const file of ['.env','runtime/job.json','runtime/vendor/production.json','data/job.json','node_modules/a.js','runtime/vendor/.npmrc','output/private.png','runtime/private.txt'])assert.equal(allowedFile(file),false,file);
 });
 test('documentation screenshots stay in a narrow image-only release directory',async()=>{
@@ -140,8 +140,8 @@ test('release audit rejects private state or installed packages forcibly staged 
 });
 
 test('only the public manual PDF is distributable and false PDFs are rejected',async t=>{
- assert.equal(allowedFile('docs/narration-guide.pdf'),true);assert.equal(allowedFile('.gitattributes'),true);
- for(const name of ['docs/private.pdf','docs/../private.pdf','docs/narration-guide.pdf.exe'])assert.equal(allowedFile(name),false);
+ assert.equal(allowedFile('docs/narration-guide.pdf'),true);assert.equal(allowedFile('docs/narration-api-guide.pdf'),true);assert.equal(allowedFile('docs/manuals/api_guide_content.json'),true);assert.equal(allowedFile('.gitattributes'),true);
+ for(const name of ['docs/private.pdf','docs/../private.pdf','docs/narration-guide.pdf.exe','docs/narration-api-guide.pdf.exe','docs/manuals/private.json'])assert.equal(allowedFile(name),false);
  const dir=await mkdtemp(path.join(os.tmpdir(),'narration-pdf-'));t.after(()=>rm(dir,{recursive:true,force:true}));await mkdir(path.join(dir,'docs'));await writeFile(path.join(dir,'docs/narration-guide.pdf'),'<html>wrong</html>');await assert.rejects(audit(dir),/DOCUMENTATION_PDF_INVALID/);
 });
 
@@ -165,11 +165,19 @@ test('manual opens the bundled PDF without a duplicate save control or exposed p
   assert.equal(res.headers.get('content-disposition'),disposition+'; filename="narration-guide.pdf"');
   assert.deepEqual(Buffer.from(await res.arrayBuffer()),expected);
  }
+ const apiExpected=await readFile(path.join(appRoot,'docs/narration-api-guide.pdf'));
+ const apiPdf=await fetch(service.url+'/narration-api-guide.pdf?file=LICENSE');
+ assert.equal(apiPdf.status,200);assert.equal(apiPdf.headers.get('content-type'),'application/pdf');
+ assert.equal(apiPdf.headers.get('content-disposition'),'inline; filename="narration-api-guide.pdf"');
+ assert.deepEqual(Buffer.from(await apiPdf.arrayBuffer()),apiExpected);
+ assert.equal((await fetch(service.url+'/narration-api-guide.pdf',{headers:{Origin:'https://foreign.invalid'}})).status,403);
+ assert.equal((await fetch(service.url+'/private.pdf')).status,404);
  assert.equal((await fetch(service.url+'/docs/LICENSE')).status,404);
  assert.equal((await fetch(service.url+'/narration-guide.pdf',{headers:{Origin:'https://foreign.invalid'}})).status,403);
  const html=await(await fetch(service.url+'/')).text();
  assert.match(html,/<header[^>]*>[\s\S]*使い方マニュアル（PDF）[\s\S]*画面の配色[\s\S]*<\/header>/);
  assert.match(html,/href="\/narration-guide.pdf" target="_blank" rel="noopener noreferrer"/);
+ assert.match(html,/href="\/narration-api-guide.pdf" target="_blank" rel="noopener noreferrer"/);
  assert.doesNotMatch(html,/manual-save|マニュアルPDFをダウンロード|↓ 保存/);
 });
 

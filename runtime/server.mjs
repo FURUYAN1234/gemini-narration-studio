@@ -114,11 +114,11 @@ export async function startServer({session,port=6181,startupMode='resume',sample
       const route=new URL(req.url,url).pathname;
       if(req.headers.origin&&req.headers.origin!==url)return json(res,403,{error:'FOREIGN_ORIGIN'});
       if(req.method==='GET'){
-        if(route==='/narration-guide.pdf'){
+        if(['/narration-guide.pdf','/narration-api-guide.pdf'].includes(route)){
           if(!rendererRoot)return json(res,404,{error:'MANUAL_NOT_FOUND'});
-          let bytes;try{bytes=await readFile(path.join(rendererRoot,'docs','narration-guide.pdf'));}catch(error){if(error.code==='ENOENT')return json(res,404,{error:'MANUAL_NOT_FOUND'});throw error;}
+          let bytes;try{bytes=await readFile(path.join(rendererRoot,'docs',route.slice(1)));}catch(error){if(error.code==='ENOENT')return json(res,404,{error:'MANUAL_NOT_FOUND'});throw error;}
           res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Length',bytes.length);
-          res.setHeader('Content-Disposition','inline; filename="narration-guide.pdf"');
+          res.setHeader('Content-Disposition','inline; filename="'+route.slice(1)+'"');
           return res.end(bytes);
         }
         if(route==='/api/bootstrap')return json(res,200,{token,instanceId});
