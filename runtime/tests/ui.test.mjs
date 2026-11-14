@@ -299,10 +299,10 @@ for(const control of ['unconfirm-script'])test(control+' can undo idle reading c
 });
 test('final seal hides reading undo/next actions and active synthesis keeps cancellation as execution cancellation',async()=>{
  const sealed=await setup({rows:[{id:'one',caption:'字幕。',speech:'よみ。',reviewed:true,audio:{file:'one.wav'},audioCurrent:true}]});await previewReady(sealed);await sealed.get('confirm-full').emit('click');assert.equal(sealed.get('unconfirm-script').hidden,true);assert.equal(sealed.get('reading-next').hidden,true);assert.equal(sealed.get('cancel').disabled,false);
- const active=await setup();active.externalBusy(true);await active.poll();assert.equal(active.get('unconfirm-script').disabled,true);assert.equal(active.get('cancel').disabled,false);assert.match(active.get('cancel').textContent,/処理を中止/);await active.get('cancel').emit('click');assert.equal(active.requests.filter(r=>r.route==='cancel').length,1);assert.equal(active.requests.some(r=>r.route==='unapprove'),false);
+ const active=await setup();active.externalBusy(true);await active.poll();assert.equal(active.get('unconfirm-script').disabled,true);assert.equal(active.get('cancel').hidden,true);assert.equal(active.get('emergency-stop').disabled,false);assert.match(active.get('emergency-stop').textContent,/処理を中止/);await active.get('emergency-stop').emit('click');assert.equal(active.requests.filter(r=>r.route==='cancel').length,1);assert.equal(active.requests.some(r=>r.route==='unapprove'),false);
 });
 test('cancellation stays usable while the AI request promise itself is still pending',async()=>{
- let release;const draftWait=new Promise(r=>release=r),ui=await setup({draftWait,rows:[]});await ui.edit(ui.get('production-instructions'),'作成指示');const running=ui.sendScript({confirmOverwrite:true});await new Promise(r=>setImmediate(r));await ui.poll();assert.equal(ui.state().busy,true);assert.equal(ui.get('cancel').disabled,false);await ui.get('cancel').emit('click');assert.equal(ui.get('workflow-paused').hidden,true);release();await running;assert.equal(ui.get('workflow-paused').hidden,false);assert.equal(ui.requests.filter(r=>r.route==='cancel').length,1);assert.equal(ui.requests.some(r=>r.route==='unapprove'),false);
+ let release;const draftWait=new Promise(r=>release=r),ui=await setup({draftWait,rows:[]});await ui.edit(ui.get('production-instructions'),'作成指示');const running=ui.sendScript({confirmOverwrite:true});await new Promise(r=>setImmediate(r));await ui.poll();assert.equal(ui.state().busy,true);assert.equal(ui.get('emergency-stop').disabled,false);await ui.get('emergency-stop').emit('click');assert.equal(ui.get('workflow-paused').hidden,true);release();await running;assert.equal(ui.get('workflow-paused').hidden,false);assert.equal(ui.requests.filter(r=>r.route==='cancel').length,1);assert.equal(ui.requests.some(r=>r.route==='unapprove'),false);
 });
 
 test('AI hiragana readings survive local saving/polling and are passed into review without another provider request',async()=>{
@@ -325,7 +325,7 @@ test('local saving reports completion beside its separated control and reading n
 test('current production distinguishes editing from finalized viewing and active video can be canceled without publishing',async()=>{
  const ui=await setup({rows:[{id:'one',caption:'字幕。',speech:'よみ。',reviewed:true,audio:{file:'one.wav'},audioCurrent:true}]});assert.equal(!!ui.state().production.finalization,false);
  await previewReady(ui);await ui.get('confirm-full').emit('click');assert.ok(ui.state().production.finalization);assert.equal(ui.get('cancel').disabled,false);
- ui.externalVideo({running:true,stage:'rendering',steps:['preparing','bundling','rendering']});await ui.poll();await ui.get('cancel').emit('click');assert.equal(ui.state().video.stage,'canceled');assert.equal(ui.get('video-result').hidden,true);assert.equal(ui.get('video-spinner').hidden,true);assert.equal(ui.get('cancel').disabled,true);assert.match(ui.get('cancel-status').textContent,/中止/);assert.match(ui.get('video-stages').children.at(-1).textContent,/中止/);assert.equal(ui.get('confirm-full').textContent,'動画生成を再開する');assert.equal(ui.requests.filter(r=>r.route==='cancel').length,1);assert.equal(ui.requests.some(r=>r.route==='generate'),false);
+ ui.externalVideo({running:true,stage:'rendering',steps:['preparing','bundling','rendering']});await ui.poll();await ui.get('emergency-stop').emit('click');assert.equal(ui.state().video.stage,'canceled');assert.equal(ui.get('video-result').hidden,true);assert.equal(ui.get('video-spinner').hidden,true);assert.equal(ui.get('cancel').disabled,true);assert.match(ui.get('cancel-status').textContent,/中止/);assert.match(ui.get('video-stages').children.at(-1).textContent,/中止/);assert.equal(ui.get('confirm-full').textContent,'動画生成を再開する');assert.equal(ui.requests.filter(r=>r.route==='cancel').length,1);assert.equal(ui.requests.some(r=>r.route==='generate'),false);
 });
 
 test('automatic AI choices cannot block a genuinely empty new production or cause a false new-project label',async()=>{
@@ -765,6 +765,8 @@ async function setup({beforeBootstrap,adoptionWait,adoptionError,titleReading,im
     observeScroll: callback => {context.window.scrollTo=callback;},
     resize:()=>resizes.forEach(callback=>callback()),
     state: () => structuredClone(state),
+    externalError: value=>{state.error=value;},
+    cancelButtons: ()=>all().filter(node=>node.dataset.cancel!==undefined),
     poll: async () => {assert.equal(intervals.length, 1); await intervals[0]();},
     restart: () => {state.instanceId = 'instance-2'; state.keyConfigured = false; token = 'fixture-token-2';},
     externalEdit: (id,input) => {Object.assign(state.rows.find(r=>r.id===id),input,{reviewed:false});state.revision='revision-'+ ++revision;},
@@ -1159,4 +1161,38 @@ test('empty initial API setup hides the emergency dock and reservation, while lo
  ui.externalBusy(false);await ui.poll();assert.equal(ui.get('emergency-controls').hidden,true);
  const local=await setup();await local.get('clear-key').emit('click');assert.equal(local.get('emergency-controls').hidden,false);assert.equal(local.get('emergency-stop').disabled,true);
  ui.get('api-key').value='fixture-value';await ui.get('key-form').emit('submit');assert.equal(ui.get('emergency-controls').hidden,false);assert.equal(ui.get('emergency-stop').disabled,true);
+});
+
+test('only the upper-right emergency stop is visible during script or video work; idle pause and restart remain available',async()=>{
+ for(const video of [false,true]){
+  const ui=await setup();const before=ui.state().rows;
+  if(video)ui.externalVideo({running:true,stage:'rendering'});else ui.externalBusy(true);
+  await ui.poll();
+  const visible=ui.cancelButtons().filter(button=>{for(let node=button;node;node=node.parent)if(node.hidden)return false;return true;});
+  assert.deepEqual(visible.map(button=>button.attributes.id),['emergency-stop']);
+  assert.equal(ui.get('emergency-stop').disabled,false);
+  for(const button of ui.cancelButtons())if(button!==ui.get('emergency-stop'))assert.equal(button.hidden,true);
+  await ui.get('emergency-stop').emit('click');await ui.poll();assert.equal(ui.get('emergency-stop').disabled,true);
+  await ui.get('resume-workflow').emit('click');assert.deepEqual(ui.state().rows,before);assert.equal(ui.get('cancel-planning').hidden,false);assert.equal(ui.get('cancel-planning').textContent,'制作画面を一時退避');
+  ui.externalBusy(true);await ui.poll();assert.equal(ui.get('emergency-stop').disabled,false);assert.equal(ui.get('cancel-planning').hidden,true);
+ }
+});
+test('cancelled script work and late status polling use operation-neutral preservation copy',async()=>{
+ const ui=await setup({rows:[]});ui.externalBusy(true);await ui.poll();ui.externalBusy(false);ui.externalError('CANCELED');
+ await ui.poll();assert.match(ui.get('message').textContent,/処理を中止しました/);assert.match(ui.get('message').textContent,/台本・素材・作成済みの成果/);assert.doesNotMatch(ui.get('message').textContent,/合成を中止|完成済みの音声/);
+ await ui.poll();assert.doesNotMatch(ui.get('message').textContent,/合成を中止/);
+});
+
+test('new video work clears old script cancellation and completed output replaces running text across later polls',async()=>{
+ const ui=await setup({rows:[{id:'one',caption:'字幕。',speech:'よみ。',reviewed:true,audio:{file:'one.wav'},audioCurrent:true}]});
+ ui.externalError('CANCELED');await ui.poll();const old=ui.get('message').textContent;ui.get('script-status').textContent=old;ui.get('script-status').classList.add('error');
+ await ui.get('generate-all').emit('click');assert.equal(ui.get('script-status').textContent,'');assert.equal(ui.get('script-status').classList.contains('error'),false);
+ ui.externalVideo({running:false,stage:'complete',progress:1,result:{file:'a'.repeat(64)+'.mp4',filename:'Video.mp4',savedPath:'Downloads/Video.mp4',audio:{file:'b'.repeat(64)+'.m4a',filename:'Audio.m4a',savedPath:'Downloads/Audio.m4a'}}});
+ await ui.poll();assert.match(ui.get('message').textContent,/動画と音声.*完了/);assert.doesNotMatch(ui.get('message').textContent,/作成しています|合成を中止|処理を中止/);const complete=ui.get('message').textContent;
+ await ui.poll();assert.equal(ui.get('message').textContent,complete);assert.equal(ui.get('video-spinner').hidden,true);
+});
+
+test('video failure replaces active generation status and does not claim completion',async()=>{
+ const ui=await setup({rows:[{id:'one',caption:'字幕。',speech:'よみ。',reviewed:true,audio:{file:'one.wav'},audioCurrent:true}]});await ui.get('generate-all').emit('click');
+ ui.externalVideo({running:false,stage:'failed',error:'VIDEO_RENDER_FAILED',result:null});await ui.poll();assert.match(ui.get('message').textContent,/動画を作成できません/);assert.doesNotMatch(ui.get('message').textContent,/作成しています|作成が完了/);
 });

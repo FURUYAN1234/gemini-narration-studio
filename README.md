@@ -176,7 +176,7 @@ This app is one component in a broader AI-assisted manga and story production wo
 
 ### Emergency stop and workflow pause / 緊急停止と制作の中断
 
-Use the red “緊急停止（処理を中止）” during AI communication or video processing. It is disabled when idle or already stopped. Existing scripts, materials and audio are preserved; provider-side processing or billing cancellation is not guaranteed. / AI通信・動画処理中は画面右上に固定した赤い「緊急停止（処理を中止）」を押せます。待機中・停止済みは無効です。台本・素材・音声を保持しますが、API提供元での処理・課金停止は保証しません。
+Use the single red upper-right “緊急停止（処理を中止）” during AI communication or video processing; the older section pause controls are hidden while processing. It is disabled when idle or already stopped. Existing scripts, materials and audio are preserved; provider-side processing or billing cancellation is not guaranteed. / AI通信・動画処理中は画面右上に固定した赤い「緊急停止（処理を中止）」1つを表示し、各工程の一時退避ボタンは隠します。待機中・停止済みは無効です。台本・素材・音声を保持しますが、API提供元での処理・課金停止は保証しません。
 
 The separate “制作画面を一時退避” control pauses the idle production view, and “制作を再開” returns to it. It does not submit another AI request or undo approved readings. / 別操作の「制作画面を一時退避」は待機中の制作画面を一時退避し、「制作を再開」で戻ります。AI再送信や確定した読みの取り消しは行いません。
 
