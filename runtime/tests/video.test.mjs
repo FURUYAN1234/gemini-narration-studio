@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';
+import {access,mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {StudioVideo,mediaRange,downloadName,fullDecodeVideo,extractVideoAudio,findRendererRoot,renderErrorCode} from '../video.mjs';
@@ -51,8 +51,11 @@ test('one authorized action generates audio then video without inventing listeni
 });
 
 test('bundled FFmpeg fully decodes real video and audio but rejects a corrupt MP4',async t=>{
- const root=await findRendererRoot(process.cwd());if(!root||process.platform!=='win32'){t.skip('Existing Windows Remotion runtime required');return;}
- const dir=await directory(t),ffmpeg=path.join(root,'node_modules','@remotion','compositor-win32-x64-msvc','ffmpeg.exe');
+ if(process.platform!=='win32'){t.skip('Windows Remotion runtime required');return;}
+ const root=await findRendererRoot(process.cwd())??path.resolve(import.meta.dirname,'../..');
+ const ffmpeg=path.join(root,'node_modules','@remotion','compositor-win32-x64-msvc','ffmpeg.exe');
+ if(!await access(ffmpeg).then(()=>true,()=>false)){t.skip('Bundled FFmpeg required');return;}
+ const dir=await directory(t);
  const wav=Buffer.alloc(44+4800);wav.write('RIFF');wav.writeUInt32LE(wav.length-8,4);wav.write('WAVE',8);wav.write('fmt ',12);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(24000,24);wav.writeUInt32LE(48000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(4800,40);
  const raw=path.join(dir,'frame.png'),audio=path.join(dir,'tone.wav'),output=path.join(dir,'real.mp4');await writeFile(raw,Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=','base64'));await writeFile(audio,wav);
  await promisify(execFile)(ffmpeg,['-v','error','-loop','1','-framerate','30','-i',raw,'-i',audio,'-vf','scale=16:16','-c:v','libx264','-c:a','aac','-shortest',output],{windowsHide:true});

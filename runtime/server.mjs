@@ -17,6 +17,8 @@ import {VoiceSamples} from './samples.mjs';
 import {StudioVideo,findRendererRoot,mediaRange} from './video.mjs';
 import {VIDEO_TEMPLATES} from './designs.mjs';
 import {atomicWrite} from './atomic-write.mjs';
+import {preparePromo,promoImage} from './promo.mjs';
+import {makeSkillArchive} from '../mcp/skill-archive.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(data));};
@@ -51,10 +53,15 @@ export async function startServer({session,port=6181,startupMode='resume',sample
   const recoverAdoption=async()=>{const pending=production.status().authoring?.pendingAdoption;if(!pending)return;const actual=session.rowsHash();if(actual===pending.desiredRowsHash){const {pendingAdoption,...authoring}=production.status().authoring;await production.saveAuthoring(authoring);}else if(actual!==pending.baseRowsHash)adoptionError='ADOPTION_CONFLICT';};
   await recoverAdoption();
   let video=await StudioVideo.open({sourceDir:session.outputDir,rendererRoot,downloadsDir,runner:videoRunner});
+  const openPromo=()=>StudioVideo.open({sourceDir:path.join(session.outputDir,'promo'),rendererRoot,downloadsDir,runner:videoRunner});
+  let promo=await openPromo();
+  let mcpAllowed=false,mcpAttached=false,mcpRender=null,mcpGrant=0;
+  const promoStatus=()=>promo.status(promo.state.result?.revision);
+  const mcpStatus=()=>({allowed:mcpAllowed,attached:mcpAttached,projectId,ownsRender:!!mcpRender&&mcpRender.target.completion===mcpRender.completion&&mcpRender.target.state.running});
   const samples=await new VoiceSamples([sampleDir,bundledSampleDir]).load();let inputBusy=false,sampleProgress=null,bankCanceled=false,bankError=null,narrationStage=null,narrationError=null,narrationCanceled=false;
   let fullAudioCache=null,imageProposal=null,authoringProgress=null;
   let token=randomBytes(32).toString('hex'),instanceId=randomBytes(16).toString('hex'),url;
-  const status=()=>{const current=session.status();return {...current,authoringProgress:authoringProgress?{...authoringProgress,...(current.progress?.phase?{phase:current.progress.phase}:{})}:null,imageProposal:currentImageProposal(),fullAudioRevision:narrationSignature(current,production.status().pauseSeconds),voiceConfirmed:production.status().voiceConfirmation===previewFingerprint(current.settings)||(production.status().voiceConfirmation===undefined&&current.rows.some(r=>r.audioCurrent)),projectId,video:video.status(current.revision,production.finalInputsHash()),voiceGenders:VOICE_GENDERS,sampleSettings:SAMPLE_SETTINGS,titleReadingPreparationRequired:titleReadingPreparationRequired(),rows:current.rows.map(row=>{const ready=row.id===production.status().bookends?.titleRowId?isHiraganaReading(row.speech):isScriptReadingReady(row),candidate={...row,reviewed:row.reviewed&&ready};return {...candidate,readingPreparationRequired:!ready,...production.cutInfo(candidate)};}),busy:session.busy||inputBusy,error:narrationError||bankError||session.error,progress:narrationStage?{...current.progress,phase:narrationStage}:current.progress,instanceId,resumed,adoptionError,unsavedDraft,production:production.status(),productionRevision:production.finalInputsHash(),musicCurrent:production.status().musicEnabled===false||!production.status().music||production.status().music.signature===musicSignature(current),samples:samples.status(),sampleProgress,sampleLibraryTotal:SAMPLE_SETTINGS.length};};
+  const status=()=>{const current=session.status();return {...current,mcp:mcpStatus(),promo:promoStatus(),authoringProgress:authoringProgress?{...authoringProgress,...(current.progress?.phase?{phase:current.progress.phase}:{})}:null,imageProposal:currentImageProposal(),fullAudioRevision:narrationSignature(current,production.status().pauseSeconds),voiceConfirmed:production.status().voiceConfirmation===previewFingerprint(current.settings)||(production.status().voiceConfirmation===undefined&&current.rows.some(r=>r.audioCurrent)),projectId,video:video.status(current.revision,production.finalInputsHash()),voiceGenders:VOICE_GENDERS,sampleSettings:SAMPLE_SETTINGS,titleReadingPreparationRequired:titleReadingPreparationRequired(),rows:current.rows.map(row=>{const ready=row.id===production.status().bookends?.titleRowId?isHiraganaReading(row.speech):isScriptReadingReady(row),candidate={...row,reviewed:row.reviewed&&ready};return {...candidate,readingPreparationRequired:!ready,...production.cutInfo(candidate)};}),busy:session.busy||inputBusy,error:narrationError||bankError||session.error,progress:narrationStage?{...current.progress,phase:narrationStage}:current.progress,instanceId,resumed,adoptionError,unsavedDraft,production:production.status(),productionRevision:production.finalInputsHash(),musicCurrent:production.status().musicEnabled===false||!production.status().music||production.status().music.signature===musicSignature(current),samples:samples.status(),sampleProgress,sampleLibraryTotal:SAMPLE_SETTINGS.length};};
   function makeImageProposal(scenes,rows){
     if(!Array.isArray(scenes)||scenes.length!==rows.length)throw new Error('INVALID_IMAGE_PLAN');
     const assets=production.status().assets,provided=production.status().brief.assetMode==='provided';
@@ -93,7 +100,7 @@ export async function startServer({session,port=6181,startupMode='resume',sample
     const outputDir=await projectPath(id),next=await session.openRelated(outputDir,{fresh});
     const nextProduction=await ProductionInputs.open(outputDir),nextVideo=await StudioVideo.open({sourceDir:outputDir,rendererRoot,downloadsDir,runner:videoRunner});
     await atomicWrite(pointer,JSON.stringify({id}));session=next;production=nextProduction;video=nextVideo;projectId=id;bankError=null;sampleProgress=null;narrationError=null;narrationStage=null;narrationCanceled=false;
-    imageProposal=null;fullAudioCache=null;token=randomBytes(32).toString('hex');instanceId=randomBytes(16).toString('hex');unsavedDraft=null;resumed=!fresh;adoptionError=null;await recoverAdoption();
+    imageProposal=null;fullAudioCache=null;token=randomBytes(32).toString('hex');instanceId=randomBytes(16).toString('hex');unsavedDraft=null;resumed=!fresh;adoptionError=null;promo=await openPromo();allowMcp(false);await recoverAdoption();
   };
   const titleReadingPreparationRequired=()=>{const prepared=production.status().brief.titleReading;if(!prepared||prepared.caption!==session.status().title)return false;const row=session.status().rows.find(r=>r.id===production.status().bookends?.titleRowId);return !(row?.caption===prepared.caption&&isHiraganaReading(row.speech));};
   const assertReadyReadings=ids=>{if((ids===undefined||ids.includes(production.status().bookends?.titleRowId))&&titleReadingPreparationRequired())throw new Error('TITLE_READING_REQUIRED');for(const row of session.status().rows.filter(r=>ids===undefined||ids.includes(r.id))){if(row.id===production.status().bookends?.titleRowId){if(!isHiraganaReading(row.speech))throw new Error('HIRAGANA_READING_REQUIRED');}else normalizeScriptReadings(row.caption,[row]);}};
@@ -106,6 +113,24 @@ export async function startServer({session,port=6181,startupMode='resume',sample
     return video.start({revision:session.revision(),title:session.status().title,preview:true,inputsHash});
   };
   const reviewedManifest=async()=>{assertAdopted();assertReadyReadings();if(session.busy||inputBusy)throw new Error('BUSY');production.assertNoCorrections();production.assertCutsConfirmed(session.status().rows);production.assertFinalization(session.status());return session.exportManifest();};
+  const startPromo=async input=>{
+    if(session.busy||inputBusy||video.state.running||promo.state.running)throw new Error('BUSY');
+    if(input.projectId!==projectId||input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');
+    inputBusy=true;
+    try{return promo.start({...await preparePromo(promo.sourceDir,input,production),promo:true});}
+    finally{inputBusy=false;}
+  };
+  const allowMcp=allowed=>{
+    mcpGrant+=1;mcpAllowed=allowed;mcpAttached=false;
+    if(mcpRender&&mcpRender.target.completion===mcpRender.completion)mcpRender.target.cancel();
+    mcpRender=null;
+  };
+  const trackMcpRender=(target,result,grant)=>{
+    if(result.started){
+      if(grant!==mcpGrant)target.cancel();
+      else mcpRender={target,completion:target.completion};
+    }
+  };
   const server=http.createServer(async(req,res)=>{
     res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Frame-Options','DENY');
     res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; media-src 'self'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
@@ -114,6 +139,26 @@ export async function startServer({session,port=6181,startupMode='resume',sample
       const route=new URL(req.url,url).pathname;
       if(req.headers.origin&&req.headers.origin!==url)return json(res,403,{error:'FOREIGN_ORIGIN'});
       if(req.method==='GET'){
+        if(route==='/mcp-guide.html'){
+          const bytes=await readFile(path.join(here,'ui','mcp-guide.html'));
+          res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(bytes);
+        }
+        if(route==='/narrated-video-production.zip'){
+          const bytes=await makeSkillArchive(path.join(here,'..'));
+          res.setHeader('Content-Type','application/zip');
+          res.setHeader('Content-Disposition','attachment; filename="narrated-video-production.zip"');return res.end(bytes);
+        }
+        if(route==='/api/promo-video'){
+          if(!promo.state.result)return json(res,404,{error:'VIDEO_NOT_READY'});
+          const {bytes}=await promo.media(promo.state.result.revision);
+          const range=mediaRange(req.headers.range,bytes.length);
+          if(range===null){res.writeHead(416,{'Content-Range':'bytes */'+bytes.length});return res.end();}
+          res.setHeader('Content-Type','video/mp4');
+          res.setHeader('Accept-Ranges','bytes');
+          if(new URL(req.url,url).searchParams.has('download'))res.setHeader('Content-Disposition','attachment; filename="product-intro.mp4"');
+          if(range){const {start,end}=range;res.writeHead(206,{'Content-Range':`bytes ${start}-${end}/${bytes.length}`,'Content-Length':end-start+1});return res.end(bytes.subarray(start,end+1));}
+          res.setHeader('Content-Length',bytes.length);return res.end(bytes);
+        }
         if(['/narration-guide.pdf','/narration-api-guide.pdf'].includes(route)){
           if(!rendererRoot)return json(res,404,{error:'MANUAL_NOT_FOUND'});
           let bytes;try{bytes=await readFile(path.join(rendererRoot,'docs',route.slice(1)));}catch(error){if(error.code==='ENOENT')return json(res,404,{error:'MANUAL_NOT_FOUND'});throw error;}
@@ -166,10 +211,41 @@ export async function startServer({session,port=6181,startupMode='resume',sample
       if(req.method!=='POST')return json(res,405,{error:'METHOD_NOT_ALLOWED'});
       const supplied=Buffer.from(String(req.headers['x-narration-token']||'')),expected=Buffer.from(token);
       if(supplied.length!==expected.length||!timingSafeEqual(supplied,expected))return json(res,403,{error:'CSRF_TOKEN_REQUIRED'});
+      if(['/api/mcp-access','/api/mcp-action','/api/promo'].includes(route)){
+        if(!String(req.headers['content-type']||'').startsWith('application/json'))return json(res,415,{error:'JSON_REQUIRED'});
+        const input=await body(req,64_000);
+        if(token!==expected.toString())return json(res,403,{error:'CSRF_TOKEN_REQUIRED'});
+        if(route==='/api/promo')return json(res,202,await startPromo(input));
+        if(route==='/api/mcp-access'){
+          if(req.headers.origin!==url||typeof input.enabled!=='boolean'||input.projectId!==projectId)return json(res,403,{error:'MCP_BROWSER_APPROVAL_REQUIRED'});
+          allowMcp(input.enabled);return json(res,200,status());
+        }
+        if(req.headers.origin)return json(res,403,{error:'MCP_LOCAL_CLIENT_ONLY'});
+        if(!mcpAllowed)return json(res,403,{error:'MCP_ENABLE_IN_STUDIO'});
+        mcpAttached=true;
+        if(input.action==='project'){
+          return json(res,200,{app:'ナレーション動画メーカー',projectId,title:session.status().title,revision:session.revision(),productionRevision:production.finalInputsHash(),assets:production.status().assets.filter(a=>promoImage.test(a.file)).map(({file,name})=>({file,name})),watermarkEnabled:production.status().watermarkEnabled,video:video.status(session.revision(),production.finalInputsHash()),promo:promoStatus()});
+        }
+        if(input.projectId!==projectId||input.productionRevision!==production.finalInputsHash()||input.revision!==session.revision())throw new Error('STALE_REVISION');
+        const grant=mcpGrant;
+        if(input.action==='promo'){
+          const result=await startPromo(input);trackMcpRender(promo,result,grant);return json(res,202,result);
+        }
+        if(input.action==='preview'){
+          if(session.busy||inputBusy||video.state.running||promo.state.running)throw new Error('BUSY');
+          inputBusy=true;
+          try{
+            const result=await startPreviewVideo();
+            trackMcpRender(video,result,grant);
+            return json(res,202,result);
+          }finally{inputBusy=false;}
+        }
+        return json(res,400,{error:'INVALID_MCP_ACTION'});
+      }
       if(route==='/api/project')return json(res,404,{error:'NOT_FOUND'});
       const draftRoute=['/api/draft','/api/source-plan','/api/prepare-readings'].includes(route);
       if(inputBusy&&route!=='/api/cancel'&&!draftRoute)throw new Error('BUSY');
-      if(video.status(session.revision()).running&&!['/api/key','/api/connection-check','/api/cancel'].includes(route))throw new Error('BUSY');
+      if((video.status(session.revision()).running||promo.state.running)&&!['/api/key','/api/connection-check','/api/cancel'].includes(route))throw new Error('BUSY');
       if(!['/api/audio-inspect','/api/key','/api/connection-check','/api/cancel','/api/preview','/api/prepare-samples','/api/render-video','/api/new-project','/api/revision-project'].includes(route))production.assertWritable();
       if(route==='/api/material'){
         if(session.busy)throw new Error('BUSY');inputBusy=true;
@@ -476,7 +552,7 @@ export async function startServer({session,port=6181,startupMode='resume',sample
       else if(route==='/api/confirm-cut'){if(session.busy)throw new Error('BUSY');if(input.revision!==session.revision())throw new Error('STALE_REVISION');const row=session.status().rows.find(r=>r.id===input.id);if(!row)throw new Error('ROW_NOT_FOUND');inputBusy=true;try{await production.confirmCut(row,input.fingerprint);await session.markListened(input.id,input.revision);}finally{inputBusy=false;}}
       else if(route==='/api/reopen-cut'){if(session.busy)throw new Error('BUSY');if(input.revision!==session.revision())throw new Error('STALE_REVISION');if(!session.status().rows.some(r=>r.id===input.id))throw new Error('ROW_NOT_FOUND');inputBusy=true;try{await production.reopenCut(input.id);await session.reopenListening(input.id);}finally{inputBusy=false;}}
       else if(route==='/api/finalize'){assertAdopted();if(input.confirmIrreversible!==true)throw new Error('FINAL_CONFIRMATION_REQUIRED');if(session.busy)throw new Error('BUSY');if(input.revision!==session.revision())throw new Error('STALE_REVISION');inputBusy=true;try{await production.finalize(session.status());}finally{inputBusy=false;}}
-      else if(route==='/api/cancel'){bankCanceled=true;narrationCanceled=true;draftCanceled=true;session.cancel();video.cancel();}
+      else if(route==='/api/cancel'){bankCanceled=true;narrationCanceled=true;draftCanceled=true;session.cancel();video.cancel();promo.cancel();}
       else if(route==='/api/generate'){
         if(input.productionRevision!==undefined&&input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');
         assertAdopted();if(!status().voiceConfirmed)throw new Error('VOICE_CONFIRMATION_REQUIRED');production.assertNoCorrections();

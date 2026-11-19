@@ -44,5 +44,5 @@ async function prepareAudio({sourceDir,publicDir,fps=30,gapFrames,preview}) {
     const subtitles=buildSubtitleCues({caption:row.caption,speech:row.speech,bytes,fps,frames});
     await copyFile(source,path.join(publicDir,src));rows.push({...row,src,from,frames,subtitles});from+=frames+gapFrames;
   }
-  const bookends=production.ending();const ending=bookends?{...bookends,from,frames:bookends.endingEnabled===false?0:Math.round(bookends.endSeconds*fps)}:undefined;const result={...current,title:bookends?.titleRowId===rows[0]?.id?rows[0].caption:current.title,fps,gapFrames,durationInFrames:from+(ending?.frames||0),rows,...(ending?{bookends:ending}:{})};await writeFile(path.join(publicDir,'narration.json'),JSON.stringify(result,null,2),'utf8');return result;
+  const bookends=production.ending();const ending={...bookends,from,frames:Math.round(bookends.endSeconds*fps)};const result={...current,title:bookends.titleRowId===rows[0]?.id?rows[0].caption:current.title,fps,gapFrames,durationInFrames:from+ending.frames,rows,bookends:ending};await writeFile(path.join(publicDir,'narration.json'),JSON.stringify(result,null,2),'utf8');return result;
 }

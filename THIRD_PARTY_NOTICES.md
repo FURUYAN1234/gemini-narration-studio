@@ -6,6 +6,7 @@
 - Noto Sans JP: SIL Open Font License; bundled `runtime/vendor/NotoSansJP-OFL.txt`.
 - 180 Gemini TTS preset samples: previously generated generic Japanese preview narration, model/voice/pitch metadata retained. No personal production narration is bundled. Google API terms apply to future API use.
 - Chrome Headless Shell and Remotion FFmpeg are installed by the renderer setup; their original package notices apply.
+- Model Context Protocol TypeScript server SDK 2.4.0: Apache-2.0. The installed npm package retains its original license and notices.
 
 Browser setup uses the official [Remotion ensureBrowser API](https://www.remotion.dev/docs/renderer/ensure-browser). No other Antigravity application is required to render.
 

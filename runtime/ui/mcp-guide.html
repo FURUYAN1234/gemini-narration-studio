@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ナレーション動画メーカー｜MCP導入ガイド</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+<h1>ナレーション動画メーカーのMCP導入</h1>
+<ol>
+<li>Windowsで <code>start_narration_studio.bat</code> を起動します。初回に必要なNode.js、ライブラリ、レンダー用ブラウザーを用意します。</li>
+<li>利用するAIのMCP設定に、コマンド <code>node</code> と引数 <code>展開先の絶対パス/mcp/server.mjs</code> を登録します。ローカルスタジオの既定ポートは6181です。別ポートを使う場合は <code>--port</code> とポート番号を追加します。</li>
+<li>実行チャットの内蔵ブラウザーにスタジオを表示し、画面上部で「MCP接続を許可」を押します。AIが <code>studio_project</code> で制作を確認すると「MCP 接続済み」になります。</li>
+<li>操作を手動に戻すときは画面上部の「停止して手動に戻る」を押します。別の制作を開いた場合は再度許可してください。</li>
+</ol>
+<h2>できること</h2>
+<ul>
+<li><code>studio_project</code> で制作・取り込み済みの画面素材・書き出し状況を確認します。</li>
+<li><code>studio_render_promo</code> で取り込み済みの画面素材から短い紹介MP4を作ります。BGMと切り替え音を使わない場合は <code>soundEnabled: false</code> を指定します。完成動画は制作画面の下部で再生できます。</li>
+<li><code>studio_render_preview</code> で作成済みの音声と素材から確認用のナレーション動画を作ります。</li>
+</ul>
+<p>紹介動画にはGemini APIキーは要りません。音声を新規に作る場合は、スタジオのAPI設定と読み・音声の確認手順を使います。</p>
+<p><a href="/narrated-video-production.zip" download>制作スキルを取得</a> ／ <a href="/">制作画面へ戻る</a></p>
+</main>
+</body>
+</html>

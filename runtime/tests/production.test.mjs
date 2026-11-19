@@ -9,7 +9,7 @@ import {startServer} from '../server.mjs';
 import {prepareReviewedAudio} from '../client.mjs';
 import {musicSignature,musicTimeline} from '../music.mjs';
 
-test('ending watermark defaults on, persists off, preserves opening title and removes its full timeline duration',async t=>{
+test('ending watermark defaults on, persists off, and retains opening and closing credit timing',async t=>{
  for(const enabled of [true,false]){
   const {s,dir}=await setup(t);s.setKey('test-only-key');
   await s.appendRow({id:'opening',caption:'動画の紹介',speech:'どうがのしょうかい'},{prepend:true});
@@ -22,8 +22,9 @@ test('ending watermark defaults on, persists off, preserves opening title and re
   await restored.finalize(s.status());await s.exportManifest();
   const data=await prepareReviewedAudio({sourceDir:dir,publicDir:path.join(dir,'public')});
   assert.equal(data.bookends.titleRowId,'opening');assert.equal(data.rows[0].id,'opening');
-  assert.equal(data.bookends.frames,enabled?120:0);
-  assert.equal(data.durationInFrames,data.rows.reduce((n,r)=>n+r.frames+data.gapFrames,0)+(enabled?120:0));
+  assert.equal(data.bookends.watermarkEnabled,enabled);
+  assert.equal(data.bookends.frames,120);
+  assert.equal(data.durationInFrames,data.rows.reduce((n,r)=>n+r.frames+data.gapFrames,0)+120);
   const timeline=musicTimeline({...s.status(),pauseSeconds:restored.status().pauseSeconds,bookends:restored.ending()});assert.equal(timeline.durationInFrames,data.durationInFrames);
   await assert.rejects(restored.saveWatermarkEnabled(!enabled),/VIDEO_FINALIZED/);
  }

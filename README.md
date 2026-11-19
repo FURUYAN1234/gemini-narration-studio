@@ -6,7 +6,7 @@ Operation guide / 操作ガイド: Open the PDF to review the application workfl
 
 Read both Japanese A4 guides from the app header or the public installation page. / 日本語A4の操作・API設定ガイドは、アプリ上部と公開導入ページから別タブで開けます。
 
-# Narrated Video Maker / ナレーション動画メーカー v1.3.5
+# Narrated Video Maker / ナレーション動画メーカー v1.3.6
 
 > **MIT License; your outputs remain yours.** You may use, modify, redistribute and sell the app, including in paid products and services, without individual permission from FURU. Retain the copyright and MIT license notices in copies or substantial portions of the software. External API fees and third-party terms are separate. / **アプリはMITライセンス。成果物の権利は従来どおり利用者に帰属します。** アプリの利用・改変・再配布・販売、有料商品やサービスへの組み込みに、FURUへの個別許可は不要です。ソフトウェアの複製または重要な部分には著作権表示とMITの許諾表示を残してください。外部API料金と第三者の条件は別です。
 
@@ -55,6 +55,12 @@ Use Windows 10 or 11, x64, a writable local folder, an internet connection and y
 The public website is a download and installation guide. Video processing runs on your PC after launching the batch file. Git, Python and a separately installed voice engine are unnecessary. / 公開サイトはダウンロードと導入案内です。動画処理はバッチで起動したPC上で行います。Git、Python、別の音声エンジンの導入は不要です。
 
 ## Download and launch / ダウンロードとバッチ起動
+
+### Product demos and MCP / 紹介動画とMCP
+
+- Open the studio with `start_narration_studio.bat`, import PNG/JPEG/WebP screenshots, then open the product-demo panel. The MP4 includes optional locally generated music and transition sounds. Play and save it at the bottom of the page. / バッチ起動後に実画面の画像を取り込み、紹介動画フォームでMP4を書き出せます。BGMと切り替え音はPCで作成し、オフにもできます。完成動画の再生と保存はページ下部です。
+- The studio toolbar provides the downloadable production skill and the MCP setup guide. The local MCP bridge reads the currently approved project and starts a demo or narration preview with existing assets. / 画面上部に制作スキルとMCP導入ガイドがあります。MCPから許可済み制作の確認、実画面の紹介動画、用意済み音声によるプレビューを実行できます。
+- The tool credits remain on the final card when the optional legacy watermark is turned off. The watermark defaults to on. / 末尾は制作環境を表示します。従来の透かしは初期値オンで、オフにすると透かしだけ消えます。
 
 1. Open the latest Release above. Under Assets, choose **Source code (zip)**. / 上の最新版ダウンロードを開き、Assets欄の **Source code (zip)** をクリックします。
 2. In Windows Downloads, right-click the ZIP and choose **Extract All**. Do not run files inside the ZIP. / WindowsのダウンロードでZIPを右クリックし、**すべて展開**を選びます。ZIP内のまま起動しないでください。

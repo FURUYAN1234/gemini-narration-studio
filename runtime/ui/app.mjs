@@ -264,7 +264,7 @@ function updateControls(){
   $('generate-all').hidden=sealed||state.rows.some(r=>!r.audioCurrent&&r.attempts>0);$('generate-all').disabled=state.busy||localBusy||state.video?.running||sealed||hasCorrections()||isDirty()||!state.rows.length||state.rows.some(r=>!r.reviewed)||state.titleReadingPreparationRequired||!state.voiceConfirmed||dirtyFields.has('settings')||state.rows.some(r=>!r.audioCurrent&&r.attempts>0)||((ready.length||needsMusic)&&!state.keyConfigured);$('retry-audio').hidden=sealed||!state.rows.some(r=>!r.audioCurrent&&r.attempts>0);$('retry-audio').disabled=state.busy||localBusy||sealed||!state.keyConfigured||state.rows.some(r=>!r.reviewed)||state.titleReadingPreparationRequired||!state.voiceConfirmed;
   updateVideo();
   const active=state.busy||state.video?.running,canUndoReading=!sealed&&state.rows.some(r=>r.reviewed);if(!active&&cancelRequested){cancelRequested=false;$('cancel-status').textContent='中止処理が終了しました。保存済みの台本・素材・音声は保持しています。';}
-  const emergencyVisible=!!(state.keyConfigured||active||projectHasContent());$('emergency-controls').hidden=!emergencyVisible;document.documentElement.classList?.toggle('emergency-stop-ready',emergencyVisible);
+  const emergencyVisible=state.mcp?.allowed?!!active&&!state.mcp.ownsRender:!!(state.keyConfigured||active||projectHasContent());$('emergency-controls').hidden=!emergencyVisible;document.documentElement.classList?.toggle('emergency-stop-ready',emergencyVisible);
   for(const button of document.querySelectorAll('[data-cancel]')){const inline=button.dataset.cancelInline!==undefined,emergency=button.dataset.aiStop!==undefined;button.disabled=!!(workflowPaused||pauseRequested||cancelRequested||state.video?.canceling||(!active&&(localBusy||inline||emergency||(!projectHasContent()&&!isDirty()&&!dirtyFields.has('production')))));button.classList.toggle('emergency-stop',!!(active||emergency));button.textContent=cancelRequested||state.video?.canceling?'中止処理中…':emergency?'緊急停止（処理を中止）':active?'緊急停止（実行中の処理を中止）':'制作画面を一時退避';button.hidden=!emergency&&(active||inline);}
   const readingDone=!!state.rows.length&&state.rows.every(r=>r.reviewed);$('unconfirm-script').hidden=!canUndoReading;$('unconfirm-script').disabled=!!(localBusy||active||sealed);
   $('generation-next').hidden=true;$('generation-next').disabled=!!(localBusy||active||isDirty()||dirtyFields.has('settings'));
@@ -291,7 +291,39 @@ function updateApiBoundary(){
  for(const button of document.querySelectorAll('[data-go-step]')){const step=button.dataset.goStep;if(step==='finish')button.hidden=!hasGenerationOutput();if(missing&&(['connection','reading'].includes(step)?planningBlocked:step==='finish'&&finishBlocked))button.disabled=true;else button.disabled=!!(state.busy||localBusy);}
 }
 function maybeAdvanceAudio(){updateApiBoundary();if(!advanceAfterAudio||state.busy||localBusy)return;if(state.error){advanceAfterAudio=false;return;}if(!state.rows.length||state.rows.some(r=>!r.audioCurrent)||(musicEnabled()&&(!state.production?.music||!state.musicCurrent)))return;advanceAfterAudio=false;window.location.hash='#finish';$('finish').scrollIntoView?.({block:'start'});message(!state.busy&&state.video?.stage==='complete'&&!state.video.running&&state.video.result?videoCompletionMessage(state.video):state.video?.running?'音声'+(musicEnabled()?'とBGM':'')+'を準備しました。続けて動画を作成しています。完成後に動画と音声を確認してください。':'音声の準備が完了しました。動画の状態を④で確認してください。');}
-function render(next,force=false){state=next;if(state.keyConfigured)$('api-required-alert').hidden=true;$('resume-info').textContent=state.resumed?'保存した制作「'+state.title+'」を再開しています。':projectHasContent()?'制作中の動画です。別の制作を始めると、台本・素材のない空の制作を開きます。':'新規制作です。台本・素材はまだ登録されていません。';let keyLost=false;try{keyLost=!state.keyConfigured&&window.sessionStorage?.getItem('narration-had-key')==='yes';if(state.keyConfigured)window.sessionStorage?.setItem('narration-had-key','yes');}catch{}$('key-reset-notice').hidden=!keyLost;if(lastKeyConfigured!==state.keyConfigured){$('api-settings').open=!state.keyConfigured&&!isFinalized();lastKeyConfigured=state.keyConfigured;}$('api-connection').classList.toggle('needs-key',!state.keyConfigured&&!isFinalized());$('api-summary').textContent=state.keyConfigured?'APIキーを変更・解除':'Gemini APIキーを登録';$('key-state').textContent=state.keyConfigured?'キー登録済み':'APIキー未設定';$('key-state').classList.toggle('ready',state.keyConfigured);$('review-count').textContent=`${state.rows.filter(r=>r.reviewed).length} / ${state.rows.length} 読み確認済み`;$('progress').textContent=state.busy&&state.production?.authoring?.lastAttempt?.state==='running'?'指定した台本・読みの作成処理を実行中です。完了を待っています。':state.busy?`${state.progress?.phase||'合成中'}：${state.progress?.completed||0} / ${state.progress?.total||0} カット（自動再試行なし）`:state.progress?`合成終了：${state.progress.completed} / ${state.progress.total} カット`:'';
+let promoChoicesKey,promoShown;
+function renderStudioTools(){
+  const mcp=state.mcp||{},entered=$('mcp-access');
+  if(!entered)return;
+  entered.setAttribute('aria-pressed',String(!!mcp.allowed));
+  entered.textContent=mcp.allowed?'停止して手動に戻る':'MCP接続を許可';
+  $('mcp-state').textContent=mcp.attached?'MCP 接続済み':mcp.allowed?'MCP 接続待ち':'MCP 未接続';
+  const list=$('promo-images'),items=(state.production?.assets||[]).filter(a=>/^[a-f0-9]{64}\.(png|jpe?g|webp)$/.test(a.file));
+  const choiceKey=items.map(a=>a.file).join(',');
+  if(promoChoicesKey!==choiceKey){
+    const selected=new Set(Array.from(list.selectedOptions||[],o=>o.value));
+    list.replaceChildren(...items.map(a=>{const o=element('option',a.name,{value:a.file});o.selected=selected.has(a.file);return o;}));
+    promoChoicesKey=choiceKey;
+  }
+  const intro=state.promo||{},active=!!intro.running;
+  $('promo-start').disabled=active||state.busy||state.video?.running||!intro.available||items.length===0;
+  $('promo-stop').hidden=!active;
+  $('promo-status').textContent=active?'紹介動画を書き出し中 · '+Math.round((intro.progress||0)*100)+'%':intro.error?(errors[intro.error]||'紹介動画を書き出せませんでした。')+' ('+intro.error+')':intro.result?'書き出しが完了しました。':'';
+  $('promo-result-link').hidden=$('promo-result').hidden=!intro.result;
+  if(intro.result?.file!==promoShown){promoShown=intro.result?.file;if(promoShown)$('promo-player').src='/api/promo-video?v='+encodeURIComponent(promoShown);else $('promo-player').removeAttribute('src');}
+}
+$('mcp-access')?.addEventListener('click',guarded(async()=>{
+  await pending(async()=>render(await api('mcp-access',{enabled:!state.mcp?.allowed,projectId:state.projectId})));
+}));
+$('promo-start')?.addEventListener('click',guarded(async()=>{
+  const cuts=Array.from($('promo-images').selectedOptions,selected=>({image:selected.value,title:selected.textContent.replace(/\.[a-z]+$/i,'').slice(0,66)}));
+  const title=$('promo-title').value.trim();
+  if(!title||cuts.length<1||cuts.length>6)throw new Error('タイトルと1〜6枚の画像を指定してください。');
+  await api('promo',{projectId:state.projectId,productionRevision:state.productionRevision,title,cuts,soundEnabled:$('promo-sound').checked,watermarkEnabled:$('promo-watermark').checked});
+  render(await api('status'));
+},'promo-status'));
+$('promo-stop')?.addEventListener('click',guarded(async()=>{await api('cancel',{});render(await api('status'));},'promo-status'));
+function render(next,force=false){state=next;renderStudioTools();if(state.keyConfigured)$('api-required-alert').hidden=true;$('resume-info').textContent=state.resumed?'保存した制作「'+state.title+'」を再開しています。':projectHasContent()?'制作中の動画です。別の制作を始めると、台本・素材のない空の制作を開きます。':'新規制作です。台本・素材はまだ登録されていません。';let keyLost=false;try{keyLost=!state.keyConfigured&&window.sessionStorage?.getItem('narration-had-key')==='yes';if(state.keyConfigured)window.sessionStorage?.setItem('narration-had-key','yes');}catch{}$('key-reset-notice').hidden=!keyLost;if(lastKeyConfigured!==state.keyConfigured){$('api-settings').open=!state.keyConfigured&&!isFinalized();lastKeyConfigured=state.keyConfigured;}$('api-connection').classList.toggle('needs-key',!state.keyConfigured&&!isFinalized());$('api-summary').textContent=state.keyConfigured?'APIキーを変更・解除':'Gemini APIキーを登録';$('key-state').textContent=state.keyConfigured?'キー登録済み':'APIキー未設定';$('key-state').classList.toggle('ready',state.keyConfigured);$('review-count').textContent=`${state.rows.filter(r=>r.reviewed).length} / ${state.rows.length} 読み確認済み`;$('progress').textContent=state.busy&&state.production?.authoring?.lastAttempt?.state==='running'?'指定した台本・読みの作成処理を実行中です。完了を待っています。':state.busy?`${state.progress?.phase||'合成中'}：${state.progress?.completed||0} / ${state.progress?.total||0} カット（自動再試行なし）`:state.progress?`合成終了：${state.progress.completed} / ${state.progress.total} カット`:'';
   $('theme').value=screenTheme||state.presentation?.theme||'moon';applyTheme($('theme').value);
   if(!dirtyFields.has('design')&&!designPreviewOnly)$('design-instructions').value=state.presentation?.instructions||'';
   if((force||state.revision!==lastRevision)&&!isDirty()){

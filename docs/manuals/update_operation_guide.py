@@ -22,13 +22,13 @@ old.close()
 
 builder = runpy.run_path(str(Path(__file__).with_name('build_api_guide.py')))
 builder['DATA']['manual'] = [{
-    'title': 'v1.3.5 補足：緊急停止と制作の中断',
-    'lead': 'AI通信・動画処理の停止と、待機中の制作画面の中断は別操作です。',
+    'title': '補足　紹介動画・末尾表示・MCP',
+    'lead': '画面上部の制作スキルとMCP導入ガイドから、設定と手順を確認できます。',
     'blocks': [
-        ['text', '画面右上に固定した赤い「緊急停止（処理を中止）」は、AIが考えている間・応答の受信中・動画処理中に押せます。待機中と停止済みはグレー表示で無効です。処理中の停止ボタンは右上の1つに統一し、各工程の一時退避ボタンは隠します。初期API未設定・空の制作では欄ごと隠し、キー設定後・ローカル制作・処理中に表示します。'],
-        ['text', '緊急停止は現在の中止処理を使います。台本・素材・生成済み音声は保持し、停止処理の終了後に制作を再開できます。API提供元で既に始まった処理・課金の停止は保証しません。'],
-        ['box', '「制作画面を一時退避」は、待機中の制作画面を一時退避する別の操作です。内容のない初期画面では無効です。「制作を再開」で同じ内容へ戻ります。AIの再送信、保存済みデータの削除、確定した読みの取り消しではありません。'],
-        ['text', '本書前半の既存操作ガイドはそのまま保持しています。この補足は緊急停止の操作と表示に関する更新です。'],
+        ['text', '紹介動画は「素材と台本」で撮影済みの画面素材を取り込みます。上部の紹介動画フォームでタイトルと最大6枚の画像を指定します。BGMと切り替え音はPCで作成し、オフにもできます。完成したMP4はページ下部で再生・保存できます。'],
+        ['text', '末尾には使用した制作環境を表示します。従来の透かしはチェックを外すと消えます。初期値はオンで、透かしを外しても制作環境の表示は残ります。'],
+        ['text', 'MCPを使う場合は、導入ガイドに沿って登録し、制作画面上部で接続を許可します。接続後は取り込んだ素材の確認、紹介動画と準備済みナレーションのプレビューを書き出せます。'],
+        ['box', 'MCPから始めた処理を止めるには「停止して手動に戻る」を押します。通常のAI通信や動画処理には「緊急停止」を使います。「制作画面を一時退避」は待機中の画面を退避します。保存済みの台本・素材・音声は保持します。'],
     ],
 }]
 supplement, layout = builder['build']('manual')
@@ -46,7 +46,7 @@ assert before == after, 'Original guide pages changed'
 updated[count].render(scale=1.25).to_pil().save(out / 'renders/narration-guide-supplement.png')
 updated.close()
 (out / 'operation-guide-qa.json').write_text(json.dumps({
-    'version': '1.3.5', 'pages': count + 1, 'originalPagesPixelIdentical': True,
+    'version': '1.3.6', 'pages': count + 1, 'originalPagesPixelIdentical': True,
     'supplement': report, 'sha256': hashlib.sha256(target.read_bytes()).hexdigest(),
 }, ensure_ascii=False, indent=2), encoding='utf-8')
 print(f'OPERATION_GUIDE_SUPPLEMENT_READY pages={count + 1} original-pages-identical=true')

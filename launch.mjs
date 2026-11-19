@@ -34,7 +34,10 @@ export async function ensureSetup(root=appRoot) {
   const require=createRequire(path.join(root,'package.json'));
   let ready=true;
   for(const [name,version] of Object.entries(pkg.dependencies)) {
-    try {if(require(name+'/package.json').version!==version)ready=false;} catch {ready=false;}
+    try {
+      const installed=JSON.parse(await readFile(path.join(root,'node_modules',name,'package.json'),'utf8'));
+      if(installed.version!==version)ready=false;
+    } catch {ready=false;}
   }
   if(!ready) {
     console.log('初回準備: 動画作成用ファイルをインストールしています。');
@@ -50,6 +53,7 @@ export async function runtimeIdentity(root=appRoot){
  const files=['launch.mjs','package-lock.json'];
  async function walk(dir,prefix){for(const entry of await readdir(dir,{withFileTypes:true})){const name=prefix+entry.name;if(entry.isDirectory()){if(entry.name!=='tests')await walk(path.join(dir,entry.name),name+'/');}else if(/\.(mjs|tsx|html|css|json)$/.test(name))files.push(name);}}
  await walk(path.join(root,'runtime'),'runtime/');const hash=createHash('sha256');
+  await walk(path.join(root,'mcp'),'mcp/');
  for(const file of files.sort())hash.update(file+'\0'+createHash('sha256').update(await readFile(path.join(root,file))).digest('hex')+'\n');
  return {buildId:hash.digest('hex'),protocol:1};
 }
@@ -72,7 +76,7 @@ export async function reuseStudio(url,startupMode){
  if(!/^http:\/\/127\.0\.0\.1:\d+$/.test(url)||!['new','resume'].includes(startupMode))throw new Error('INVALID_STARTUP_MODE');
  const read=async(route,options={})=>{const response=await fetch(url+'/api/'+route,{...options,signal:AbortSignal.timeout(10000)});const result=await response.json();if(!response.ok)throw new Error(result.error||'STUDIO_REUSE_FAILED');return result;};
  const current=await read('status');if(startupMode==='resume')return current;
- if(current.busy||current.video?.running)throw new Error('BUSY');
+ if(current.busy||current.video?.running||current.promo?.running)throw new Error('BUSY');
  const boot=await read('bootstrap'),created=await read('new-project',{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':boot.token},body:JSON.stringify({sessionId:current.sessionId,revision:current.revision,discardPrevious:true})});
  if(created.projectId===current.projectId||created.rows.length||created.production.assets.length||created.production.brief.script)throw new Error('NEW_PROJECT_NOT_EMPTY');
  return created;
