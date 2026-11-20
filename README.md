@@ -29,7 +29,11 @@ Turn reference materials and scripts into 16:9 videos with Japanese narration, c
 
 Use **使い方マニュアル（PDF）** in the app header to read the bundled guide in a separate tab and save it from the PDF viewer. / アプリ上部の **使い方マニュアル（PDF）** から別タブで読めます。保存はPDFビューアーから行えます。ネット接続やAPIキーは不要です。
 
-![Current app screen / 現在のアプリ実画面](docs/screenshots/workflow-current.jpg)
+[![Watch the 83-second introduction / 83秒の紹介動画を見る](docs/screenshots/workflow-current.jpg)](https://youtu.be/ZAozAE8M2-8)
+
+**Introduction video / 紹介動画（83秒）:** Click the image to watch the app screens, MCP connection, captions and reading review on YouTube. / 上の画像から、操作画面・MCP接続・字幕と読みの確認をYouTubeで見られます。
+
+[Read the article and play the embedded video / 記事内で動画を再生する（note）](https://note.com/happy_duck780/n/n97d49c1c98b1)
 
 ## Explain with pictures and diagrams / 画像と図解で伝える
 
