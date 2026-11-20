@@ -46,7 +46,7 @@ assert before == after, 'Original guide pages changed'
 updated[count].render(scale=1.25).to_pil().save(out / 'renders/narration-guide-supplement.png')
 updated.close()
 (out / 'operation-guide-qa.json').write_text(json.dumps({
-    'version': '1.3.6', 'pages': count + 1, 'originalPagesPixelIdentical': True,
+    'version': builder['DATA']['version'], 'pages': count + 1, 'originalPagesPixelIdentical': True,
     'supplement': report, 'sha256': hashlib.sha256(target.read_bytes()).hexdigest(),
 }, ensure_ascii=False, indent=2), encoding='utf-8')
 print(f'OPERATION_GUIDE_SUPPLEMENT_READY pages={count + 1} original-pages-identical=true')
