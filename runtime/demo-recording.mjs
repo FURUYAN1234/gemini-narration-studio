@@ -135,13 +135,14 @@ export async function captureRecording({input,chromium,rendererRoot,outputDir,si
     const events=[];
     const result=await page.goto(url.href,{waitUntil:'domcontentloaded',timeout:7000}).catch(()=>null);
     if(!result?.ok()||new URL(page.url()).origin!==url.origin)throw new Error('RECORDING_PAGE_FAILED');
-    const began=performance.now(),frames=[];
+    let began=performance.now();const frames=[];
     const sample=async()=>{
       const name='frame-'+frames.length+'.jpg',time=performance.now()-began;
-      await page.screenshot({path:path.join(work,name),type:'jpeg',quality:91,timeout:2500});
+      await page.screenshot({path:path.join(work,name),type:'jpeg',quality:91,timeout:8000});
       frames.push({name,time});
     };
     await sample();
+    began=performance.now();frames[0].time=0;
     sampling=true;
     let sampleError;
     samples=(async()=>{

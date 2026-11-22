@@ -13,6 +13,7 @@ function retrySignature(){return JSON.stringify({project:state.projectId,revisio
 let correctionOutcome='',draftGenerating=false,draftOutcome='',productionSaving=false,cancelRequested=false,scriptReadings,storyboard;
 let workflowPaused=false,pauseRequested=false,workflowProject,pauseStep='planning',lastRenderedError='',wasVideoRunning=false,lastCompletedVideoFile=null,lastVideoError='';
 const workflowSteps=['planning','connection','reading','finish'];
+let resultAnchorPending=window.location.hash==='#finish';
 function syncWorkflow(){
  if(workflowProject!==state.projectId){workflowProject=state.projectId;workflowPaused=false;pauseRequested=false;lastRenderedError='';wasVideoRunning=false;lastCompletedVideoFile=null;lastVideoError='';try{const step=window.sessionStorage?.getItem('narration-paused:'+workflowProject);if(workflowSteps.includes(step)){pauseStep=step;workflowPaused=true;}}catch{}}
  if(pauseRequested&&!state.busy&&!state.video?.running&&!localBusy){pauseRequested=false;workflowPaused=true;try{window.sessionStorage?.setItem('narration-paused:'+workflowProject,pauseStep);}catch{}window.location.hash='#workflow-paused';$('workflow-paused').scrollIntoView?.({block:'start'});actionMessage('cancel-status','制作を中断しました。台本・素材・音声は保持しています。');}
@@ -223,7 +224,9 @@ function updateVideo(){
   $('video-progress').hidden=!video.running||!['bundling','rendering'].includes(video.stage);$('video-progress').value=video.progress||0;
   const steps=(video.steps||[]).filter(step=>labels[step]);
   $('video-stages').replaceChildren(...steps.map((step,index)=>element('li',labels[step]+(video.error&&index===steps.length-1?video.stage==='canceled'?' — 中止':' — 失敗':step===video.stage&&video.running?' — 処理中':' — 完了'))));
-  $('video-result').hidden=!result;if(result){const src='/video/'+result.file;if(!$('video-player').src?.endsWith(src))$('video-player').src=src;$('download-video').download=result.filename;$('video-saved-path').textContent='保存済み：'+result.savedPath;}
+  $('video-result').hidden=!result;if(result){
+    if(resultAnchorPending&&window.location.hash==='#finish'){resultAnchorPending=false;window.requestAnimationFrame?.(()=>{if(window.location.hash==='#finish'&&!$('finish').hidden)$('finish').scrollIntoView?.({block:'start',behavior:'instant'});});}
+    const src='/video/'+result.file;if(!$('video-player').src?.endsWith(src))$('video-player').src=src;$('download-video').download=result.filename;$('video-saved-path').textContent='保存済み：'+result.savedPath;}
   $('download-audio').hidden=!result?.audio;$('audio-saved-path').textContent=result?.audio?'音声の保存先：'+result.audio.savedPath:'';if(result?.audio)$('download-audio').download=result.audio.filename;
 }
 function updateActivityProgress(){
@@ -292,7 +295,7 @@ function updateApiBoundary(){
  const locked=state.busy||state.video?.running||localBusy||isFinalized();
  if(!state.keyConfigured&&!locked){for(const id of ['generate-script','regenerate-script','prepare-readings','draft-design','draft-script','generate-all','retry-audio','apply-review','plan-images','prepare-samples','check-connection','probe-generation']){const button=$(id);if(button&&!button.hidden&&(id!=='apply-review'||hasCorrections()))button.disabled=false;}if(!cachedSample())$('preview-voice').disabled=false;for(const selector of ['[data-generate]','[data-generate-image]','[data-apply-review]'])for(const button of document.querySelectorAll(selector))if(!button.hidden&&(!button.dataset.applyReview||cutInstructions.get(button.dataset.applyReview)?.trim()))button.disabled=false;}
  const missing=!state.keyConfigured&&!isFinalized(),planningBlocked=missing&&!state.rows.length;
- const finishBlocked=missing&&(!state.rows.length||state.rows.some(r=>!r.audioCurrent)||musicEnabled()&&(!state.production?.music||!state.musicCurrent));
+ const finishBlocked=missing&&!state.video?.result&&(!state.rows.length||state.rows.some(r=>!r.audioCurrent)||musicEnabled()&&(!state.production?.music||!state.musicCurrent));
  $('connection').inert=planningBlocked;$('reading').inert=planningBlocked;$('finish').inert=finishBlocked;
  for(const button of document.querySelectorAll('[data-go-step]')){const step=button.dataset.goStep;if(step==='finish')button.hidden=!hasGenerationOutput();if(missing&&(['connection','reading'].includes(step)?planningBlocked:step==='finish'&&finishBlocked))button.disabled=true;else button.disabled=!!(state.busy||localBusy);}
 }
@@ -347,6 +350,9 @@ for(const id of ['model','voice','style','pitch','job-title'])$(id).addEventList
 function chooseVoice(value){$('voice-mode').value='manual';dirtyFields.add('production');if(value==='custom'){customMode=true;syncVoicePreset();return;}const legacy=voicePresets[value];const config=legacy?{model:$('model').value,...legacy}:allPresets().find(p=>p.model+'::'+p.voice===value);if(!config)throw new Error('INVALID_VOICE_PRESET');customMode=false;$('model').value=config.model;$('voice').value=config.voice;$('style').value=config.style;markSettingsDirty();syncVoicePreset();refreshSampleAudio();updateControls();message('声と話し方を選びました。サンプルを試聴し、「この声で全文確認へ」で保存します。');}
 $('voice-preset').addEventListener('change',guarded(()=>chooseVoice($('voice-preset').value)));
 $('voice-manual').addEventListener('change',guarded(()=>{if(state.busy||localBusy||state.video?.running||isFinalized())throw new Error('BUSY');$('voice-mode').value=$('voice-manual').checked?'manual':'auto';dirtyFields.add('production');updateVoiceChoice(true);refreshSampleAudio();updateControls();}));
+const resultPlayer=$('video-player');
+resultPlayer.addEventListener('ended',()=>{resultPlayer.currentTime=0;});
+$('video-play-from-start').addEventListener('click',guarded(async()=>{resultPlayer.currentTime=0;await resultPlayer.play();}));
 $('settings-form').addEventListener('submit',guarded(()=>goStep('reading')));$('apply-voice').addEventListener('click',guarded(()=>goStep('reading')));for(const link of document.querySelectorAll('[data-go-step]'))link.addEventListener('click',guarded(()=>goStep(link.dataset.goStep)));
 function editableJob(){return {title:$('job-title').value,settings:state.settings,dictionary:state.dictionary,rows:state.rows.map(({id,caption,speech,scene})=>({id,caption,speech,scene}))};}
 $('add-row').addEventListener('click',guarded(()=>{throw new Error('MANUAL_CUT_EDITOR_REQUIRED');}));
@@ -486,7 +492,7 @@ async function adoptPreparedTitle(){
  return b?.titleRowId?undefined:state.production?.bookends?.titleRowId;
 }
 async function saveVoice(){if(isFinalized())return;const next=await api('settings',selectedSettings());dirtyFields.delete('settings');render(next,true);}
-async function goStep(step){if(state.busy||localBusy||state.video?.running)throw new Error('BUSY');if($(step)?.inert)throw new Error('API_KEY_REQUIRED');await pending(async()=>{await savePlanning();if(step==='reading'||step==='finish')await saveVoice();if(step==='reading')await adoptPreparedTitle();});window.location.hash='#'+step;updateControls();$(step).scrollIntoView?.({block:'start'});}
+async function goStep(step){if(state.busy||localBusy||state.video?.running)throw new Error('BUSY');if($(step)?.inert)throw new Error('API_KEY_REQUIRED');await pending(async()=>{await savePlanning();if(step==='reading'||step==='finish')await saveVoice();if(step==='reading')await adoptPreparedTitle();});window.location.hash='#'+step;updateControls();$(step).scrollIntoView?.({block:'start',...(step==='finish'?{behavior:'instant'}:{})});}
 async function pending(action){localBusy=true;updateControls();try{return await action();}finally{localBusy=false;updateControls();}}
 $('preview-voice').addEventListener('click',guarded(async()=>{const existing=cachedSample();if(existing){sampleAudio(existing.id);await $('sample-audio').play();return;}if(!state.keyConfigured)throw new Error('API_KEY_REQUIRED');message('音声サンプルを1回合成しています。');await pending(async()=>{const result=await api('preview',{settings:selectedSettings(),consent:$('preview-consent').checked});render(await api('status'));sampleAudio(result.sample);message('サンプルを保存しました。次回はAPIを使わず再生できます。');});}));
 $('save-production').addEventListener('click',guarded(async()=>{productionSaving=true;actionMessage('save-status','制作条件を保存しています…');try{await pending(async()=>{const next=await api('production',currentBrief());dirtyFields.delete('production');render(next);actionMessage('save-status','保存しました。指示・素材の使い方・台本案をこの動画に保存済みです。');});}finally{productionSaving=false;updateControls();}},'save-status'));

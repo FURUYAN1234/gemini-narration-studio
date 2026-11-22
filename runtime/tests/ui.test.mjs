@@ -1213,3 +1213,15 @@ test('disabled emergency stop is neutral gray and readable while active stays re
  assert.match(disabled,/color:\s*#fff/);assert.match(disabled,/opacity:\s*1(?:;|$)/);assert.match(disabled,/cursor:\s*not-allowed/);
  assert.match(css,/#emergency-stop\s*\{[^}]*top:20px;[^}]*right:12px;/);
 });
+
+test('a saved video can replay after a restart without an API key or BGM',async()=>{
+  const ui=await setup();
+  ui.restart();
+  ui.externalVideo({stage:'complete',result:{file:'saved.mp4',filename:'saved.mp4',savedPath:'demo/saved.mp4'}});
+  await ui.poll();
+  assert.equal(ui.get('finish').inert,false);
+  assert.equal(ui.get('video-result').hidden,false);
+  await ui.get('video-play-from-start').emit('click');
+  assert.equal(ui.get('video-player').played,true);
+  assert.equal(ui.requests.some(r=>r.route==='generate'),false);
+});
