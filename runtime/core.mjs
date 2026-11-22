@@ -191,6 +191,8 @@ async function googleDesign({key,title,instructions,signal}){
  const response=await googleRequest('models/gemini-3.5-flash:generateContent',buildDesignRequest({title,instructions}),key,signal),candidate=response.candidates?.[0];
  return parseGoogleJson(response);
 }
+import {recordingEditRequest,recordingCuts} from './recording-edits.mjs';
+
 export class NarrationSession {
   #key=''; #provider; #controller; #saving=Promise.resolve();
   constructor({outputDir,provider=googleSynthesis,draftProvider=googleDraft,designProvider=googleDesign,correctionProvider=googleCorrections,sourceResolver=resolveSourceUrls}) {
@@ -337,6 +339,26 @@ export class NarrationSession {
       this.error=providerError(error);
       throw new Error(this.error);
     }finally{this.busy=false;this.#controller=null;}
+  }
+  async editRecording(metadata,file) {
+    this.#idle();
+    if(!this.#key)fail('API_KEY_REQUIRED');
+    this.busy=true;
+    this.#controller=new AbortController();
+    try {
+      const request=recordingEditRequest(metadata);
+      if(JSON.stringify(request).includes(this.#key))fail('CREDENTIAL_IN_TEXT');
+      const signal=this.#controller.signal;
+      const response=await googleRequest('models/gemini-3.5-flash:generateContent',request,this.#key,signal);
+      signal.throwIfAborted();
+      if(response.candidates?.[0]?.finishReason!=='STOP')fail('PROVIDER_INCOMPLETE_TEXT');
+      const cuts=recordingCuts(parseGoogleJson(response),metadata,file);
+      if(JSON.stringify(cuts).includes(this.#key))fail('PROVIDER_INVALID_RESPONSE');
+      return cuts;
+    } finally {
+      this.#controller=null;
+      this.busy=false;
+    }
   }
   cancel(){this.#controller?.abort();}
   async exportManifest({persist=true}={}) {

@@ -5,6 +5,7 @@ import {readFile, mkdir, access,readdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {createRequire} from 'node:module';
+import {recordingRuntime} from './runtime/demo-recording.mjs';
 
 export const appRoot = path.dirname(fileURLToPath(import.meta.url));
 export function options(args, home=os.homedir()) {
@@ -50,7 +51,7 @@ export async function ensureSetup(root=appRoot) {
   await access(path.join(root,'node_modules','.remotion','chrome-headless-shell'));
 }
 export async function runtimeIdentity(root=appRoot){
- const files=['launch.mjs','package-lock.json'];
+ const files=['launch.mjs','package-lock.json','scripts/recording-runtime/package-lock.json','scripts/recording-runtime/package.json'];
  async function walk(dir,prefix){for(const entry of await readdir(dir,{withFileTypes:true})){const name=prefix+entry.name;if(entry.isDirectory()){if(entry.name!=='tests')await walk(path.join(dir,entry.name),name+'/');}else if(/\.(mjs|tsx|html|css|json)$/.test(name))files.push(name);}}
  await walk(path.join(root,'runtime'),'runtime/');const hash=createHash('sha256');
   await walk(path.join(root,'mcp'),'mcp/');
@@ -90,7 +91,9 @@ export async function launch(args=process.argv.slice(2),home=os.homedir()) {
   if(Number(process.versions.node.split('.')[0])<22)throw new Error('NODE_22_REQUIRED');
   const config=options(args,home);
   process.chdir(appRoot);
-  if(config.setupOnly){await ensureSetup();console.log('NARRATION_STUDIO_SETUP_READY');return;}
+  const recording=recordingRuntime();
+  const prepareRecording=()=>recording.prepare().then(ready=>console.log(ready?'NARRATION_RECORDING_READY':'NARRATION_RECORDING_SETUP_UNAVAILABLE: 録画機能だけ再試行できます。'));
+  if(config.setupOnly){await ensureSetup();await prepareRecording();console.log('NARRATION_STUDIO_SETUP_READY');return;}
   const identity=await runtimeIdentity();
   if(await existingStudio(config.port,config.output,identity)) {
     const url='http://127.0.0.1:'+config.port;
@@ -106,9 +109,10 @@ export async function launch(args=process.argv.slice(2),home=os.homedir()) {
   const {NarrationSession}=await import('./runtime/core.mjs');
   const {startServer}=await import('./runtime/server.mjs');
   const session=await NarrationSession.open({outputDir:config.output});
-  const service=await startServer({session,port:config.port,startupMode:config.startupMode,sampleDir:path.join(config.output,'voice-samples'),videoRendererRoot:appRoot,launcherStatus:{app:'gemini-narration-studio',version:JSON.parse(await readFile(path.join(appRoot,'package.json'),'utf8')).version,output:config.output,...identity}});
+  const service=await startServer({session,port:config.port,startupMode:config.startupMode,sampleDir:path.join(config.output,'voice-samples'),videoRendererRoot:appRoot,recording,launcherStatus:{app:'gemini-narration-studio',version:JSON.parse(await readFile(path.join(appRoot,'package.json'),'utf8')).version,output:config.output,...identity}});
   console.log('NARRATION_STUDIO_READY '+service.url);
   console.log('制作データ: '+config.output);
+  void prepareRecording();
   if(config.openBrowser)openLocalBrowser(service.url);
   process.once('SIGINT',async()=>{await service.close();process.exitCode=0;});
   return service;

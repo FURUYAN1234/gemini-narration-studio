@@ -118,7 +118,7 @@ test('same data directory cannot silently reuse a different runtime build',async
 
 test('runtime identity is independent of root and changes with executable content, not tests',async t=>{
  const first=await mkdtemp(path.join(os.tmpdir(),'studio-build-a-')),second=await mkdtemp(path.join(os.tmpdir(),'studio-build-b-'));t.after(()=>rm(first,{recursive:true,force:true}));t.after(()=>rm(second,{recursive:true,force:true}));
- for(const root of [first,second]){await mkdir(path.join(root,'runtime/tests'),{recursive:true});await mkdir(path.join(root,'mcp'),{recursive:true});for(const [file,text]of [['launch.mjs','launch'],['package-lock.json','{}'],['runtime/server.mjs','server'],['runtime/tests/test.mjs','test']])await writeFile(path.join(root,file),text);}
+ for(const root of [first,second]){await mkdir(path.join(root,'runtime/tests'),{recursive:true});await mkdir(path.join(root,'mcp'),{recursive:true});await mkdir(path.join(root,'scripts/recording-runtime'),{recursive:true});for(const [file,text]of [['launch.mjs','launch'],['package-lock.json','{}'],['scripts/recording-runtime/package-lock.json','{}'],['scripts/recording-runtime/package.json','{}'],['runtime/server.mjs','server'],['runtime/tests/test.mjs','test']])await writeFile(path.join(root,file),text);}
  const initial=await runtimeIdentity(first);assert.deepEqual(await runtimeIdentity(second),initial);await writeFile(path.join(second,'runtime/tests/test.mjs'),'changed test');assert.deepEqual(await runtimeIdentity(second),initial);await writeFile(path.join(second,'runtime/server.mjs'),'changed executable');assert.notEqual((await runtimeIdentity(second)).buildId,initial.buildId);
 });
 

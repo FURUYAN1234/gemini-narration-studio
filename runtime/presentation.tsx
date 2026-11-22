@@ -10,9 +10,9 @@ import {MotionSlide,FocusArtwork,CutTransition} from './motion-presentation';
 import {EXPANDED_LAYOUTS,templateGeometry,fitText,motionFrame,ease,pointSchedule} from './motion.mjs';
 
 // Layouts adapt reveal.js themes (MIT; see vendor/reveal-LICENSE.txt).
-export type Slide={explanation?:Explanation;id:string;scene?:string;caption:string;src:string;from:number;frames:number;title?:string;points?:string[];image?:string;imageFocus?:{x:number;y:number;zoom:number;label:string};layout?:'title'|'split'|'steps';subtitles?:{text:string;from:number;to:number}[]};
+export type Slide={video?:string;videoStart?:number;explanation?:Explanation;id:string;scene?:string;caption:string;src:string;from:number;frames:number;title?:string;points?:string[];image?:string;imageFocus?:{x:number;y:number;zoom:number;label:string};layout?:'title'|'split'|'steps';subtitles?:{text:string;from:number;to:number}[]};
 export type Design={name:string;layout:'split'|'visual'|'steps'|'editorial'|'focus'|'poster'|'gallery'|'rail'|'stack';background:string;foreground:string;heading:string;accent:string;decoration:string;titleSize:number;imageSide:string;imageRatio:number;radius:number};
-export type PresentationData={promo?:boolean;promoAudio?:string;bookends?:{titleRowId?:string;endLabel:string;endUrl:string;owner:string;creationYear:number;from:number;frames:number;watermarkEnabled?:boolean;tools?:string[]};gapFrames?:number;music?:{src:string;durationSeconds:number;level:number};title:string;fps:number;durationInFrames:number;rows:Slide[];design?:Design;motion?:{version:1;style:'cinematic'|'kinetic'|'editorial';intensity:'subtle'|'standard'|'bold';transitions?:string[];transitionTones?:string[]}|null};
+export type PresentationData={promo?:boolean;promoAudio?:string;promoNarration?:string;bookends?:{titleRowId?:string;endLabel:string;endUrl:string;owner:string;creationYear:number;from:number;frames:number;watermarkEnabled?:boolean;tools?:string[]};gapFrames?:number;music?:{src:string;durationSeconds:number;level:number};title:string;fps:number;durationInFrames:number;rows:Slide[];design?:Design;motion?:{version:1;style:'cinematic'|'kinetic'|'editorial';intensity:'subtle'|'standard'|'bold';transitions?:string[];transitionTones?:string[]}|null};
 export type Theme={name:string;background:string;foreground:string;heading:string;accent:string};
 const font='NarrationJapanese';
 const FittedHeading=({text,width,height,size,lineHeight=1.3}:{text:string;width:number;height:number;size:number;lineHeight?:number})=>{
@@ -93,7 +93,7 @@ const ExpandedSlide=({row,data,index,design:d}:{row:Slide;data:PresentationData;
   <Audio src={staticFile(row.src)}/>
  </AbsoluteFill>;
 };
-const BackgroundMusic=({data}:{data:PresentationData})=>{if(data.promoAudio)return <Audio src={staticFile(data.promoAudio)}/>;if(!data.music)return null;const music=data.music;return <>{musicClips(data.durationInFrames,Math.floor(music.durationSeconds*data.fps),data.fps).map(clip=><Sequence key={clip.from} from={clip.from} durationInFrames={clip.frames}><Audio src={staticFile(music.src)} volume={frame=>musicVolume(clip.from+frame,data,music.level)*musicClipGain(frame,clip)}/></Sequence>)}</>;};
+const BackgroundMusic=({data}:{data:PresentationData})=>{if(data.promo)return <>{data.promoAudio&&<Audio src={staticFile(data.promoAudio)} volume={data.promoNarration?0.24:1}/>} {data.promoNarration&&<Audio src={staticFile(data.promoNarration)}/>}</>;if(!data.music)return null;const music=data.music;return <>{musicClips(data.durationInFrames,Math.floor(music.durationSeconds*data.fps),data.fps).map(clip=><Sequence key={clip.from} from={clip.from} durationInFrames={clip.frames}><Audio src={staticFile(music.src)} volume={frame=>musicVolume(clip.from+frame,data,music.level)*musicClipGain(frame,clip)}/></Sequence>)}</>;};
 const Bookend=({data,theme,row}:{data:PresentationData;theme:Theme;row?:Slide})=>{
  const frame=useCurrentFrame(),ending=!row,b=data.bookends!,frames=ending?b.frames:row!.frames+(data.gapFrames??7);
  const fade=interpolate(frame,[0,18,Math.max(19,frames-18),frames],[0,1,1,0],{extrapolateLeft:'clamp',extrapolateRight:'clamp'});

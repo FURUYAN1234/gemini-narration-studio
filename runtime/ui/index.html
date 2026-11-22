@@ -23,7 +23,24 @@
   <div class="product-intro-form">
     <p class="help">「素材と台本」で取り込んだ画像を、一覧の上から4秒ずつ表示します。完成したMP4はページ下部で再生できます。</p>
     <label>動画タイトル<input id="promo-title" type="text" maxlength="90" placeholder="紹介するアプリや機能"></label>
-    <label>表示する素材（最大6枚）<select id="promo-images" multiple size="4"></select></label>
+    <details class="promo-recording">
+      <summary>操作を録画する</summary>
+      <label>デモ用アプリのURL<input id="recording-url" type="url" maxlength="500" placeholder="http://127.0.0.1:5000/"></label>
+      <label>操作手順<textarea id="recording-steps" rows="4" maxlength="2400" placeholder="クリック｜開始&#10;入力｜タイトル｜デモ用サンプル"></textarea></label>
+      <p class="help">別のローカルアプリを、ログインしていない状態で開きます。例に沿って1行に1操作（最大7件）を書き、画面のボタン名や入力欄名をそのまま使ってください。入力にはサンプルデータを使用してください。</p>
+      <div class="input-row"><button id="recording-start" type="button" disabled>録画を開始</button><button id="recording-stop" type="button" class="secondary" hidden>録画・編集を停止</button><button id="recording-setup" type="button" class="secondary" hidden>録画機能を再セットアップ</button></div>
+      <p id="recording-status" class="help" role="status"></p>
+      <label>録画の確認・AI編集<select id="recording-source"></select></label>
+      <video id="recording-player" controls preload="metadata" aria-label="元の操作録画" hidden></video>
+      <label class="music-switch"><input id="recording-consent" type="checkbox"> 操作名と時刻をGeminiに送って編集案を作る（API使用）</label>
+      <button id="recording-edit" type="button" class="secondary" disabled>AIでカット案を作る</button>
+      <p id="recording-edit-status" class="help" role="status"></p>
+      <button id="recording-apply" type="button" class="secondary" hidden>いまのカット一覧をAI案に置き換える</button>
+    </details>
+    <label>カットに追加する素材<select id="promo-images"></select></label>
+    <button id="promo-add" type="button" class="secondary" disabled>素材をカットに追加</button>
+    <ol id="promo-cuts" class="promo-cut-list" aria-label="カット順"></ol>
+    <label>ナレーション音声（任意）<select id="promo-narration"></select></label>
     <label class="music-switch"><input id="promo-sound" type="checkbox" checked> BGMと切り替え音を入れる</label>
     <label class="music-switch"><input id="promo-watermark" type="checkbox" checked> 末尾に従来のウォーターマークを表示する</label>
     <div class="input-row"><button id="promo-start" type="button">紹介動画を書き出す</button><button id="promo-stop" class="secondary" type="button" hidden>紹介動画を停止</button></div>

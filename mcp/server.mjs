@@ -24,8 +24,8 @@ async function localAction(action,data){
   return result;
 }
 
-function tool(name,description,action,inputSchema,readOnlyHint){
-  server.registerTool(name,{description,inputSchema,annotations:{readOnlyHint,destructiveHint:false,openWorldHint:false}},async input=>{
+function tool(name,description,action,inputSchema,readOnlyHint,openWorldHint=false){
+  server.registerTool(name,{description,inputSchema,annotations:{readOnlyHint,destructiveHint:false,openWorldHint}},async input=>{
     try{
       const result=await localAction(action,input);
       return {content:[{type:'text',text:JSON.stringify(result)}],structuredContent:result};
@@ -41,11 +41,22 @@ const revision=z.string().regex(/^[a-f0-9]{64}$/);
 const identity={projectId:z.string().max(40),revision,productionRevision:revision};
 tool('studio_project','Read the current project, imported screenshots and local render status. Requires MCP approval in the app.','project',z.object({}).strict(),true);
 tool('studio_render_preview','Render the current prepared narration and artwork for human review. Uses existing audio only. Does not approve or finalize.','preview',z.object(identity).strict(),false);
-tool('studio_render_promo','Make a short animated product demo from already imported screenshot asset IDs, with local music and transition sounds enabled by default. Poll studio_project for the verified MP4.','promo',z.object({
-  ...identity,title:z.string().min(1).max(90),watermarkEnabled:z.boolean().optional(),soundEnabled:z.boolean().optional(),
+const recordingFile=z.string().regex(/^[a-f0-9]{64}\.mp4$/);
+const recordingStep=z.discriminatedUnion('action',[
+  z.object({action:z.literal('click'),target:z.string().min(1).max(120)}).strict(),
+  z.object({action:z.literal('fill'),target:z.string().min(1).max(120),text:z.string().max(180)}).strict()
+]);
+tool('studio_record_demo','Record only the localhost demo URL and exact UI steps approved by the user. Use an unsigned-in demonstration instance with sample data. Poll studio_project for recording.asset.','recording',z.object({
+  ...identity,url:z.string().max(500),steps:z.array(recordingStep).min(1).max(7)
+}).strict(),false);
+tool('studio_edit_recording','Draft ordered cuts and Japanese captions from the names and timing of recorded operations. Call only after the user approves sending those details to Gemini. Never sends footage or entered values. Poll studio_project for recording.edit.','recording-edit',z.object({
+  ...identity,file:recordingFile,sendOperationNamesToGemini:z.literal(true)
+}).strict(),false,true);
+tool('studio_render_promo','Make a short animated product demo from already imported screenshot or MP4 asset IDs, with local music and transition sounds enabled by default. Poll studio_project for the verified MP4.','promo',z.object({
+  ...identity,title:z.string().min(1).max(90),watermarkEnabled:z.boolean().optional(),soundEnabled:z.boolean().optional(),narration:z.string().regex(/^[a-f0-9]{64}\.(wav|mp3)$/).optional(),
   cuts:z.array(z.object({
-    image:z.string().regex(/^[a-f0-9]{64}\.(png|jpe?g|webp)$/),
-    title:z.string().min(1).max(66),caption:z.string().max(120).optional(),seconds:z.number().int().min(3).max(8).optional()
+    image:z.string().regex(/^[a-f0-9]{64}\.(png|jpe?g|webp|mp4)$/),
+    title:z.string().min(1).max(66),caption:z.string().max(120).optional(),seconds:z.number().int().min(3).max(8).optional(),startFrame:z.number().int().min(0).max(899).optional(),frames:z.number().int().min(18).max(900).optional()
   }).strict()).min(1).max(6)
 }).strict(),false);
 await server.connect(new StdioServerTransport());

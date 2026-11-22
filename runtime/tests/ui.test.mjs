@@ -7,6 +7,7 @@ import {VOICE_GENDERS,VOICES,MODELS,SAMPLE_SETTINGS} from '../core.mjs';
 import {VIDEO_TEMPLATES,presentationDesign} from '../designs.mjs';
 import {themeTokens} from '../themes.mjs';
 import {fitText} from '../motion.mjs';
+import {initPromoTools} from '../ui/promo-tools.mjs';
 
 const appSource = (await readFile(new URL('../ui/app.mjs', import.meta.url), 'utf8')).replace(/^import .*\.mjs';\r?\n/gm,'');
 const html = await readFile(new URL('../ui/index.html', import.meta.url), 'utf8');
@@ -742,6 +743,7 @@ async function setup({beforeBootstrap,adoptionWait,adoptionError,titleReading,im
   const storage=new Map(pausedStep?[['narration-paused:original',pausedStep]]:[]);
   const resizes=[],windowEvents=new Map();
   const context = vm.createContext({fitText,getComputedStyle:()=>({fontSize:'72px',lineHeight:'100.8px'}),ResizeObserver:class {constructor(callback){resizes.push(callback);}observe(){}},MutationObserver:class {observe(){}},requestAnimationFrame:callback=>callback(),scriptActionState,parseScriptParts,document, fetch, setInterval: callback => {intervals.push(callback);}, window: {addEventListener:(name,handler)=>windowEvents.set(name,handler),sessionStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},location:{hash:''},alert:message=>alerts.push(message),confirm: message => {confirmations.push(message);return confirmResult;}}, crypto: {randomUUID: () => 'fixture-id',subtle:crypto.subtle}});
+  context.initPromoTools=initPromoTools;
   await vm.runInContext('(async () => {\n' + appSource + '\n})()', context, {filename: 'ui/app.mjs'});
   const get = id => {assert.ok(elements.has(id), 'UI element exists: ' + id); return elements.get(id);};
   const row = id => [...get('rows').walk()].find(element => element.dataset.approve === id);

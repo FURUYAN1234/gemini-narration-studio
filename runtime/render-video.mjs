@@ -66,7 +66,7 @@ try{
   report({stage:'verifying',progress:0});
   const bins=path.join(rendererRoot,'node_modules','@remotion','compositor-win32-x64-msvc');
   const ffmpeg=path.join(bins,process.platform==='win32'?'ffmpeg.exe':'ffmpeg'),ffprobe=path.join(bins,process.platform==='win32'?'ffprobe.exe':'ffprobe');await stat(ffmpeg);await stat(ffprobe);
-  const requireAudio=!promo||!!data.promoAudio;
+  const requireAudio=!promo||!!data.promoAudio||!!data.promoNarration;
   const run=promisify(execFile);checkCanceled();await fullDecodeVideo(ffmpeg,output,{signal:controller.signal,requireAudio});
   const {stdout}=await run(ffprobe,['-v','error','-show_streams','-show_format','-of','json',output],{windowsHide:true,maxBuffer:1024*1024,signal:controller.signal});checkCanceled();const metadata=JSON.parse(stdout),video=metadata.streams.find(s=>s.codec_type==='video'),audio=metadata.streams.find(s=>s.codec_type==='audio');
   if(!video||Boolean(audio)!==requireAudio||video.width!==composition.width||video.height!==composition.height||Math.abs(Number(metadata.format.duration)-composition.durationInFrames/composition.fps)>0.25)throw new Error('VIDEO_MEDIA_QA_FAILED');

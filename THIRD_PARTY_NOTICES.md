@@ -6,6 +6,7 @@
 - Noto Sans JP: SIL Open Font License; bundled `runtime/vendor/NotoSansJP-OFL.txt`.
 - 180 Gemini TTS preset samples: previously generated generic Japanese preview narration, model/voice/pitch metadata retained. No personal production narration is bundled. Google API terms apply to future API use.
 - Chrome Headless Shell and Remotion FFmpeg are installed by the renderer setup; their original package notices apply.
+- Playwright Core 1.65.1 is installed from npm under Apache-2.0, with its original license and notices. Playwright installs the pinned Chromium release under its original third-party notices. The application ZIP contains the dependency manifests.
 - Model Context Protocol TypeScript server SDK 2.4.0: Apache-2.0. The installed npm package retains its original license and notices.
 
 Browser setup uses the official [Remotion ensureBrowser API](https://www.remotion.dev/docs/renderer/ensure-browser). No other Antigravity application is required to render.
@@ -13,6 +14,8 @@ Browser setup uses the official [Remotion ensureBrowser API](https://www.remotio
 - Node.js 22.23.3 Windows x64 portable distribution: automatically downloaded only when supported Node.js/npm is missing, from https://nodejs.org/dist/v22.23.3/. The official archive SHA-256 is pinned in scripts/bootstrap.ps1 and checked before extraction. Node.js license and notices remain in the installed runtime folder.
 
 ## Application code and independent terms
+
+[autoRecording](https://github.com/OrrrGE/autoRecording) supplied the recording workflow idea. This distribution implements local capture and editing with Playwright and Remotion.
 
 The explanatory-scene implementation in runtime/explain-scenes.mjs and runtime/explain-presentation.tsx is original application code under the MIT license in LICENSE. OpenMontage supplied conceptual inspiration only; its source, templates, assets and packages are not copied, imported or bundled in this distribution. The separately installed OpenMontage project carries its own [AGPL-3.0 license](https://github.com/calesthio/OpenMontage/blob/main/LICENSE) and is not required to use this app.
 

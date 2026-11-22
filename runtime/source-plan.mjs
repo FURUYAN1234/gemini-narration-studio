@@ -12,9 +12,9 @@ export const MAX_SOURCE_BYTES=12*1024*1024;
 export async function collectSources(brief,assets,readAsset){
  const refs=normalizeReferences(brief.references),sources=[],parts=[];let bytes=Buffer.byteLength(refs.text);
  if(refs.text){sources.push({id:'text',label:'貼り付けた参考本文',kind:'text'});parts.push({text:JSON.stringify({sourceId:'text',content:refs.text})});}
- if(assets.filter(a=>a.origin!=='generated-music').length>20)fail('SOURCE_COUNT_LIMIT');
+ if(assets.filter(a=>!['generated-music','operation-recording'].includes(a.origin)).length>20)fail('SOURCE_COUNT_LIMIT');
  for(const [i,a]of assets.entries()){
-  if(a.origin==='generated-music')continue;
+  if(['generated-music','operation-recording'].includes(a.origin))continue;
   if(bytes+a.size>MAX_SOURCE_BYTES)fail('SOURCE_SIZE_LIMIT');
   const data=await readAsset(a.file),ext=validateAsset(a.name,data);bytes+=data.length;if(bytes>MAX_SOURCE_BYTES)fail('SOURCE_SIZE_LIMIT');
   const source={id:'asset-'+i,label:a.name,kind:ext==='txt'?'text':mime[ext],file:a.file};sources.push(source);parts.push({text:JSON.stringify({sourceId:source.id,name:a.name,file:a.file})});

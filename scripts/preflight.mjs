@@ -8,7 +8,7 @@ export function allowedFile(relative) {
   if(/(^|\/)(\.git|node_modules|output|data|dist)(\/|$)/.test(relative))return false;
   if(/(^|\/)(\.env[^/]*|\.npmrc|job\.json|production\.json|active-project\.json|video-receipt\.json|credentials[^/]*|auth\.json)$/.test(relative))return false;
   if(['docs/assets/demo-site-button.png','docs/assets/demo-site-button.svg','docs/assets/local-download-banner.png','docs/assets/manual-pdf-banner.png'].includes(relative))return true;
-  return /^(package(-lock)?\.json|\.gitignore|\.gitattributes|start_narration_studio\.bat|launch\.mjs|LICENSE|index\.html|public\/LICENSE\.txt|README\.md|THIRD_PARTY_NOTICES\.md|scripts\/(bootstrap\.ps1|[^/]+\.mjs)|tests\/[^/]+\.test\.mjs|docs\/(narration-(?:api-)?guide\.pdf|manuals\/(?:build_api_guide\.py|update_operation_guide\.py|api_guide_content\.json|README\.md)|deploy\.md|publication\.md|note-draft\.md|licenses\/(?:previous-notices\.md|furu-application-terms-2026-10-08\.txt)|releases\/v\d+\.\d+\.\d+\.md|screenshots\/[A-Za-z0-9_-]+\.(png|jpg|jpeg|webp))|runtime\/[^/]+\.(mjs|tsx)|runtime\/tests\/[^/]+\.test\.mjs|runtime\/ui\/(app\.mjs|index\.html|style\.css|mcp-guide\.html)|mcp\/(server\.mjs|skill-archive\.mjs|skills\/narrated-video-production\/(SKILL\.md|agents\/openai\.yaml))|runtime\/vendor\/[A-Za-z0-9_.\/-]+)$/.test(relative);
+  return /^(package(-lock)?\.json|\.gitignore|\.gitattributes|start_narration_studio\.bat|launch\.mjs|LICENSE|index\.html|public\/LICENSE\.txt|README\.md|THIRD_PARTY_NOTICES\.md|scripts\/(bootstrap\.ps1|[^/]+\.mjs|recording-runtime\/package(-lock)?\.json)|tests\/[^/]+\.test\.mjs|docs\/(narration-(?:api-)?guide\.pdf|manuals\/(?:build_api_guide\.py|update_operation_guide\.py|api_guide_content\.json|README\.md)|deploy\.md|publication\.md|note-draft\.md|licenses\/(?:previous-notices\.md|furu-application-terms-2026-10-08\.txt)|releases\/v\d+\.\d+\.\d+\.md|screenshots\/[A-Za-z0-9_-]+\.(png|jpg|jpeg|webp))|runtime\/[^/]+\.(mjs|tsx)|runtime\/tests\/[^/]+\.test\.mjs|runtime\/ui\/(app\.mjs|promo-tools\.mjs|index\.html|style\.css|mcp-guide\.html)|mcp\/(server\.mjs|skill-archive\.mjs|skills\/narrated-video-production\/(SKILL\.md|agents\/openai\.yaml))|runtime\/vendor\/[A-Za-z0-9_.\/-]+)$/.test(relative);
 }
 export function validateDependencyAudit(result) {
   const counts=result?.metadata?.vulnerabilities;
@@ -58,19 +58,21 @@ export async function audit(root,{tracked=false}={}) {
   }
   await walk(root);
   if(SAMPLE_SETTINGS.some(config=>!sampleIds.has(previewFingerprint(config))))throw new Error('BUNDLED_180_SAMPLES_REQUIRED');
-  for(const required of ['package.json','package-lock.json','launch.mjs','start_narration_studio.bat','scripts/bootstrap.ps1','README.md','runtime/server.mjs'])await stat(path.join(root,required));
+  for(const required of ['package.json','package-lock.json','launch.mjs','start_narration_studio.bat','scripts/bootstrap.ps1','scripts/recording-runtime/package.json','scripts/recording-runtime/package-lock.json','README.md','runtime/server.mjs'])await stat(path.join(root,required));
   return {count,samples,presetCoverage:SAMPLE_SETTINGS.length};
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
   const root=path.resolve(fileURLToPath(new URL('..',import.meta.url)));
   const result=await audit(root);
-  let dependencyResult;
-  try {
-    const command=process.platform==='win32'?'cmd.exe':'npm';
-    const args=process.platform==='win32'?['/d','/s','/c','npm audit --json --ignore-scripts']:['audit','--json','--ignore-scripts'];
-    dependencyResult=JSON.parse(execFileSync(command,args,{cwd:root,encoding:'utf8',windowsHide:true,timeout:180000,stdio:['ignore','pipe','pipe']}));
-  }catch{throw new Error('DEPENDENCY_AUDIT_FAILED');}
-  validateDependencyAudit(dependencyResult);
+  for(const cwd of [root,path.join(root,'scripts','recording-runtime')]){
+    let dependencyResult;
+    try {
+      const command=process.platform==='win32'?'cmd.exe':'npm';
+      const args=process.platform==='win32'?['/d','/s','/c','npm audit --json --ignore-scripts']:['audit','--json','--ignore-scripts'];
+      dependencyResult=JSON.parse(execFileSync(command,args,{cwd,encoding:'utf8',windowsHide:true,timeout:180000,stdio:['ignore','pipe','pipe']}));
+    }catch{throw new Error('DEPENDENCY_AUDIT_FAILED');}
+    validateDependencyAudit(dependencyResult);
+  }
   console.log('STANDALONE_DEPENDENCY_AUDIT_OK total=0');
   console.log('STANDALONE_RELEASE_PREFLIGHT_OK '+JSON.stringify(result));
 }

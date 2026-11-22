@@ -1,3 +1,4 @@
+import {initPromoTools} from './promo-tools.mjs';
 import {scriptActionState,parseScriptParts} from './script-flow.mjs';
 import {fitText} from './motion.mjs';
 const $=id=>document.getElementById(id);
@@ -116,7 +117,7 @@ function currentBrief(){return {...(state.production?.brief.titleReading?{titleR
 function musicEnabled(){return true;}
 async function enableAutomaticMusic(){if(state.production?.musicEnabled!==true)render(await api('music-preference',{enabled:true,revision:state.revision,productionRevision:state.productionRevision}),true);}
 function scriptUrls(){const parts=scriptParts();return parts.length&&parts.every(s=>/^https?:\/\/\S+$/i.test(s))?parts:[];}
-function hasSources(){return !!($('source-text').value.trim()||$('source-urls').value.trim()||state.production?.assets?.some(a=>a.origin!=='generated-music'));}
+function hasSources(){return !!($('source-text').value.trim()||$('source-urls').value.trim()||state.production?.assets?.some(a=>!['generated-music','operation-recording'].includes(a.origin)));}
 function selectDirectionProposal(){if(!directionProposal||!designs.some(t=>t.id===directionProposal.template))throw new Error('INVALID_AUTOMATIC_DIRECTION');$('job-title').value=directionProposal.title;designChoice={mode:'template',template:directionProposal.template};$('motion-style').value=directionProposal.motion?.style||'off';$('motion-intensity').value=directionProposal.motion?.intensity||'standard';for(const field of ['title','design','motion'])dirtyFields.add(field);}
 function updateDirectionControls(){const automatic=automaticDirectionEnabled(),proposal=directionPending?undefined:directionProposal,locked=state.busy||localBusy||isFinalized();$('auto-direction').disabled=locked;$('manual-direction').hidden=automatic;$('manual-direction').open=!automatic;$('apply-direction').disabled=locked;const legacy=!automatic&&!state.presentation?.mode&&!dirtyFields.has('design');const choice=legacy?undefined:automatic&&proposal?designs.find(t=>t.id===proposal.template):designChoice?.mode==='template'?designs.find(t=>t.id===designChoice.template):undefined,selectedDesign=choice?.design||renderPreviewDesign(state.presentation),show=automatic?!!proposal:!!selectedDesign;$('direction-sample').hidden=!show;if(show&&selectedDesign)paintDesign($('direction-sample'),selectedDesign);$('direction-preview-caption').textContent=legacy?'保存済みの配色の見本（配置は簡易表示）':'選択したテンプレートの配色・レイアウト見本';$('direction-title').textContent=automatic&&proposal?proposal.title:$('job-title').value;$('direction-info').textContent=automatic?(proposal?'AIの提案（台本採用時に反映）：'+(choice?.name||proposal.template)+' ／ '+proposal.title+' ／ '+(proposal.motion?.style||'静かなスライド'):'台本生成後にタイトル・テンプレート・動きを自動選択します。'):'手動設定：'+(choice?.name||(legacy?'保存済みの配色':'今回用のデザイン'))+'。下の調整欄で変更できます。';}
 $('auto-direction').addEventListener('change',guarded(async()=>{if(!dirtyFields.has('production'))productionBaseline=state.productionRevision;dirtyFields.add('production');$('manual-direction').open=!automaticDirectionEnabled();directionPending=automaticDirectionEnabled();updateControls();}));
@@ -291,38 +292,18 @@ function updateApiBoundary(){
  for(const button of document.querySelectorAll('[data-go-step]')){const step=button.dataset.goStep;if(step==='finish')button.hidden=!hasGenerationOutput();if(missing&&(['connection','reading'].includes(step)?planningBlocked:step==='finish'&&finishBlocked))button.disabled=true;else button.disabled=!!(state.busy||localBusy);}
 }
 function maybeAdvanceAudio(){updateApiBoundary();if(!advanceAfterAudio||state.busy||localBusy)return;if(state.error){advanceAfterAudio=false;return;}if(!state.rows.length||state.rows.some(r=>!r.audioCurrent)||(musicEnabled()&&(!state.production?.music||!state.musicCurrent)))return;advanceAfterAudio=false;window.location.hash='#finish';$('finish').scrollIntoView?.({block:'start'});message(!state.busy&&state.video?.stage==='complete'&&!state.video.running&&state.video.result?videoCompletionMessage(state.video):state.video?.running?'音声'+(musicEnabled()?'とBGM':'')+'を準備しました。続けて動画を作成しています。完成後に動画と音声を確認してください。':'音声の準備が完了しました。動画の状態を④で確認してください。');}
-let promoChoicesKey,promoShown;
+const refreshPromoTools=$('promo-add')?initPromoTools({$,element,api,guarded,render,readState:()=>state,errors}):()=>{};
 function renderStudioTools(){
   const mcp=state.mcp||{},entered=$('mcp-access');
   if(!entered)return;
   entered.setAttribute('aria-pressed',String(!!mcp.allowed));
   entered.textContent=mcp.allowed?'停止して手動に戻る':'MCP接続を許可';
   $('mcp-state').textContent=mcp.attached?'MCP 接続済み':mcp.allowed?'MCP 接続待ち':'MCP 未接続';
-  const list=$('promo-images'),items=(state.production?.assets||[]).filter(a=>/^[a-f0-9]{64}\.(png|jpe?g|webp)$/.test(a.file));
-  const choiceKey=items.map(a=>a.file).join(',');
-  if(promoChoicesKey!==choiceKey){
-    const selected=new Set(Array.from(list.selectedOptions||[],o=>o.value));
-    list.replaceChildren(...items.map(a=>{const o=element('option',a.name,{value:a.file});o.selected=selected.has(a.file);return o;}));
-    promoChoicesKey=choiceKey;
-  }
-  const intro=state.promo||{},active=!!intro.running;
-  $('promo-start').disabled=active||state.busy||state.video?.running||!intro.available||items.length===0;
-  $('promo-stop').hidden=!active;
-  $('promo-status').textContent=active?'紹介動画を書き出し中 · '+Math.round((intro.progress||0)*100)+'%':intro.error?(errors[intro.error]||'紹介動画を書き出せませんでした。')+' ('+intro.error+')':intro.result?'書き出しが完了しました。':'';
-  $('promo-result-link').hidden=$('promo-result').hidden=!intro.result;
-  if(intro.result?.file!==promoShown){promoShown=intro.result?.file;if(promoShown)$('promo-player').src='/api/promo-video?v='+encodeURIComponent(promoShown);else $('promo-player').removeAttribute('src');}
+  refreshPromoTools();
 }
 $('mcp-access')?.addEventListener('click',guarded(async()=>{
   await pending(async()=>render(await api('mcp-access',{enabled:!state.mcp?.allowed,projectId:state.projectId})));
 }));
-$('promo-start')?.addEventListener('click',guarded(async()=>{
-  const cuts=Array.from($('promo-images').selectedOptions,selected=>({image:selected.value,title:selected.textContent.replace(/\.[a-z]+$/i,'').slice(0,66)}));
-  const title=$('promo-title').value.trim();
-  if(!title||cuts.length<1||cuts.length>6)throw new Error('タイトルと1〜6枚の画像を指定してください。');
-  await api('promo',{projectId:state.projectId,productionRevision:state.productionRevision,title,cuts,soundEnabled:$('promo-sound').checked,watermarkEnabled:$('promo-watermark').checked});
-  render(await api('status'));
-},'promo-status'));
-$('promo-stop')?.addEventListener('click',guarded(async()=>{await api('cancel',{});render(await api('status'));},'promo-status'));
 function render(next,force=false){state=next;renderStudioTools();if(state.keyConfigured)$('api-required-alert').hidden=true;$('resume-info').textContent=state.resumed?'保存した制作「'+state.title+'」を再開しています。':projectHasContent()?'制作中の動画です。別の制作を始めると、台本・素材のない空の制作を開きます。':'新規制作です。台本・素材はまだ登録されていません。';let keyLost=false;try{keyLost=!state.keyConfigured&&window.sessionStorage?.getItem('narration-had-key')==='yes';if(state.keyConfigured)window.sessionStorage?.setItem('narration-had-key','yes');}catch{}$('key-reset-notice').hidden=!keyLost;if(lastKeyConfigured!==state.keyConfigured){$('api-settings').open=!state.keyConfigured&&!isFinalized();lastKeyConfigured=state.keyConfigured;}$('api-connection').classList.toggle('needs-key',!state.keyConfigured&&!isFinalized());$('api-summary').textContent=state.keyConfigured?'APIキーを変更・解除':'Gemini APIキーを登録';$('key-state').textContent=state.keyConfigured?'キー登録済み':'APIキー未設定';$('key-state').classList.toggle('ready',state.keyConfigured);$('review-count').textContent=`${state.rows.filter(r=>r.reviewed).length} / ${state.rows.length} 読み確認済み`;$('progress').textContent=state.busy&&state.production?.authoring?.lastAttempt?.state==='running'?'指定した台本・読みの作成処理を実行中です。完了を待っています。':state.busy?`${state.progress?.phase||'合成中'}：${state.progress?.completed||0} / ${state.progress?.total||0} カット（自動再試行なし）`:state.progress?`合成終了：${state.progress.completed} / ${state.progress.total} カット`:'';
   $('theme').value=screenTheme||state.presentation?.theme||'moon';applyTheme($('theme').value);
   if(!dirtyFields.has('design')&&!designPreviewOnly)$('design-instructions').value=state.presentation?.instructions||'';
