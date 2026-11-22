@@ -41,16 +41,25 @@ try{
   const scenes=production.status().visuals||await readFile(path.join(sourceDir,'video-scenes.json'),'utf8').then(JSON.parse).catch(error=>{if(error.code==='ENOENT')return {};throw error;});
   const artworkTools=new Set();
   await mkdir(path.join(publicDir,'cuts'),{recursive:true});
+  let extraVideoFrames=0;
   for(const row of data.rows){
+    row.from+=extraVideoFrames;
     const asset=production.cutMedia(row);
     if(asset){
       const destination=path.join(publicDir,'cuts',asset.file),src='cuts/'+asset.file;
       await writeFile(destination,await production.readAsset(asset.file));
-      if(isCutVideo(asset.file)){row.video=src;row.videoFrames=Math.max(1,Math.floor(await videoDuration(rendererRoot,destination,controller.signal)*data.fps));}
+      if(isCutVideo(asset.file)){
+        const duration=await videoDuration(rendererRoot,destination,controller.signal);
+        if(asset.clip&&asset.clip.endSeconds>duration+.05)throw new Error('INVALID_VIDEO_CLIP');
+        row.video=src;row.videoStart=asset.clip?Math.round(asset.clip.startSeconds*data.fps):0;
+        const end=Math.floor(Math.min(duration,asset.clip?.endSeconds??duration)*data.fps);
+        row.videoFrames=Math.max(1,end-row.videoStart);
+        if(asset.clip&&row.videoFrames>row.frames){extraVideoFrames+=row.videoFrames-row.frames;row.frames=row.videoFrames;}
+      }
       else row.image=src;
       row.layout='split';
     }
-    const visual=scenes[row.id]||{};if(visual.imageFocus)row.imageFocus=visual.imageFocus;row.title=typeof visual.title==='string'?visual.title.slice(0,200):row.scene||data.title;
+    const visual=scenes[row.id]||{};if(visual.imageFocus)row.imageFocus=visual.imageFocus;if(visual.layout)row.designLayout=visual.layout;row.title=typeof visual.title==='string'?visual.title.slice(0,200):row.scene||data.title;
     const source=visual.artworkSource;
     if(asset&&source?.file===asset.file&&typeof source.tool==='string'&&source.tool.length<=80){
       const tool=safeText(source.tool,80);if(tool)artworkTools.add(tool);
@@ -58,6 +67,8 @@ try{
     row.explanation=row.video?undefined:resolveExplanation({...row,explanation:visual.explanation},data.presentation.explainScenes);
     row.points=Array.isArray(visual.points)?visual.points.filter(v=>typeof v==='string').slice(0,6).map(v=>v.slice(0,160)):[];
   }
+  data.bookends.from+=extraVideoFrames;
+  data.durationInFrames+=extraVideoFrames;
   const music=production.effectiveMusic();if(music){await writeFile(path.join(publicDir,'cuts',music.file),await production.readAsset(music.file));data.music={src:'cuts/'+music.file,durationSeconds:music.durationSeconds,level:music.level};}
   data.bookends.tools=[...new Set([...videoCredits({provider:data.provider,settings:data.settings,music}),...artworkTools])];
   }
@@ -79,7 +90,7 @@ try{
   if(!video||Boolean(audio)!==requireAudio||video.width!==composition.width||video.height!==composition.height||Math.abs(Number(metadata.format.duration)-composition.durationInFrames/composition.fps)>0.25)throw new Error('VIDEO_MEDIA_QA_FAILED');
   if(!promo)await extractVideoAudio(ffmpeg,output,output.replace(/\.mp4$/,'.m4a'),{signal:controller.signal});
   checkCanceled();
-  await writeFile(path.join(sourceDir,'video','media-qa.json'),JSON.stringify({fullDecode:true,frames:composition.durationInFrames,fps:composition.fps,metadata,provider:data.provider,settings:data.settings,...(data.music?{music:data.music}:{}),...(data.bookends?{bookends:data.bookends}:{}),rows:data.rows.map(r=>({id:r.id,image:r.image,video:r.video,file:r.file,frames:r.frames,explanation:r.explanation?.type})),renderedAt:new Date().toISOString()},null,2));report({stage:'verifying',progress:1});
+  await writeFile(path.join(sourceDir,'video','media-qa.json'),JSON.stringify({fullDecode:true,frames:composition.durationInFrames,fps:composition.fps,metadata,provider:data.provider,settings:data.settings,...(data.music?{music:data.music}:{}),...(data.bookends?{bookends:data.bookends}:{}),rows:data.rows.map(r=>({id:r.id,image:r.image,video:r.video,videoStart:r.videoStart,videoFrames:r.videoFrames,from:r.from,file:r.file,frames:r.frames,explanation:r.explanation?.type})),renderedAt:new Date().toISOString()},null,2));report({stage:'verifying',progress:1});
 }catch(error){
   // This local renderer never receives credentials. Keep bounded, redacted
   // diagnostics on disk so encoding failures can be diagnosed without UI logs.

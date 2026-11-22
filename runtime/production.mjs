@@ -5,7 +5,7 @@ import path from 'node:path';
 import {recordingMetadata} from './recording-edits.mjs';
 import {atomicWrite} from './atomic-write.mjs';
 import {FRESH_BRIEF} from './script-flow.mjs';
-import {assertDesignReady,normalizeAutomaticDirection} from './designs.mjs';
+import {assertDesignReady,DESIGN_LAYOUTS,normalizeAutomaticDirection} from './designs.mjs';
 export const STUDIO_WATERMARK=Object.freeze({endLabel:'ネームから全自動の自律式統合AI漫画システム',endUrl:'https://note.com/happy_duck780',owner:'FURU'});
 import {normalizeMusic,musicSignature,musicTimeline} from './music.mjs';
 import {normalizeMotion,normalizeImageFocus} from './motion.mjs';
@@ -26,20 +26,34 @@ export function normalizeStoryboard(input,script){
  const sources=input.sources.map(s=>{if(!/^(?:text|asset-\d+|url-\d+)$/.test(s.id)||!['provided','retrieved'].includes(s.status))throw new Error('INVALID_STORYBOARD_SOURCE');return {id:s.id,label:safeText(s.label,2048),status:s.status,summary:safeText(s.summary,1200)};});
  if(new Set(sources.map(s=>s.id)).size!==sources.length)throw new Error('INVALID_STORYBOARD_SOURCE');
  const scenes=input.scenes.map((s,i)=>{if(s.caption!==captions[i])throw new Error('STALE_STORYBOARD');if(!Array.isArray(s.points)||s.points.length>6||!Array.isArray(s.sourceIds)||s.sourceIds.some(id=>!sources.some(v=>v.id===id))||typeof s.imageFile!=='string'||(s.imageFile&&!/^[a-f0-9]{64}\.(png|jpe?g|webp)$/.test(s.imageFile)))throw new Error('INVALID_STORYBOARD');const imagePrompt=safeText(s.imagePrompt||'',3000),imageReferences=s.imageReferences||[];if(imagePrompt&&s.imageFile||!Array.isArray(imageReferences)||imageReferences.length>3||imageReferences.some(f=>!/^[a-f0-9]{64}\.(png|jpe?g|webp)$/.test(f)))throw new Error('INVALID_STORYBOARD_IMAGE');return {caption:s.caption,...(s.explanation!==undefined?{explanation:normalizeExplanation(s.explanation,s.caption)}:{}),...(imagePrompt?{imagePrompt,imageReferences}:{}),...(s.imageReason?{imageReason:safeText(s.imageReason,500)}:{}),title:safeText(s.title,200),points:s.points.map(v=>safeText(v,160)),sourceIds:[...new Set(s.sourceIds)],imageFile:s.imageFile,...(s.imageFocus?{imageFocus:normalizeImageFocus(s.imageFocus)}:{})};});
- const voice=safeText(input.voice,40);if(!/^[A-Za-z]+$/.test(voice))throw new Error('INVALID_STORYBOARD_VOICE');
+  for(const [i,scene] of scenes.entries()){
+   const layout=input.scenes[i].layout;
+   if(layout!==undefined){if(!DESIGN_LAYOUTS.includes(layout))throw new Error('INVALID_STORYBOARD_LAYOUT');scene.layout=layout;}
+   const clip=input.scenes[i].videoClip;
+   if(clip===undefined)continue;
+   if(!clip||!isCutVideo(clip.file)||scene.imageFile||scene.imagePrompt||scene.imageFocus)throw new Error('INVALID_VIDEO_CLIP');
+   const {file,...range}=clip;scene.videoClip={file,...normalizeVideoRange(range)};
+  }
+  const voice=safeText(input.voice,40);if(!/^[A-Za-z]+$/.test(voice))throw new Error('INVALID_STORYBOARD_VOICE');
  if(input.visualStyle!==undefined&&(!safeText(input.visualStyle,400)||typeof input.visualStyle!=='string'))throw new Error('INVALID_DIRECTOR_STYLE');
  for(let i=0;i<scenes.length;i++)if(input.scenes[i].purpose!==undefined){if(!SCENE_PURPOSES.includes(input.scenes[i].purpose))throw new Error('INVALID_DIRECTOR_PURPOSE');scenes[i].purpose=input.scenes[i].purpose;}
  const selected=input.template===undefined?{}:{template:normalizeAutomaticDirection({title:input.title,template:input.template,motion:input.motion}).template};
- return {version:1,...selected,title:safeText(input.title,200),summary:safeText(input.summary,2000),voice,voiceReason:safeText(input.voiceReason,500),motion:input.motion===null?null:normalizeMotion(input.motion),sources,scenes,...(input.visualStyle!==undefined?{visualStyle:safeText(input.visualStyle,400)}:{})};
+ return {version:1,...selected,title:safeText(input.title,200),summary:safeText(input.summary,2000),voice,voiceReason:safeText(input.voiceReason,500),...(input.voiceStyle?{voiceStyle:safeText(input.voiceStyle,300)}:{}),motion:input.motion===null?null:normalizeMotion(input.motion),sources,scenes,...(input.visualStyle!==undefined?{visualStyle:safeText(input.visualStyle,400)}:{})};
 }
 export const isCutVideo=file=>typeof file==='string'&&/^[a-f0-9]{64}\.(mp4|webm)$/.test(file);
 const isCutImage=file=>typeof file==='string'&&/^[a-f0-9]{64}\.(png|jpe?g|webp)$/.test(file);
 const isCutVisual=file=>isCutImage(file)||isCutVideo(file);
+function normalizeVideoRange(range){
+ if(!range||typeof range!=='object'||Object.keys(range).some(k=>!['startSeconds','endSeconds'].includes(k)))throw new Error('INVALID_VIDEO_CLIP');
+ const {startSeconds,endSeconds}=range;
+ if(!Number.isFinite(startSeconds)||!Number.isFinite(endSeconds)||startSeconds<0||endSeconds-startSeconds<.25||endSeconds>86400)throw new Error('INVALID_VIDEO_CLIP');
+ return {startSeconds,endSeconds};
+}
 function normalizeCutImages(items=[]){
  if(!Array.isArray(items)||items.length>100)throw new Error('INVALID_CUT_IMAGES');
- const ids=new Set();return items.map(item=>{if(!item||Object.keys(item).some(k=>!['rowId','file'].includes(k))||typeof item.rowId!=='string'||!/^[\w-]{1,100}$/.test(item.rowId)||(item.file!==''&&!isCutVisual(item.file))||ids.has(item.rowId))throw new Error('INVALID_CUT_IMAGES');ids.add(item.rowId);return {rowId:item.rowId,file:item.file};});
+ const ids=new Set();return items.map(item=>{if(!item||Object.keys(item).some(k=>!['rowId','file','clip'].includes(k))||typeof item.rowId!=='string'||!/^[\w-]{1,100}$/.test(item.rowId)||(item.file!==''&&!isCutVisual(item.file))||ids.has(item.rowId)||item.clip!==undefined&&!isCutVideo(item.file))throw new Error('INVALID_CUT_IMAGES');ids.add(item.rowId);return {rowId:item.rowId,file:item.file,...(item.clip===undefined?{}:{clip:normalizeVideoRange(item.clip)})};});
 }
-export function normalizeVisuals(value){if(value===undefined)return undefined;if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).length>300)throw new Error('INVALID_CUT_VISUALS');const result={};for(const [id,visual]of Object.entries(value)){if(!/^[\w-]{1,100}$/.test(id)||!visual||Object.keys(visual).some(k=>!['title','points','imageFocus','explanation'].includes(k))||!Array.isArray(visual.points)||visual.points.length>6)throw new Error('INVALID_CUT_VISUALS');result[id]={...(visual.explanation!==undefined?{explanation:normalizeExplanation(visual.explanation)}:{}),title:safeText(visual.title,200),points:visual.points.map(p=>safeText(p,160)),...(visual.imageFocus?{imageFocus:normalizeImageFocus(visual.imageFocus)}:{})};}return result;}
+export function normalizeVisuals(value){if(value===undefined)return undefined;if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).length>300)throw new Error('INVALID_CUT_VISUALS');const result={};for(const [id,visual]of Object.entries(value)){if(!/^[\w-]{1,100}$/.test(id)||!visual||Object.keys(visual).some(k=>!['title','points','imageFocus','explanation','layout'].includes(k))||visual.layout!==undefined&&!DESIGN_LAYOUTS.includes(visual.layout)||!Array.isArray(visual.points)||visual.points.length>6)throw new Error('INVALID_CUT_VISUALS');result[id]={...(visual.explanation!==undefined?{explanation:normalizeExplanation(visual.explanation)}:{}),title:safeText(visual.title,200),points:visual.points.map(p=>safeText(p,160)),...(visual.imageFocus?{imageFocus:normalizeImageFocus(visual.imageFocus)}:{}),...(visual.layout?{layout:visual.layout}:{})};}return result;}
 
 export const MAX_ASSET_BYTES=100*1024*1024;
 export function normalizeTitleReading(input){
@@ -61,14 +75,22 @@ export function normalizeDraftScriptReadings(script,readings){
  return readings.map((r,i)=>{const caption=safeText(r?.caption,4000);if(caption!==captions[i])throw new Error('STALE_SCRIPT_READINGS');return {caption,speech:normalizeReadingCandidate(r?.speech??'')};});
 }
 export function isScriptReadingReady(row){try{normalizeScriptReadings(row.caption,[row]);return true;}catch{return false;}}
+export function normalizeVoiceChoice(input){
+ const voice=safeText(input?.voice,40),voiceReason=safeText(input?.voiceReason,500),voiceStyle=safeText(input?.voiceStyle,300);
+ if(!/^[A-Za-z]+$/.test(voice)||!voiceReason||!voiceStyle)throw new Error('INVALID_VOICE_PROPOSAL');
+ return {voice,voiceReason,voiceStyle};
+}
+const voiceScriptHash=script=>createHash('sha256').update(script.split(/\r?\n+/).map(r=>r.trim()).filter(Boolean).join('\n')).digest('hex');
+export function bindVoiceChoice(choice,script){return {...normalizeVoiceChoice(choice),scriptHash:voiceScriptHash(script)};}
 export function normalizeDraftRecord(input){
  if(!input||typeof input!=='object')throw new Error('INVALID_DRAFT_RESULT');
  const script=safeText(input.script),readings=normalizeDraftScriptReadings(script,input.readings),warnings=input.warnings||[];
  if(!['ready','needs-review','not-requested'].includes(input.visualPlanStatus)||!Array.isArray(warnings)||warnings.length>100)throw new Error('INVALID_DRAFT_RESULT');
- const record={script,readings,visualPlanStatus:input.visualPlanStatus,warnings:warnings.map(w=>{if(!['visual-plan','reading','title-reading'].includes(w.stage)||! /^[A-Z_]+$/.test(w.code))throw new Error('INVALID_DRAFT_RESULT');return {stage:w.stage,code:w.code};})};
+ const record={script,readings,visualPlanStatus:input.visualPlanStatus,warnings:warnings.map(w=>{if(!['visual-plan','reading','title-reading'].includes(w.stage)||! /^[A-Z_]+$/.test(w.code))throw new Error('INVALID_DRAFT_RESULT');return {stage:w.stage,code:w.code,...(Number.isInteger(w.rowIndex)&&w.rowIndex>=0&&w.rowIndex<readings.length?{rowIndex:w.rowIndex}:{})};})};
  if(readings.some(r=>!isScriptReadingReady(r))&&!record.warnings.some(w=>w.stage==='reading'))record.warnings.push({stage:'reading',code:'READING_REVIEW_REQUIRED'});
  if(input.titleReading){record.titleReading=normalizeDraftTitleReading(input.titleReading);if(!isHiraganaReading(record.titleReading.speech)&&!record.warnings.some(w=>w.stage==='title-reading'))record.warnings.push({stage:'title-reading',code:'TITLE_READING_REQUIRED'});}
  if(input.storyboard)record.storyboard=normalizeStoryboard(input.storyboard,script);if(input.direction)record.direction=normalizeAutomaticDirection(input.direction);
+ if(input.voiceChoice)record.voiceChoice=normalizeVoiceChoice(input.voiceChoice);
  if(input.verifiedSources){if(!Array.isArray(input.verifiedSources)||input.verifiedSources.length>100)throw new Error('INVALID_DRAFT_RESULT');record.verifiedSources=input.verifiedSources.map(s=>{if(!/^(text|asset-\d+|url-\d+)$/.test(s.id)||!['retrieved','provided'].includes(s.status))throw new Error('INVALID_DRAFT_RESULT');return {id:s.id,status:s.status,label:safeText(s.label,2048),summary:safeText(s.summary,1200)};});}
  if(input.sourceBindings){if(!Array.isArray(input.sourceBindings)||input.sourceBindings.length!==readings.length)throw new Error('INVALID_DRAFT_RESULT');record.sourceBindings=input.sourceBindings.map((b,i)=>{if(b.lineIndex!==i||b.captionHash!==createHash('sha256').update(readings[i].caption).digest('hex')||!Array.isArray(b.sourceIds)||!b.sourceIds.length||b.sourceIds.some(id=>!record.verifiedSources?.some(s=>s.id===id)))throw new Error('INVALID_DRAFT_RESULT');return {lineIndex:i,captionHash:b.captionHash,sourceIds:[...new Set(b.sourceIds)]};});}
  return record;
@@ -111,6 +133,7 @@ export function normalizeBrief(input){
   if(input.readings!==undefined)brief.readings=normalizeDraftScriptReadings(brief.script,input.readings);
   if(input.references!==undefined)brief.references=normalizeReferences(input.references);
   if(input.storyboard!==undefined)brief.storyboard=normalizeStoryboard(input.storyboard,brief.script);
+  if(input.voiceChoice?.scriptHash===voiceScriptHash(brief.script))brief.voiceChoice=bindVoiceChoice(input.voiceChoice,brief.script);
   if(input.sourceEvidence!==undefined)brief.sourceEvidence=normalizeSourceEvidence(input.sourceEvidence,brief.script);
   for(const field of ['titleMode','voiceMode'])if(input[field]!==undefined){if(!['auto','manual'].includes(input[field]))throw new Error('INVALID_PRODUCTION_MODE');brief[field]=input[field];}
   return brief;
@@ -166,10 +189,10 @@ export class ProductionInputs {
   async saveMusic(input){this.assertWritable();const music=normalizeMusic(input);if(music&&!this.value.assets.some(a=>a.file===music.file))throw new Error('INVALID_MUSIC');const next={...this.value};if(music)next.music=music;else delete next.music;await atomicWrite(path.join(this.dir,'production.json'),JSON.stringify(next,null,2));this.value=next;}
   imagePlan(row){const scenes=this.value.brief.storyboard?.scenes||[];return scenes.find(s=>s.caption===row.caption&&s.imagePrompt)||null;}
   async reopenCut(rowId){this.assertWritable();const cutConfirmations=this.value.cutConfirmations.filter(c=>c.rowId!==rowId);await atomicWrite(path.join(this.dir,'production.json'),JSON.stringify({...this.value,cutConfirmations},null,2));this.value.cutConfirmations=cutConfirmations;}
-  cutMedia(row){const mapping=(this.value.cutImages||[]).find(c=>c.rowId===row.id);if(mapping){if(mapping.file==='')return null;const asset=this.value.assets.find(a=>a.file===mapping.file);if(!asset||!isCutVisual(asset.file))throw new Error('INVALID_CUT_IMAGE');return asset;}const images=this.value.assets.filter(a=>a.name==='cut-'+row.id+'.png');if(images.length>1)throw new Error('CUT_IMAGE_AMBIGUOUS');return images[0]||null;}
+  cutMedia(row){const mapping=(this.value.cutImages||[]).find(c=>c.rowId===row.id);if(mapping){if(mapping.file==='')return null;const asset=this.value.assets.find(a=>a.file===mapping.file);if(!asset||!isCutVisual(asset.file))throw new Error('INVALID_CUT_IMAGE');return mapping.clip?{...asset,clip:mapping.clip}:asset;}const images=this.value.assets.filter(a=>a.name==='cut-'+row.id+'.png');if(images.length>1)throw new Error('CUT_IMAGE_AMBIGUOUS');return images[0]||null;}
   cutImage(row){const asset=this.cutMedia(row);return asset&&isCutImage(asset.file)?asset:null;}
-  imageRequired(row){if(this.value.bookends?.titleRowId===row?.id)return false;if(this.value.finalization)return false;const scenes=(this.value.brief.storyboard?.scenes||[]).filter(s=>s.caption===row?.caption);if(scenes.length)return scenes.some(s=>s.imageFile||s.imagePrompt);return this.value.brief.assetMode==='ai'||this.value.assets.some(a=>isCutImage(a.file));}
-  cutFingerprint(row){const image=this.cutMedia(row);return createHash('sha256').update(JSON.stringify({id:row.id,scene:row.scene,caption:row.caption,speech:row.speech,audio:row.audio,image:image?.file||null,...(this.value.visuals?.[row.id]?{visual:this.value.visuals[row.id]}:{})})).digest('hex');}
+  imageRequired(row){if(this.value.bookends?.titleRowId===row?.id)return false;if(this.value.finalization)return false;const scenes=(this.value.brief.storyboard?.scenes||[]).filter(s=>s.caption===row?.caption);if(scenes.length)return scenes.some(s=>s.imageFile||s.imagePrompt||s.videoClip);return this.value.brief.assetMode==='ai'||this.value.assets.some(a=>isCutImage(a.file));}
+  cutFingerprint(row){const image=this.cutMedia(row);return createHash('sha256').update(JSON.stringify({id:row.id,scene:row.scene,caption:row.caption,speech:row.speech,audio:row.audio,image:image?.file||null,...(image?.clip?{clip:image.clip}:{}),...(this.value.visuals?.[row.id]?{visual:this.value.visuals[row.id]}:{})})).digest('hex');}
   cutInfo(row){let fingerprint,image;try{image=this.cutMedia(row);fingerprint=this.cutFingerprint(row);}catch{return {cutConfirmed:false,cutFingerprint:null,cutImage:null};}if(!image&&this.imageRequired(row))return {cutConfirmed:false,cutFingerprint:null,cutImage:null};return {cutImage:image&&!isCutVideo(image.file)?image:null,...(image&&isCutVideo(image.file)?{cutVideo:image}:{}),cutVisual:this.value.visuals?.[row.id],cutFingerprint:fingerprint,cutConfirmed:!!(!this.value.imageProposal?.scenes.some(s=>s.id===row.id&&s.caption===row.caption)&&row.reviewed&&row.audioCurrent&&row.listenedCurrent&&(!image||this.value.cutConfirmations.some(c=>c.rowId===row.id&&c.fingerprint===fingerprint)))};}
   async assignCutImage(row,file){this.assertWritable();if(this.value.bookends?.titleRowId===row.id)throw new Error('TITLE_IMAGE_NOT_ALLOWED');if(file!==''&&!this.value.assets.some(a=>a.file===file&&isCutVisual(a.file)))throw new Error('INVALID_CUT_IMAGE');const cutImages=normalizeCutImages([...(this.value.cutImages||[]).filter(c=>c.rowId!==row.id),{rowId:row.id,file}]),cutConfirmations=this.value.cutConfirmations.filter(c=>c.rowId!==row.id);const visuals=structuredClone(this.value.visuals);if(visuals?.[row.id]&&this.cutMedia(row)?.file!==file)delete visuals[row.id].imageFocus;await atomicWrite(path.join(this.dir,'production.json'),JSON.stringify({...this.value,cutImages,cutConfirmations,...(visuals?{visuals}:{})},null,2));Object.assign(this.value,{cutImages,cutConfirmations,...(visuals?{visuals}:{})});return this.status();}
   async applyImageChoices(choices,rows){
@@ -179,7 +202,7 @@ export class ProductionInputs {
   }
   async removeAsset(file,rows){
     this.assertWritable();if(!this.value.assets.some(a=>a.file===file))throw new Error('ASSET_NOT_FOUND');
-    const affected=rows.filter(r=>this.cutMedia(r)?.file===file).map(r=>r.id),brief=structuredClone(this.value.brief);if(brief.storyboard)for(const scene of brief.storyboard.scenes){if(scene.imageFile===file)scene.imageFile='';if(scene.imageReferences)scene.imageReferences=scene.imageReferences.filter(f=>f!==file);}
+    const affected=rows.filter(r=>this.cutMedia(r)?.file===file).map(r=>r.id),brief=structuredClone(this.value.brief);if(brief.storyboard)for(const scene of brief.storyboard.scenes){if(scene.imageFile===file)scene.imageFile='';if(scene.videoClip?.file===file)delete scene.videoClip;if(scene.imageReferences)scene.imageReferences=scene.imageReferences.filter(f=>f!==file);}
     const next={...this.value,brief,assets:this.value.assets.filter(a=>a.file!==file),cutImages:[...(this.value.cutImages||[]).filter(c=>!affected.includes(c.rowId)),...affected.map(rowId=>({rowId,file:''}))],cutConfirmations:this.value.cutConfirmations.filter(c=>!affected.includes(c.rowId))};
     if(next.music?.file===file){
       delete next.music;
@@ -197,8 +220,12 @@ export class ProductionInputs {
   async applyStoryboard(plan,rows){
     this.assertWritable();plan=normalizeStoryboard(plan,rows.map(r=>r.caption).join('\n'));
     const ids=new Set(rows.map(r=>r.id)),visuals={...this.value.visuals},cutImages=(this.value.cutImages||[]).filter(c=>!ids.has(c.rowId));
-    for(const [i,scene]of plan.scenes.entries()){const row=rows[i];visuals[row.id]={...(scene.explanation?{explanation:normalizeExplanation(scene.explanation,row.caption)}:{}),title:scene.title,points:scene.points,...(scene.imageFocus?{imageFocus:scene.imageFocus}:{})};if(scene.imageFile){if(!this.value.assets.some(a=>a.file===scene.imageFile))throw new Error('INVALID_CUT_IMAGE');cutImages.push({rowId:row.id,file:scene.imageFile});}}
-    normalizeVisuals(visuals);normalizeCutImages(cutImages);const cutConfirmations=this.value.cutConfirmations.filter(c=>!ids.has(c.rowId)||(JSON.stringify(this.value.visuals?.[c.rowId])===JSON.stringify(visuals[c.rowId])&&this.value.cutImages?.find(v=>v.rowId===c.rowId)?.file===cutImages.find(v=>v.rowId===c.rowId)?.file));const next={...this.value,visuals,cutImages,cutConfirmations};await atomicWrite(path.join(this.dir,'production.json'),JSON.stringify(next,null,2));this.value=next;
+    for(const [i,scene]of plan.scenes.entries()){
+     const row=rows[i];visuals[row.id]={...(scene.explanation?{explanation:normalizeExplanation(scene.explanation,row.caption)}:{}),title:scene.title,points:scene.points,...(scene.imageFocus?{imageFocus:scene.imageFocus}:{}),...(scene.layout?{layout:scene.layout}:{})};
+     const file=scene.videoClip?.file||scene.imageFile;
+     if(file){if(!this.value.assets.some(a=>a.file===file))throw new Error('INVALID_CUT_IMAGE');const {startSeconds,endSeconds}=scene.videoClip||{};cutImages.push({rowId:row.id,file,...(scene.videoClip?{clip:{startSeconds,endSeconds}}:{})});}
+    }
+    normalizeVisuals(visuals);normalizeCutImages(cutImages);const cutConfirmations=this.value.cutConfirmations.filter(c=>!ids.has(c.rowId)||(JSON.stringify(this.value.visuals?.[c.rowId])===JSON.stringify(visuals[c.rowId])&&JSON.stringify(this.value.cutImages?.find(v=>v.rowId===c.rowId))===JSON.stringify(cutImages.find(v=>v.rowId===c.rowId))));const next={...this.value,visuals,cutImages,cutConfirmations};await atomicWrite(path.join(this.dir,'production.json'),JSON.stringify(next,null,2));this.value=next;
   }
   async addAsset(name,bytes,{origin,recording}={}){
     this.assertWritable();

@@ -6,9 +6,9 @@ Operation guide / 操作ガイド: Open the PDF to review the application workfl
 
 Read both Japanese A4 guides from the app header or the public installation page. / 日本語A4の操作・API設定ガイドは、アプリ上部と公開導入ページから別タブで開けます。
 
-# Narrated Video Maker / ナレーション動画メーカー v1.4.1
+# Narrated Video Maker / ナレーション動画メーカー v1.4.2
 
-[Release notes / 更新内容](docs/releases/v1.4.1.md)
+[Release notes / 更新内容](docs/releases/v1.4.2.md)
 
 > **MIT License; your outputs remain yours.** You may use, modify, redistribute and sell the app, including in paid products and services, without individual permission from FURU. Retain the copyright and MIT license notices in copies or substantial portions of the software. External API fees and third-party terms are separate. / **アプリはMITライセンス。成果物の権利は従来どおり利用者に帰属します。** アプリの利用・改変・再配布・販売、有料商品やサービスへの組み込みに、FURUへの個別許可は不要です。ソフトウェアの複製または重要な部分には著作権表示とMITの許諾表示を残してください。外部API料金と第三者の条件は別です。
 
@@ -65,6 +65,8 @@ The public website is a download and installation guide. Video processing runs o
 ### Product demos and MCP / 紹介動画とMCP
 
 - Operation recordings, MP4 and WebM are available as footage in the main narration workflow. After preparing the script and choosing a voice, select the clip in each cut in Step 3. The narration and captions use the normal rendering path. / 操作録画・MP4・WebMは通常のナレーション制作にも使えます。素材と台本を準備して声を選び、③で使う動画をカットごとに選択します。ナレーションや字幕は通常の工程で付けられます。
+- When AI plans from imported MP4 or WebM references, it can select a time range for a cut. Review the range in Step 3. The export plays that excerpt with narration and captions while muting the source audio. / 取り込んだMP4・WebMを資料に台本を作ると、AIがカットに合う再生区間を提案できます。③で範囲を確認します。書き出しでは選んだ区間にナレーションと字幕を重ね、素材の音声はミュートします。
+- Automatic direction selects an overall palette and can vary layouts and transitions by cut. The narration voice and delivery are also proposed from the script. With a hand-written script, choose a voice in Step 2 or ask Gemini for a proposal. / 自動演出では、全体の配色を選び、カットに応じて配置や切り替えを変えます。ナレーターと話し方も台本から提案します。手入力の台本では、②で声を指定するか、Geminiに提案を頼めます。
 
 - The Windows batch launcher prepares the pinned recording browser on first launch. Record a separate signed-out `http://127.0.0.1:port/` demo using sample data. / Windowsバッチが初回に録画用Chromiumを準備します。「操作を録画する」で未ログインの別のローカルアプリのURLとサンプル操作を指定します。
 - Edit up to six clips or screenshots. Set the order, start, duration, heading and caption, and add optional WAV/MP3 narration. Gemini can propose cuts with your consent to share only operation names and timings. / 画像と動画を最大6カットに並べ、開始位置・長さ・見出し・字幕と任意のナレーションを指定できます。操作名と時刻の送信を選べば、Geminiがカット案を作れます。

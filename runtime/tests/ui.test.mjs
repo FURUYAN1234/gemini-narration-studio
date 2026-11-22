@@ -227,6 +227,26 @@ test('manual direction stays expanded after applying settings and polling, and s
  await ui.edit(ui.get('job-title'),'手動の題名');await ui.get('template-gallery').children.find(b=>b.dataset.template==='blueprint').emit('click');await ui.edit(ui.get('motion-style'),'off');await ui.get('motion-style').emit('change');await ui.get('apply-direction').emit('click');await ui.poll();assert.equal(ui.get('manual-direction').open,true);assert.equal(ui.get('auto-direction').checked,false);assert.equal(ui.state().title,'手動の題名');assert.equal(ui.state().presentation.template,'blueprint');assert.equal(ui.state().presentation.motion,null);assert.equal(ui.requests.some(r=>['draft','source-plan','generate'].includes(r.route)),false);
  await ui.edit(ui.get('script-input'),'既存の台本。');await ui.edit(ui.get('production-instructions'),'わかりやすく修正');await ui.sendScript({confirmOverwrite:true});assert.equal(ui.state().title,'手動の題名');assert.equal(ui.state().presentation.template,'blueprint');assert.equal(ui.state().presentation.motion,null);
 });
+test('adopting an automatic design replaces old transition effects and colors with the proposed plan',async()=>{
+ const previous={version:1,style:'editorial',intensity:'standard',transitions:['checker'],transitionTones:['heading']};
+ const proposals=[
+  {title:'水の流れを知る',template:'blueprint',motion:{version:1,style:'editorial',intensity:'standard',transitions:['split','blinds'],transitionTones:['background','accent']}},
+  {title:'夜の森を歩く',template:'cinema',motion:{version:1,style:'cinematic',intensity:'subtle',transitions:['iris','fade'],transitionTones:['image','background']}}
+ ];
+ const backgrounds=[];
+ for(const direction of proposals){
+  const script='はじめ。\nつぎ。\nおわり。',readings=script.split('\n').map(caption=>({caption,speech:caption}));
+  const ui=await setup({rows:[],motion:previous,sourcePlan:{script,readings,direction}});
+  await ui.edit(ui.get('source-text'),direction.title);
+  await ui.get('generate-script').emit('click');
+  await ui.get('plan-sources').emit('click');
+  assert.equal(ui.state().presentation.template,direction.template);
+  assert.deepEqual(ui.state().presentation.motion,direction.motion);
+  assert.equal(ui.requests.filter(r=>r.route==='source-plan').length,1);
+  backgrounds.push(presentationDesign(ui.state().presentation).background);
+ }
+ assert.equal(new Set(backgrounds).size,2);
+});
 test('one creation action includes video and preserves post-generation review without sealing or claiming listening',async()=>{
  const ui=await setup({secondReviewed:false});await ui.get('confirm-script').emit('click');await ui.get('generate-all').emit('click');assert.equal(ui.location.hash,'#finish');assert.equal(ui.requests.filter(r=>r.route==='generate').length,1);assert.equal(ui.requests.find(r=>r.route==='generate').input.createVideo,true);assert.equal(ui.requests.some(r=>['listened','confirm-cut','finalize','render-video'].includes(r.route)),false);assert.equal(ui.state().rows.every(r=>!r.listenedCurrent),true);
  assert.ok(html.indexOf('id="confirm-full"')>html.indexOf('id="finish"'));assert.ok(html.indexOf('id="generate-script"')<html.indexOf('id="script-input"'));assert.ok(html.indexOf('id="regenerate-script"')<html.indexOf('id="script-input"'));
@@ -425,9 +445,10 @@ test('video generation shows only actual progress, publishes player/download aft
  ui.externalVideo({result:null,stage:'failed',error:'VIDEO_FONT_TIMEOUT',steps:['preparing','bundling','rendering']});await ui.poll();assert.match(ui.get('video-status').textContent,/日本語フォント.*時間切れ/);assert.equal(ui.get('video-result').hidden,true);assert.equal(ui.requests.filter(r=>r.route==='render-preview').length,1);
 });
 
-test('initial voice remains a candidate and next step saves it without synthesis',async()=>{
- const ui=await setup({voiceConfirmed:false});assert.match(ui.get('voice-apply-state').textContent,/候補/);assert.equal(ui.get('apply-voice').disabled,false);
- await ui.edit(ui.get('pitch'),'high');assert.equal(ui.requests.some(r=>r.route==='settings'),false);await ui.get('apply-voice').emit('click');assert.equal(ui.location.hash,'#reading');assert.equal(ui.state().voiceConfirmed,true);assert.equal(ui.state().settings.pitch,'high');assert.match(ui.get('voice-apply-state').textContent,/保存した声：Kore/);assert.equal(ui.requests.some(r=>r.route==='generate'),false);
+test('an unconfirmed internal voice cannot be adopted automatically before a voice is chosen',async()=>{
+ const ui=await setup({voiceConfirmed:false});assert.match(ui.get('voice-apply-state').textContent,/採用する声を選んで/);assert.equal(ui.get('apply-voice').disabled,true);assert.equal(ui.get('choose-ai-voice').hidden,false);assert.doesNotMatch(ui.get('production-voice-info').textContent,/Kore/);
+ ui.get('voice-manual').checked=true;await ui.get('voice-manual').emit('change');await ui.edit(ui.get('voice'),'Puck');await ui.edit(ui.get('pitch'),'high');
+ assert.equal(ui.requests.some(r=>r.route==='settings'),false);await ui.get('apply-voice').emit('click');assert.equal(ui.location.hash,'#reading');assert.equal(ui.state().voiceConfirmed,true);assert.equal(ui.state().settings.pitch,'high');assert.match(ui.get('voice-apply-state').textContent,/保存した声：Puck/);assert.equal(ui.requests.some(r=>r.route==='generate'),false);
 });
 
 test('review shows only the next useful actions, makes the send action explicit and places stale-audio repair inside its cut',async()=>{
@@ -1061,7 +1082,7 @@ test('AI voice is initially selected and manual voice controls appear only when 
 });
 
 test('selected voice playback is available in automatic and manual modes and cached playback never calls the provider',async()=>{
- const ui=await setup();ui.restart();await ui.poll();assert.equal(ui.get('preview-voice').hidden,false);assert.equal(ui.get('preview-voice').disabled,false);await ui.get('preview-voice').emit('click');assert.equal(ui.get('sample-audio').played,true);
+ const ui=await setup({storyboard:{voice:'Kore',voiceReason:'明瞭な読み',voiceStyle:'Original style',scenes:[{caption:'Caption one'},{caption:'Caption two'}]}});ui.restart();await ui.poll();assert.equal(ui.get('preview-voice').hidden,false);assert.equal(ui.get('preview-voice').disabled,false);await ui.get('preview-voice').emit('click');assert.equal(ui.get('sample-audio').played,true);
  ui.get('voice-manual').checked=true;await ui.get('voice-manual').emit('change');assert.equal(ui.get('preview-voice').hidden,false);assert.equal(ui.get('preview-voice').disabled,false);await ui.get('preview-voice').emit('click');assert.equal(ui.requests.some(r=>['preview','settings','generate'].includes(r.route)),false);
  ui.externalBusy(true);await ui.poll();assert.equal(ui.get('voice-manual').disabled,true);
 });
@@ -1101,7 +1122,7 @@ test('image controls stay usable with an AI voice candidate and preserve indepen
 });
 
 test('source script adoption carries AI title reading into review without a separate AI action',async()=>{
- const title='朝の道具',titleReading={caption:title,speech:'あさのどうぐ'},sourcePlan={script:'窓を開けます。',readings:[{caption:'窓を開けます。',speech:'まどをあけます。'}],titleReading,direction:{title,template:'steps',motion:null}};
+ const title='朝の道具',titleReading={caption:title,speech:'あさのどうぐ'},sourcePlan={script:'窓を開けます。',readings:[{caption:'窓を開けます。',speech:'まどをあけます。'}],titleReading,direction:{title,template:'steps',motion:null},storyboard:{title,voice:'Puck',voiceReason:'朝の案内に合う',scenes:[{caption:'窓を開けます。',title:'窓を開ける'}]}};
  const ui=await setup({rows:[],sourcePlan});await ui.edit(ui.get('source-text'),'朝の道具を紹介');await ui.get('generate-script').emit('click');await ui.get('plan-sources').emit('click');await ui.get('apply-voice').emit('click');
  assert.equal(ui.get('opening-title').value,title);assert.equal(ui.get('opening-speech').value,titleReading.speech);assert.equal(ui.requests.filter(r=>r.route==='source-plan').length,1);assert.equal(ui.requests.some(r=>r.route==='prepare-readings'),false);
  assert.ok(ui.requests.some(r=>r.route==='bookends'&&r.input.speech===titleReading.speech));

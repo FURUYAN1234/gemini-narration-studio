@@ -3,13 +3,23 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {NarrationSession,buildDraftRequest,buildDesignRequest} from '../core.mjs';
+import {NarrationSession,VOICES,buildDraftRequest,buildDesignRequest} from '../core.mjs';
 import {TRANSITION_FAMILIES,TRANSITION_TONES,TRANSITION_INSTRUCTION} from '../motion.mjs';
 import {buildSourcePlanRequest,collectSources} from '../source-plan.mjs';
 import {normalizeAutomaticDirection,VIDEO_TEMPLATES} from '../designs.mjs';
-import {normalizeBrief} from '../production.mjs';
+import {normalizeBrief,bindVoiceChoice} from '../production.mjs';
 
 const direction={title:'手順の説明',template:'steps',motion:{version:1,style:'editorial',intensity:'standard',transitions:['split','blinds','fade'],transitionTones:['background','accent','image']}};
+test('voice proposals use the built-in catalog and expire when the adopted script changes',async()=>{
+ const script='夜の森を歩きます。',brief={scriptMode:'ai',assetMode:'provided',instructions:'短い映像エッセイ',script,voiceMode:'auto'};
+ const schema=buildDraftRequest({brief}).generationConfig.responseJsonSchema;
+ assert.ok(schema.required.includes('voiceChoice'));
+ assert.deepEqual(schema.properties.voiceChoice.properties.voice.enum,VOICES);
+ assert.equal(buildDraftRequest({brief:{...brief,voiceMode:'manual'}}).generationConfig.responseJsonSchema.properties.voiceChoice,undefined);
+ const voiceChoice=bindVoiceChoice({voice:'Achernar',voiceReason:'静かな夜に合う',voiceStyle:'落ち着いたテンポで、文の間を長めに。'},script);
+ assert.deepEqual(normalizeBrief({...brief,voiceChoice}).voiceChoice,voiceChoice);
+ assert.equal(normalizeBrief({...brief,script:'朝の街を歩きます。',voiceChoice}).voiceChoice,undefined);
+});
 test('AI transition planning rides the existing draft, source and design request, never the manual path',async()=>{
  const brief={scriptMode:'ai',assetMode:'provided',instructions:'説明動画',script:'',autoDirection:true,references:{text:'提供情報',urls:[]}};
  const requests=[buildDraftRequest({brief}),buildDesignRequest({title:'説明',instructions:'静かに'}),buildSourcePlanRequest({brief,bundle:await collectSources(brief,[],()=>{}),voices:['Kore']})];

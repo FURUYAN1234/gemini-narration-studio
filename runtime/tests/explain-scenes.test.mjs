@@ -49,7 +49,7 @@ test('items inside one subtitle cue reveal in narration order and shared quotati
  const split={caption:'洗う。乾かす。',frames:100,subtitles:[{text:'洗う。',from:0,to:40},{text:'乾かす。',from:40,to:100}]};
  assert.deepEqual(explanationSchedule(split,{...e,items:[{label:'洗う',value:'',quote:'洗う。'},{label:'乾かす',value:'',quote:'乾かす。'}]}),[0,40]);
 });
-test('source-plan schema, validated storyboard, persisted cut visuals and renderer share the same chart; unsupported figures stay needs-review',async()=>{
+test('valid charts reach the renderer and an invalid chart is omitted without losing the rest of the storyboard',async()=>{
  const brief={scriptMode:'ai',assetMode:'provided',instructions:'記録の説明',script:'',references:{text:caption,urls:[]},autoDirection:true};
  const bundle=await collectSources(brief,[],()=>{}),request=buildSourcePlanRequest({brief,bundle,voices:['Kore']});
  assert.ok(request.generationConfig.responseFormat.text.schema.properties.rows.items.properties.explanation);
@@ -59,5 +59,5 @@ test('source-plan schema, validated storyboard, persisted cut visuals and render
  try{const p=await ProductionInputs.open(dir),rows=[{id:'cut1',caption}];await p.applyStoryboard(draft.storyboard,rows);const reopened=await ProductionInputs.open(dir);assert.deepEqual(reopened.status().visuals.cut1.explanation,chart);assert.deepEqual(resolveExplanation({...rows[0],...reopened.status().visuals.cut1},'auto'),chart);
  await assert.rejects(p.saveVisuals({cut1:{title:'別の数字',points:[],explanation:{...chart,items:[{...chart.items[0],quote:'準備は99分',value:'99'},...chart.items.slice(1)]}}},rows),/INVALID_EXPLANATION/);
  }finally{await rm(dir,{recursive:true,force:true});}
- const bad=structuredClone(result);bad.rows[0].explanation.items[0].value='99';const rejected=normalizeSourcePlan(bad,bundle,['Kore']);assert.equal(rejected.visualPlanStatus,'needs-review');assert.equal(rejected.storyboard,undefined);assert.equal(rejected.warnings[0].code,'INVALID_EXPLANATION');
+ const bad=structuredClone(result);bad.rows[0].explanation.items[0].value='99';const recovered=normalizeSourcePlan(bad,bundle,['Kore']);assert.equal(recovered.visualPlanStatus,'ready');assert.equal(recovered.storyboard.scenes[0].explanation,undefined);assert.equal(recovered.direction.template,'blueprint');assert.deepEqual(recovered.warnings[0],{stage:'visual-plan',code:'INVALID_EXPLANATION',rowIndex:0});
 });

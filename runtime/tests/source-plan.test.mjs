@@ -24,6 +24,31 @@ test('source planning selects a validated template in the same response; missing
  const planned=normalizeSourcePlan({...output,template:'blueprint',motion:null},bundle,VOICES);assert.equal(planned.direction.template,'blueprint');assert.equal(planned.storyboard.template,'blueprint');assert.equal(planned.direction.motion,null);
  const manual={...brief,autoDirection:false},manualBundle=await collectSources(manual,[],()=>{});assert.equal(normalizeSourcePlan(output,manualBundle,VOICES).direction,undefined);
 });
+test('an analyzed reference video can supply a bounded excerpt to a narration cut',async t=>{
+ const dir=await mkdtemp(path.join(tmpdir(),'source-video-'));t.after(()=>rm(dir,{recursive:true,force:true}));
+ const production=await ProductionInputs.open(dir),bytes=Buffer.from('000000186674797069736f6d0000000069736f6d', 'hex');
+ await production.addAsset('reference.mp4',bytes);
+ const asset=production.status().assets[0],bundle=await collectSources(brief,[asset],()=>bytes,{videoDuration:async()=>8});
+ const videoClip={file:asset.file,startSeconds:2,endSeconds:5};
+ const result=structuredClone(output);result.sources.push({id:'asset-0',summary:'入口を拡大する実演'});
+ result.rows[0].sourceIds.push('asset-0');result.rows[0].videoClip=videoClip;
+ assert.ok(buildSourcePlanRequest({brief,bundle,voices:VOICES}).generationConfig.responseFormat.text.schema.properties.rows.items.properties.videoClip);
+ const draft=normalizeSourcePlan(result,bundle,VOICES);assert.deepEqual(draft.storyboard.scenes[0].videoClip,videoClip);
+ const row={id:'cut',caption:result.rows[0].caption};await production.applyStoryboard(draft.storyboard,[row]);
+ const saved=await ProductionInputs.open(dir);assert.deepEqual(saved.cutMedia(row).clip,{startSeconds:2,endSeconds:5});
+ for(const edit of [c=>c.endSeconds=9,c=>c.endSeconds=1,c=>c.file=file]){
+  const bad=structuredClone(result);edit(bad.rows[0].videoClip);const rejected=normalizeSourcePlan(bad,bundle,VOICES);
+  assert.equal(rejected.storyboard,undefined);assert.equal(rejected.warnings[0].code,'INVALID_VIDEO_CLIP');assert.equal(rejected.script,draft.script);
+ }
+ await saved.removeAsset(asset.file,[row]);assert.equal(saved.cutMedia(row),null);
+});
+test('image generation can use a valid prompt when the provider omits its empty image slot',async()=>{
+ const bundle=await collectSources({...brief,assetMode:'ai'},[],()=>{}),result=structuredClone(output),scene=result.rows[0];
+ delete scene.imageFile;delete scene.points;scene.imagePrompt='中央に入口のある図。文字は入れない。';
+ const plan=normalizeSourcePlan(result,bundle,VOICES);
+ assert.equal(plan.visualPlanStatus,'ready');assert.equal(plan.storyboard.scenes[0].imageFile,'');assert.deepEqual(plan.storyboard.scenes[0].points,[]);
+ assert.match(plan.storyboard.scenes[0].imagePrompt,/中央に入口のある図/);
+});
 test('references reject local URLs, credentials, limits and non-HTTP protocols',()=>{
  assert.deepEqual(normalizeReferences({text:'本文',urls:['https://example.com/a#b','https://example.com/a']}),{text:'本文',urls:['https://example.com/a']});
  for(const url of ['file:///etc/passwd','http://127.0.0.1/a','http://[::1]/','http://localhost/a','https://x.local/a','https://a:b@example.com','https://example.com:444','https://example.com?token=secret'])assert.throws(()=>normalizeReferences({text:'',urls:[url]}),/INVALID_REFERENCE/);

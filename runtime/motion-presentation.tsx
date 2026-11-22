@@ -23,7 +23,7 @@ export const CutTransition=({row,data,palette,children}:{row:Slide;data:Presenta
 };
 
 // Every visual is driven by the render frame. No CSS animation or wall clock.
-const Backdrop=({d,m,frame,fps,index}:{d:Design;m:Motion;frame:number;fps:number;index:number})=>{
+export const MotionBackdrop=({d,m,frame,fps,index}:{d:Design;m:Motion;frame:number;fps:number;index:number})=>{
  const t=frame/fps,strength={subtle:.35,standard:.7,bold:1}[m.intensity],shift=t*9*strength;
  return <AbsoluteFill style={{overflow:'hidden',background:d.background}}>
   {m.style==='cinematic'?<>
@@ -110,7 +110,7 @@ export const MotionSlide=({row,data,index,design,theme,motion:m}:{row:Slide;data
  const headBox:Box=kinetic?{x:110+(targetHead.x-110)*stage,y:290+(targetHead.y-290)*stage,w:1700+(targetHead.w-1700)*stage,h:430+(targetHead.h-430)*stage}:targetHead;
  const caption=captionAtFrame(row,frame),captionFit=fitSubtitleText(caption,{width:1630});
  return <AbsoluteFill style={{fontFamily:'NarrationJapanese',overflow:'hidden',color:d.heading}}>
-  <Backdrop d={d} m={m} frame={frame} fps={fps} index={index}/>
+  <MotionBackdrop d={d} m={m} frame={frame} fps={fps} index={index}/>
   <div style={{position:'absolute',left:110,top:100,width:80+180*state.reveal,height:4,background:d.accent}}/>
   <div style={{position:'absolute',left:110,top:125,fontSize:22,letterSpacing:3,color:d.accent,opacity:state.reveal,maxWidth:1500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{row.scene||data.title}</div>
   {row.image&&(row.imageFocus?<FocusArtwork key={row.image} image={row.image} focus={row.imageFocus} box={imageBox} d={d} frame={frame} frames={row.frames} reveal={kinetic?stage:state.reveal}/>:<Artwork image={row.image} box={imageBox} m={m} state={{...state,reveal:kinetic?stage:state.reveal}} side={direction.side} frame={frame} fps={fps}/>)}

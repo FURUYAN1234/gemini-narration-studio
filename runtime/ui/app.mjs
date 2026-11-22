@@ -48,7 +48,8 @@ function actionMessage(id,text,error=false){if(id==='draft-status')draftOutcome=
 function guarded(action,statusId){return async event=>{event?.preventDefault();try{await action(event);}catch(error){const code=error.message.split(':')[0],text=code==='PROJECT_CHANGED'?'別のタブで制作が切り替わっています。この画面の入力は保持し、別の制作への送信を止めました。':code==='API_KEY_REQUIRED'?'APIキーが未登録です。登録してからAPI利用を実行してください。':errors[code]||'処理できませんでした：'+error.message;if(code==='API_KEY_REQUIRED'){$('api-settings').open=true;$('api-connection').scrollIntoView?.({block:'start'});$('api-key').focus();$('api-required-message').textContent=text;$('api-required-alert').hidden=false;}if(statusId)actionMessage(statusId,text,true);else message(text,true);}};}
 function element(tag,text,attrs={}){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;for(const [k,v]of Object.entries(attrs))e.setAttribute(k,v);return e;}
 function isDirty(exceptVisual,ignoreAutomaticVoice=false){return [...visualDrafts].some(([id,d])=>id!==exceptVisual&&d.dirty)||dirtyFields.has('bookends')||dirtyFields.has('settings')&&!(ignoreAutomaticVoice&&automaticVoiceChoice())||dirtyFields.has('title')||dirtyFields.has('design')||dirtyFields.has('motion')||!!document.querySelector('[data-dirty="true"]');}
-function automaticVoiceChoice(){const p=currentVoiceProposal();return $('voice-mode').value==='auto'&&p&&sameSettings(selectedSettings(),{model:state.settings.model,voice:p.voice,style:styleForVoice(p.voice),pitch:'standard'});}
+function automaticVoiceSettings(proposal){return {model:state.settings.model,voice:proposal.voice,style:proposal.voiceStyle||styleForVoice(proposal.voice),pitch:'standard'};}
+function automaticVoiceChoice(){const p=currentVoiceProposal();return $('voice-mode').value==='auto'&&p&&sameSettings(selectedSettings(),automaticVoiceSettings(p));}
 function hasUserEdits(){return isDirty(undefined,true)||[...dirtyFields].some(field=>field!=='settings'||!automaticVoiceChoice());}
 function projectHasContent(){const b=state.production?.brief;return !!(state.rows.length||state.production?.assets?.length||b?.script?.trim()||b?.instructions?.trim()||b?.references?.text?.trim()||b?.references?.urls?.length);}
 function selectedMotion(){const saved=savedMotion(),style=$('motion-style').value;return style==='off'?null:{version:1,style,intensity:$('motion-intensity').value,...(saved?.style===style?Object.fromEntries(['transitions','transitionTones'].filter(k=>saved[k]).map(k=>[k,[...saved[k]]])):{})};}
@@ -114,7 +115,7 @@ function scriptParts(){return $('script-input').value.split(/\r?\n+/).map(s=>s.t
 function hasScriptReadings(){const parts=scriptParts();return !!parts.length&&scriptReadings?.length===parts.length&&scriptReadings.every((r,i)=>r.caption===parts[i]);}
 function readingPreparationNeeded(){return !scriptAlreadyLoaded()&&!hasScriptReadings()&&scriptParts().some(s=>!/[ぁ-ゖ]/u.test(s)||/[^ぁ-ゖー\p{P}\s\u3099\u309a]/u.test(s));}
 function automaticDirectionEnabled(){return $('script-mode').value!=='existing'&&$('auto-direction').checked;}
-function currentBrief(){return {...(state.production?.brief.titleReading?{titleReading:state.production.brief.titleReading}:{}),...(scriptEdited?{scriptEdited:true}:{}),...(aiThemeEnabled()?{themeAuto:true}:{}),autoDirection:automaticDirectionEnabled(),...(!directionPending&&directionProposal&&scriptParts().join('\n')===parseScriptParts(state.production?.brief?.script).join('\n')?{direction:directionProposal}:{}),...(state.production?.brief?.sourceEvidence?{sourceEvidence:state.production.brief.sourceEvidence}:{}),scriptMode:$('script-mode').value,assetMode:$('asset-mode').value,instructions:aiThemeEnabled()?'':$('production-instructions').value,script:$('script-input').value,references:{text:$('source-text').value,urls:$('source-urls').value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean)},titleMode:automaticDirectionEnabled()?'auto':'manual',voiceMode:$('voice-mode').value,...(storyboard&&storyboard.scenes.map(r=>r.caption).join('\n')===scriptParts().join('\n')?{storyboard}:{}),...(hasScriptReadings()?{readings:scriptReadings}:{})};}
+function currentBrief(){return {...(state.production?.brief.titleReading?{titleReading:state.production.brief.titleReading}:{}),...(scriptEdited?{scriptEdited:true}:{}),...(aiThemeEnabled()?{themeAuto:true}:{}),autoDirection:automaticDirectionEnabled(),...(state.production?.brief.voiceChoice&&scriptParts().join('\n')===parseScriptParts(state.production.brief.script).join('\n')?{voiceChoice:state.production.brief.voiceChoice}:{}),...(!directionPending&&directionProposal&&scriptParts().join('\n')===parseScriptParts(state.production?.brief?.script).join('\n')?{direction:directionProposal}:{}),...(state.production?.brief?.sourceEvidence?{sourceEvidence:state.production.brief.sourceEvidence}:{}),scriptMode:$('script-mode').value,assetMode:$('asset-mode').value,instructions:aiThemeEnabled()?'':$('production-instructions').value,script:$('script-input').value,references:{text:$('source-text').value,urls:$('source-urls').value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean)},titleMode:automaticDirectionEnabled()?'auto':'manual',voiceMode:$('voice-mode').value,...(storyboard&&storyboard.scenes.map(r=>r.caption).join('\n')===scriptParts().join('\n')?{storyboard}:{}),...(hasScriptReadings()?{readings:scriptReadings}:{})};}
 function musicEnabled(){return state.production?.musicRemoved!==true;}
 async function enableAutomaticMusic(){if(musicEnabled()&&state.production?.musicEnabled!==true)render(await api('music-preference',{enabled:true,revision:state.revision,productionRevision:state.productionRevision}),true);}
 function scriptUrls(){const parts=scriptParts();return parts.length&&parts.every(s=>/^https?:\/\/\S+$/i.test(s))?parts:[];}
@@ -137,9 +138,9 @@ function cutImageInputsDirty(id){return !!(rowEditors.get(id)&&editorChanged(row
 function titleReadingReadyToSave(){return !!(dirtyFields.has('bookends')||preparedTitleReading()?.speech)&&!!$('opening-speech').value.trim();}
 function updateCutImages(){for(const [id,box]of cutImages){
  const row=state.rows.find(r=>r.id===id),candidate=state.imageProposal?.scenes.find(s=>s.id===id),assets=(state.production?.assets||[]).filter(a=>/^[a-f0-9]{64}\.(png|jpg|jpeg|webp)$/.test(a.file)),legacy=assets.filter(a=>a.name==='cut-'+id+'.png'),asset=(candidate?.imageFile&&assets.find(a=>a.file===candidate.imageFile))||(row?.cutImage&&assets.find(a=>a.file===row.cutImage.file))||(row?.cutImage===undefined&&legacy.length===1?legacy[0]:null),file=asset?.file;
- const videos=(state.production?.assets||[]).filter(a=>isVideoAsset(a.file)),videoFile=row?.cutVideo?.file;
- const design=renderPreviewDesign(state.presentation),locked=state.busy||localBusy||state.video?.running;
- const signature=JSON.stringify([assets.map(a=>a.file),videos.map(a=>a.file),file,videoFile,candidate,state.imageProposal?.id,row?.cutVisual,row?.caption,state.presentation?.explainScenes,design,isFinalized(),locked,isDirty(),dirtyFields.has('production'),state.keyConfigured,state.production?.brief.assetMode,state.production?.brief.storyboard,row?.cutConfirmed,cutImageInputsDirty(id)]);if(box.dataset.files===signature)continue;box.dataset.files=signature;box.replaceChildren();
+  const videos=(state.production?.assets||[]).filter(a=>isVideoAsset(a.file)),videoFile=row?.cutVideo?.file,clip=row?.cutVideo?.clip;
+  const baseDesign=renderPreviewDesign(state.presentation),design=baseDesign&&row?.cutVisual?.layout?{...baseDesign,layout:row.cutVisual.layout}:baseDesign,locked=state.busy||localBusy||state.video?.running;
+  const signature=JSON.stringify([assets.map(a=>a.file),videos.map(a=>a.file),file,videoFile,clip,candidate,state.imageProposal?.id,row?.cutVisual,row?.caption,state.presentation?.explainScenes,design,isFinalized(),locked,isDirty(),dirtyFields.has('production'),state.keyConfigured,state.production?.brief.assetMode,state.production?.brief.storyboard,row?.cutConfirmed,cutImageInputsDirty(id)]);if(box.dataset.files===signature)continue;box.dataset.files=signature;box.replaceChildren();
  if(state.production?.bookends?.titleRowId===id){box.hidden=false;box.append(element('strong',row.caption),element('figcaption','冒頭のタイトル画面。背景と文字を動かして表示します。画像は不要です。',{class:'help'}));continue;}
  const explanation=!videoFile&&state.presentation?.explainScenes==='auto'?row?.cutVisual?.explanation:null;
  if(explanation){const preview=element('div',undefined,{class:'explanation-preview','data-explanation':explanation.type}),names={comparison:'比較',steps:'手順',stat:'数字強調',bar:'棒グラフ'};preview.append(element('strong',names[explanation.type]+'：'+(row.cutVisual.title||row.scene||'')));const items=element('div',undefined,{class:'explanation-items'}),max=explanation.type==='bar'?Math.max(...explanation.items.map(i=>Number(i.value.replaceAll(',','')))):1;for(const [i,item]of explanation.items.entries()){const card=element('div',undefined,{class:'explanation-item'});card.append(element('span',(explanation.type==='steps'?(i+1)+'．':'')+item.label),element('strong',item.value+explanation.unit));if(explanation.type==='bar'){const bar=element('div',undefined,{class:'explanation-bar'});bar.style.width=(Number(item.value.replaceAll(',',''))/max*100)+'%';card.append(bar);}items.append(card);}preview.append(items);box.append(preview,element('figcaption','図解の内容確認。完成動画では音声に合わせて順番に強調します。',{class:'help'}));}
@@ -149,7 +150,12 @@ function updateCutImages(){for(const [id,box]of cutImages){
   if(candidate?.imageFile&&!candidate.imagePrompt){const adopt=element('button','この画像を採用（APIなし）',{type:'button','data-adopt-image':id});adopt.disabled=!!(locked||cutImageInputsDirty(id));adopt.addEventListener('click',guarded(()=>adoptImages(id)));actions.append(adopt);box.append(element('p','未採用の画像候補です。画像を確認して採用してください。',{class:'help'}));}
   if(actions.children.length)box.append(actions);
  }
- if(videoFile)box.append(element('video',undefined,{src:'/api/cut-media?file='+encodeURIComponent(videoFile),controls:'',muted:'',playsinline:'',preload:'metadata',class:'cut-media-video','aria-label':'このカットの使用動画'}),element('figcaption','ナレーションと字幕を重ねます。素材の音声はミュートします。',{class:'help'}));
+  if(videoFile){
+   const range=clip?`#t=${clip.startSeconds},${clip.endSeconds}`:'';
+   const video=element('video',undefined,{src:'/api/cut-media?file='+encodeURIComponent(videoFile)+range,controls:'',muted:'',playsinline:'',preload:'metadata',class:'cut-media-video','aria-label':'このカットの使用動画'});
+   const note=clip?`使用範囲 ${clip.startSeconds.toFixed(1)}〜${clip.endSeconds.toFixed(1)}秒。`:'';
+   box.append(video,element('figcaption',note+'ナレーションと字幕を重ねます。素材の音声はミュートします。',{class:'help'}));
+  }
  if(file)box.append(element('a','画像そのものを拡大して確認（APIなし）',{href:'/materials/'+file,target:'_blank',rel:'noopener noreferrer',class:'cut-original-link'}));
  if(!file&&legacy.length>1)box.append(element('p','このカットの画像が複数あります。使う画像をファイル選択かドロップで指定してください。',{class:'help'}));
  else if(!file&&!videoFile)box.append(element('p',explanation?'このカットは図解で表示します。画像の追加は任意です。':'このカットの映像素材は未準備です。台本に合う画像か動画を割り当ててください。',{class:'help'}));
@@ -194,7 +200,7 @@ function updateExtras(){
  $('theme-auto').disabled=!!(state.busy||localBusy||isFinalized()||$('script-mode').value==='existing');$('clear-script').disabled=!!(isFinalized()||!$('script-input').value.trim());
  updateBookendsControls();updateTimingControls();const busy=state.busy||localBusy||state.video?.running||isFinalized();for(const id of ['source-text','source-urls','title-mode','voice-mode','voice-manual','append-script','save-production','material-files','script-mode','asset-mode','production-instructions','script-input','pitch','voice-preset','voice','model','style'])$(id).disabled=busy;
  $('script-input').disabled=isFinalized();
- const applied=state.voiceConfirmed===true&&sameSettings(selectedSettings(),state.settings);$('apply-voice').disabled=busy||!state.rows.length;$('apply-voice').textContent='この声で全文確認へ →';$('voice-apply-state').textContent=applied?'保存した声：'+state.settings.voice+'。次へ進むと選択内容を保存します。':'声の候補：'+selectedSettings().voice+'。次へ進むと本番の声として保存します。';
+ const applied=state.voiceConfirmed===true&&sameSettings(selectedSettings(),state.settings);const pendingVoice=voiceSelectionPending();$('apply-voice').disabled=busy||pendingVoice||!state.rows.length;$('apply-voice').textContent='この声で全文確認へ →';$('voice-apply-state').textContent=pendingVoice?'採用する声を選んでください。':applied?'保存した声：'+state.settings.voice+'。次へ進むと選択内容を保存します。':'声の候補：'+selectedSettings().voice+'。次へ進むと本番の声として保存します。';
  const needsReading=readingPreparationNeeded();$('append-script').textContent=needsReading?'読みを用意して声選びへ（API 1回）':'次へ：声を選ぶ →';$('append-script').disabled=busy||!$('script-input').value.trim()||needsReading&&!state.keyConfigured;
  $('reading-prep-info').textContent=needsReading?'このボタンで台本をGoogleへ1回送り、ひらがなの読みを用意します。API利用料が発生する場合があります。':hasScriptReadings()?'字幕とひらがなの読みは準備済みです。追加のAPI利用はありません。':'取り込み済みの台本を確認します。追加のAPI利用はありません。';
 
@@ -214,7 +220,8 @@ function updateExtras(){
  $('draft-script').disabled=busy||!state.keyConfigured||!$('production-instructions').value.trim();$('draft-script').textContent=draftGenerating?'AIが台本案を作成中…':'AIで台本案を作る（API利用）';
  $('draft-status').textContent=draftGenerating?'台本案を作成しています。':draftOutcome||(!state.keyConfigured?'APIキーが未設定です。画面上部で登録すると作成できます。':!$('production-instructions').value.trim()?'作りたい動画の指示を入力してください。':'準備できています。ボタンを押すとAPIを1回利用します。');$('draft-key-link').hidden=state.keyConfigured;
  $('save-production').textContent=productionSaving?'保存中…':'途中で保存する（APIなし）';
- $('preview-voice').disabled=busy||(!cachedSample()&&(!state.keyConfigured||!$('preview-consent').checked));$('preview-voice').textContent=cachedSample()?'保存済みの声・高さを試聴（API不要）':'この声・高さのサンプルを作る（初回のみ）';
+ $('preview-voice').disabled=busy||pendingVoice||(!cachedSample()&&(!state.keyConfigured||!$('preview-consent').checked));$('preview-voice').textContent=cachedSample()?'保存済みの声・高さを試聴（API不要）':'この声・高さのサンプルを作る（初回のみ）';
+ if(pendingVoice){$('sample-audio').hidden=true;$('sample-info').textContent='声を選ぶと試聴できます。';}
 }
 function updateVideo(){
   const video=state.video||{},result=video.result,labels={preparing:'確定済みの画像・音声を準備',bundling:'動画レイアウトを準備',rendering:'映像と音声を動画に変換',verifying:'動画と音声を検査',saving:'ダウンロードフォルダへ保存',complete:'動画が完成しました'},videoErrors={VIDEO_FONT_TIMEOUT:'日本語フォントの読み込み待ちが時間切れになりました。台本・音声は保持しています。',VIDEO_RENDER_CANCELED:'動画生成を中止しました。確認済みの素材と音声は保持しています。',VIDEO_RENDERER_REQUIRED:'動画レンダラーが未設定です。Codexへこの動画の続きを依頼してください。',VIDEO_BROWSER_REQUIRED:'動画生成用ブラウザーが見つかりません。',VIDEO_RENDER_INTERRUPTED:'前回の動画生成は中断されました。確定済みの素材は保持しています。',VIDEO_SAVE_DENIED:'ダウンロードフォルダへ保存できませんでした。保存先へのアクセスを確認してください。'};
@@ -241,11 +248,18 @@ function updateActivityProgress(){
   else{bar.removeAttribute('value');bar.setAttribute('max',1);}
  }
 }
-function currentVoiceProposal(){const proposal=state.production?.brief.storyboard,body=state.rows.filter(r=>r.id!==state.production?.bookends?.titleRowId);return proposal?.voice&&state.voices.includes(proposal.voice)&&body.length>0&&body.map(r=>r.caption).join('\n')===proposal.scenes.map(s=>s.caption).join('\n')?proposal:null;}
+function currentVoiceProposal(){
+ const brief=state.production?.brief,body=state.rows.filter(r=>r.id!==state.production?.bookends?.titleRowId).map(r=>r.caption).join('\n');
+ if(!body)return null;
+ if(brief?.voiceChoice&&state.voices.includes(brief.voiceChoice.voice)&&body===parseScriptParts(brief.script).join('\n'))return brief.voiceChoice;
+ const proposal=brief?.storyboard;
+ return proposal?.voice&&state.voices.includes(proposal.voice)&&body===proposal.scenes.map(s=>s.caption).join('\n')?proposal:null;
+}
+function voiceSelectionPending(){return $('voice-mode').value==='auto'&&state.production?.brief?.voiceMode==='auto'&&!currentVoiceProposal()&&(!state.voiceConfirmed||state.rows.some(row=>!row.audioCurrent));}
 function updateVoiceChoice(reset=false){
  const proposal=currentVoiceProposal();
  if($('voice-mode').value!=='manual'&&!isFinalized()&&!state.busy&&!localBusy&&!state.video?.running&&(proposal||reset)){
-  const config=proposal?{model:state.settings.model,voice:proposal.voice,style:styleForVoice(proposal.voice),pitch:'standard'}:state.settings;
+  const config=proposal?automaticVoiceSettings(proposal):state.settings;
   if(!sameSettings(selectedSettings(),config)){customMode=false;$('model').value=config.model;$('voice').value=config.voice;$('style').value=config.style;$('pitch').value=config.pitch||'standard';markSettingsDirty();refreshSampleAudio();}
  }
  syncVoicePreset();
@@ -253,6 +267,9 @@ function updateVoiceChoice(reset=false){
 function updateVoiceProposal(){
  const proposal=currentVoiceProposal(),box=$('voice-proposal');box.hidden=!proposal;
  if(proposal)box.replaceChildren(element('strong',($('voice-mode').value==='manual'?'AIの提案：':'AIが選んだ声：')+proposal.voice),element('span',proposal.voiceReason));
+ const waiting=voiceSelectionPending(),button=$('choose-ai-voice');
+ button.hidden=!waiting||!state.rows.length;button.disabled=!state.keyConfigured||state.busy||localBusy||!!state.video?.running||isFinalized();
+ if(waiting)$('model-info').textContent='本番の声は未選択です。台本からAIに選ばせるか、手動で指定できます。';
 }
 function updateControls(){
   updateVoiceChoice();updateActivityProgress();updateVoiceProposal();
@@ -267,7 +284,7 @@ function updateControls(){
   updateExtras();updateReviewControls();
   updateDesign();
   const lock=state.busy||localBusy||isDirty(),sealed=isFinalized(),ready=state.rows.filter(r=>!r.audioCurrent||dirtyFields.has('settings')||(rowEditors.has(r.id)&&editorChanged(rowEditors.get(r.id))));
-  $('production-voice-info').textContent=`本番の声：${state.settings.voice} ／ 高さ：${state.settings.pitch==='low'?'低め':state.settings.pitch==='high'?'高め':'標準'}${dirtyFields.has('settings')?'（選択中の変更はまだ未反映）':''}。`;
+  $('production-voice-info').textContent=state.voiceConfirmed?`本番の声：${state.settings.voice} ／ 高さ：${state.settings.pitch==='low'?'低め':state.settings.pitch==='high'?'高め':'標準'}${dirtyFields.has('settings')?'（選択中の変更はまだ未反映）':''}。`:'本番の声はまだ確定していません。';
   const needsMusic=musicEnabled()&&(!state.production?.music||!state.musicCurrent);$('generate-all').disabled=state.busy||localBusy||state.video?.running||sealed||!state.keyConfigured||hasCorrections()||!state.rows.length||(!ready.length&&!needsMusic);
   $('generate-all').textContent='動画を作成';
   $('generate-all').hidden=sealed||state.rows.some(r=>!r.audioCurrent&&r.attempts>0);$('generate-all').disabled=state.busy||localBusy||state.video?.running||sealed||hasCorrections()||isDirty()||!state.rows.length||state.rows.some(r=>!r.reviewed)||state.titleReadingPreparationRequired||!state.voiceConfirmed||dirtyFields.has('settings')||state.rows.some(r=>!r.audioCurrent&&r.attempts>0)||((ready.length||needsMusic)&&!state.keyConfigured);$('retry-audio').hidden=sealed||!state.rows.some(r=>!r.audioCurrent&&r.attempts>0);$('retry-audio').disabled=state.busy||localBusy||sealed||!state.keyConfigured||state.rows.some(r=>!r.reviewed)||state.titleReadingPreparationRequired||!state.voiceConfirmed;
@@ -350,6 +367,10 @@ for(const id of ['model','voice','style','pitch','job-title'])$(id).addEventList
 function chooseVoice(value){$('voice-mode').value='manual';dirtyFields.add('production');if(value==='custom'){customMode=true;syncVoicePreset();return;}const legacy=voicePresets[value];const config=legacy?{model:$('model').value,...legacy}:allPresets().find(p=>p.model+'::'+p.voice===value);if(!config)throw new Error('INVALID_VOICE_PRESET');customMode=false;$('model').value=config.model;$('voice').value=config.voice;$('style').value=config.style;markSettingsDirty();syncVoicePreset();refreshSampleAudio();updateControls();message('声と話し方を選びました。サンプルを試聴し、「この声で全文確認へ」で保存します。');}
 $('voice-preset').addEventListener('change',guarded(()=>chooseVoice($('voice-preset').value)));
 $('voice-manual').addEventListener('change',guarded(()=>{if(state.busy||localBusy||state.video?.running||isFinalized())throw new Error('BUSY');$('voice-mode').value=$('voice-manual').checked?'manual':'auto';dirtyFields.add('production');updateVoiceChoice(true);refreshSampleAudio();updateControls();}));
+$('choose-ai-voice').addEventListener('click',guarded(async()=>{
+ if(!state.keyConfigured)throw new Error('API_KEY_REQUIRED');
+ await pending(async()=>{await savePlanning();render(await api('voice-plan',{consent:true,revision:state.revision,productionRevision:state.productionRevision}),true);});
+},'voice-apply-state'));
 const resultPlayer=$('video-player');
 resultPlayer.addEventListener('ended',()=>{resultPlayer.currentTime=0;});
 $('video-play-from-start').addEventListener('click',guarded(async()=>{resultPlayer.currentTime=0;await resultPlayer.play();}));
@@ -490,12 +511,22 @@ $('preview-consent').addEventListener('change',updateControls);
 $('bank-consent').addEventListener('change',()=>{renderExtras();updateControls();});
 $('prepare-samples').addEventListener('click',guarded(async()=>{if(!$('bank-consent').checked)throw new Error('GENERATION_CONSENT_REQUIRED');const missing=missingPresets().length;await api('prepare-samples',{consent:true});render(await api('status'));if(!state.error)message(`不足する${missing}件のサンプルを準備しています。完成分は保存し、画面を移動しても処理を続けます。`);}));
 $('voice').addEventListener('change',()=>{const demo=(state.samples||[]).filter(i=>i.settings.voice===$('voice').value&&(i.settings.pitch||'standard')===($('pitch').value||'standard')).sort((a,b)=>(a.settings.model===$('model').value?-1:1)-(b.settings.model===$('model').value?-1:1)||a.durationSeconds-b.durationSeconds)[0];if(demo){$('style').value=demo.settings.style;markSettingsDirty();syncVoicePreset();}refreshSampleAudio();updateControls();});
-async function savePlanning(){
+async function savePlanning(proposedMotion){
  if(isFinalized())return;
  if(state.production?.musicEnabled===undefined&&!state.rows.length)render(await api('music-preference',{enabled:true,revision:state.revision,productionRevision:state.productionRevision}),true);
  if(dirtyFields.has('title')){const next=await api('title',{title:$('job-title').value});dirtyFields.delete('title');render(next,true);}
- if(dirtyFields.has('design')){if(designChoice.mode==='ai'&&!state.presentation?.design)throw new Error('CUSTOM_DESIGN_REQUIRED');const presentation=designChoice.mode==='template'?{...(state.presentation.explainScenes?{explainScenes:state.presentation.explainScenes}:{}),theme:state.presentation.theme,mode:'template',template:designChoice.template,...(Object.hasOwn(state.presentation,'motion')?{motion:state.presentation.motion}:{})}:{...state.presentation,mode:'ai',instructions:$('design-instructions').value};const next=await api('presentation',{presentation,revision:state.revision});dirtyFields.delete('design');render(next,true);}
- if(dirtyFields.has('motion')){const next=await api('presentation',{presentation:{...state.presentation,motion:selectedMotion()},revision:state.revision});dirtyFields.delete('motion');render(next,true);}
+ const designChanged=dirtyFields.has('design'),motionChanged=proposedMotion!==undefined||dirtyFields.has('motion');
+ if(designChanged||motionChanged){
+  let presentation={...state.presentation};
+  if(designChanged){
+   if(designChoice.mode==='ai'&&!presentation.design)throw new Error('CUSTOM_DESIGN_REQUIRED');
+   if(designChoice.mode==='template'){delete presentation.design;delete presentation.instructions;presentation.mode='template';presentation.template=designChoice.template;}
+   else{delete presentation.template;presentation.mode='ai';presentation.instructions=$('design-instructions').value;}
+  }
+  if(motionChanged)presentation.motion=proposedMotion===undefined?selectedMotion():proposedMotion;
+  const next=await api('presentation',{presentation,revision:state.revision});
+  dirtyFields.delete('design');dirtyFields.delete('motion');render(next,true);
+ }
  if(dirtyFields.has('production')){const next=await api('production',currentBrief());dirtyFields.delete('production');render(next);}
 }
 function preparedTitleReading(){
@@ -514,7 +545,7 @@ async function adoptPreparedTitle(){
  render(await api('bookends',{title:prepared.caption,speech:prepared.speech,readingCandidate:true,endLabel:b?.endLabel||'ネームから全自動の自律式統合AI漫画システム',endUrl:b?.endUrl||'https://note.com/happy_duck780',owner:b?.owner||'FURU',endSeconds:b?.endSeconds||4,revision:state.revision,productionRevision:state.productionRevision}),true);
  return b?.titleRowId?undefined:state.production?.bookends?.titleRowId;
 }
-async function saveVoice(){if(isFinalized())return;const next=await api('settings',selectedSettings());dirtyFields.delete('settings');render(next,true);}
+async function saveVoice(){if(isFinalized())return;if(voiceSelectionPending())throw new Error('先に台本から声を選ぶか、声を手動で指定してください。');const proposal=$('voice-mode').value==='auto'?currentVoiceProposal():null;const next=await api('settings',proposal?automaticVoiceSettings(proposal):selectedSettings());dirtyFields.delete('settings');render(next,true);}
 async function goStep(step){if(state.busy||localBusy||state.video?.running)throw new Error('BUSY');if($(step)?.inert)throw new Error('API_KEY_REQUIRED');await pending(async()=>{await savePlanning();if(step==='reading'||step==='finish')await saveVoice();if(step==='reading')await adoptPreparedTitle();});window.location.hash='#'+step;updateControls();$(step).scrollIntoView?.({block:'start',...(step==='finish'?{behavior:'instant'}:{})});}
 async function pending(action){localBusy=true;updateControls();try{return await action();}finally{localBusy=false;updateControls();}}
 $('preview-voice').addEventListener('click',guarded(async()=>{const existing=cachedSample();if(existing){sampleAudio(existing.id);await $('sample-audio').play();return;}if(!state.keyConfigured)throw new Error('API_KEY_REQUIRED');message('音声サンプルを1回合成しています。');await pending(async()=>{const result=await api('preview',{settings:selectedSettings(),consent:$('preview-consent').checked});render(await api('status'));sampleAudio(result.sample);message('サンプルを保存しました。次回はAPIを使わず再生できます。');});}));
@@ -525,7 +556,7 @@ async function advanceScript(){
  planningAdvancing=true;actionMessage('script-status','台本と素材を取り込み、声選びの画面を開いています…');
  try{await pending(async()=>{
   let partial=false;try{await savePlanning();}catch(error){if(!['INVALID_REFERENCES','INVALID_REFERENCE_URL','INVALID_PRODUCTION_TEXT'].includes(error.message))throw error;partial=true;}
-  if(!directionPending&&directionProposal&&automaticDirectionEnabled()&&scriptParts().join('\n')===parseScriptParts(state.production?.brief?.script).join('\n')){selectDirectionProposal();await savePlanning();}
+  if(!directionPending&&directionProposal&&automaticDirectionEnabled()&&scriptParts().join('\n')===parseScriptParts(state.production?.brief?.script).join('\n')){const {motion}=directionProposal;selectDirectionProposal();await savePlanning(motion);}
   const next=await api('adopt-script',{script:$('script-input').value,...(hasScriptReadings()?{readings:scriptReadings}:{}),projectId:state.projectId,instanceId,revision:state.revision,productionRevision:state.productionRevision});if(!partial)dirtyFields.delete('production');render(next);
   actionMessage('script-status',partial?'台本だけを採用しました。参考資料の入力は未保存のまま保持しています。':'台本と準備素材を読み込みました。声を選んだ後、③で絵・字幕・読みを一緒に確認できます。APIは使っていません。');window.location.hash='#connection';$('connection').scrollIntoView?.({block:'start'});
  });}finally{planningAdvancing=false;updateControls();}
