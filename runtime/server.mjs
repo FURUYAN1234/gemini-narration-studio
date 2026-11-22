@@ -352,7 +352,13 @@ export async function startServer({session,port=6181,startupMode='resume',sample
       if(['/api/plan-images','/api/prepare-images','/api/regenerate-image','/api/approve-images','/api/remove-material'].includes(route)){
         if(session.busy||video.status(session.revision()).running)throw new Error('BUSY');
         if(input.revision!==session.revision()||input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');
-        if(route==='/api/remove-material'){await production.removeAsset(input.file,session.status().rows);imageProposal=null;return json(res,200,status());}
+        if(route==='/api/remove-material'){
+          if(inputBusy)throw new Error('BUSY');
+          inputBusy=true;
+          try{await production.removeAsset(input.file,session.status().rows);imageProposal=null;}
+          finally{inputBusy=false;}
+          return json(res,200,status());
+        }
         if(input.consent!==true)throw new Error('GENERATION_CONSENT_REQUIRED');
         inputBusy=true;try{
           if(route==='/api/regenerate-image'&&input.draftIndex!==undefined){
@@ -416,7 +422,14 @@ export async function startServer({session,port=6181,startupMode='resume',sample
         inputBusy=true;try{if(previous)await session.updateRow(bookends.titleRowId,{caption,speech});else await session.appendRow({id:bookends.titleRowId,caption,speech,...(!speech?{readingState:'pending'}:{}),scene:'タイトルコール'},{prepend:true});await production.saveBookends(bookends);if(isHiraganaReading(speech))await production.saveBrief({...production.status().brief,titleReading:{caption,speech}});return json(res,200,status());}finally{inputBusy=false;}
       }
       if(route==='/api/watermark-preference'){if(session.busy||inputBusy||video.status(session.revision()).running)throw new Error('BUSY');if(input.revision!==session.revision()||input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');inputBusy=true;try{await production.saveWatermarkEnabled(input.enabled);return json(res,200,status());}finally{inputBusy=false;}}
-      if(route==='/api/music-preference'){if(session.busy||inputBusy||video.status(session.revision()).running)throw new Error('BUSY');if(input.revision!==session.revision()||input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');await production.saveMusicEnabled(input.enabled);return json(res,200,status());}
+      if(route==='/api/music-preference'){
+        if(session.busy||inputBusy||video.status(session.revision()).running)throw new Error('BUSY');
+        if(input.revision!==session.revision()||input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');
+        inputBusy=true;
+        try{await production.saveMusicEnabled(input.enabled);}
+        finally{inputBusy=false;}
+        return json(res,200,status());
+      }
       if(route==='/api/cut-pause'){if(session.busy||video.status(session.revision()).running)throw new Error('BUSY');if(input.revision!==session.revision()||input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');inputBusy=true;try{await production.savePause(input.seconds);return json(res,200,status());}finally{inputBusy=false;}}
       if(route==='/api/confirm-video'){
         if(input.confirmReviewed!==true)throw new Error('FINAL_CONFIRMATION_REQUIRED');

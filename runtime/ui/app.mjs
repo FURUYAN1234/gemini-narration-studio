@@ -115,8 +115,8 @@ function hasScriptReadings(){const parts=scriptParts();return !!parts.length&&sc
 function readingPreparationNeeded(){return !scriptAlreadyLoaded()&&!hasScriptReadings()&&scriptParts().some(s=>!/[ぁ-ゖ]/u.test(s)||/[^ぁ-ゖー\p{P}\s\u3099\u309a]/u.test(s));}
 function automaticDirectionEnabled(){return $('script-mode').value!=='existing'&&$('auto-direction').checked;}
 function currentBrief(){return {...(state.production?.brief.titleReading?{titleReading:state.production.brief.titleReading}:{}),...(scriptEdited?{scriptEdited:true}:{}),...(aiThemeEnabled()?{themeAuto:true}:{}),autoDirection:automaticDirectionEnabled(),...(!directionPending&&directionProposal&&scriptParts().join('\n')===parseScriptParts(state.production?.brief?.script).join('\n')?{direction:directionProposal}:{}),...(state.production?.brief?.sourceEvidence?{sourceEvidence:state.production.brief.sourceEvidence}:{}),scriptMode:$('script-mode').value,assetMode:$('asset-mode').value,instructions:aiThemeEnabled()?'':$('production-instructions').value,script:$('script-input').value,references:{text:$('source-text').value,urls:$('source-urls').value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean)},titleMode:automaticDirectionEnabled()?'auto':'manual',voiceMode:$('voice-mode').value,...(storyboard&&storyboard.scenes.map(r=>r.caption).join('\n')===scriptParts().join('\n')?{storyboard}:{}),...(hasScriptReadings()?{readings:scriptReadings}:{})};}
-function musicEnabled(){return true;}
-async function enableAutomaticMusic(){if(state.production?.musicEnabled!==true)render(await api('music-preference',{enabled:true,revision:state.revision,productionRevision:state.productionRevision}),true);}
+function musicEnabled(){return state.production?.musicRemoved!==true;}
+async function enableAutomaticMusic(){if(musicEnabled()&&state.production?.musicEnabled!==true)render(await api('music-preference',{enabled:true,revision:state.revision,productionRevision:state.productionRevision}),true);}
 function scriptUrls(){const parts=scriptParts();return parts.length&&parts.every(s=>/^https?:\/\/\S+$/i.test(s))?parts:[];}
 const isVideoAsset=file=>typeof file==='string'&&/^[a-f0-9]{64}\.(mp4|webm)$/.test(file);
 function hasVideoAssets(){return !!state.production?.assets?.some(asset=>isVideoAsset(asset.file));}
@@ -279,7 +279,7 @@ function updateControls(){
   $('generation-next').hidden=true;$('generation-next').disabled=!!(localBusy||active||isDirty()||dirtyFields.has('settings'));
   $('reading-next').hidden=$('generation-next').hidden;
   $('generation-next').textContent='ナレーション作成へ進む →';
-  $('generation-next-state').textContent=!readingDone?'読みを確定してから、音声・動画を作成します。':'下の1つのボタンで音声・BGM・動画を順番に作成します。';
+  $('generation-next-state').textContent=!readingDone?'読みを確定してから、音声・動画を作成します。':'下の1つのボタンで音声'+(musicEnabled()?'・BGM':'')+'・動画を順番に作成します。';
   const complete=!!state.rows.length&&state.rows.every(r=>r.reviewed&&r.audioCurrent);
   $('generation-tools').hidden=sealed||!!state.video?.result;
   $('generation-state').textContent=state.busy?(state.progress?.phase||'作成中です。'):!state.rows.length?'01で台本を用意してください。':!state.keyConfigured?'画面上部でGemini APIキーを登録してください。':'確定した読みをGoogleへ送信します。未確定の読みは、先に「全文の読みを確定」で確認してください。音声は対象カットごとにAPI1回'+(musicEnabled()?'、必要なBGMはLyria 3.5で1回':'')+'。料金が発生する場合があります。自動再試行はありません。';
@@ -362,7 +362,7 @@ $('apply-dictionary').addEventListener('click',guarded(async()=>{render(await ap
 $('generate-all').addEventListener('click',guarded(async()=>{
  if(state.busy||localBusy||isFinalized()||hasCorrections())throw new Error('BUSY');
  if(isDirty()||state.rows.some(r=>!r.reviewed))throw new Error('READING_REVIEW_REQUIRED');if(dirtyFields.has('settings')||!state.voiceConfirmed)throw new Error('VOICE_CONFIRMATION_REQUIRED');
- if(state.production?.musicEnabled!==true)await pending(enableAutomaticMusic);
+  if(musicEnabled()&&state.production?.musicEnabled!==true)await pending(enableAutomaticMusic);
  if(state.rows.length&&state.rows.every(r=>r.audioCurrent)&&!isDirty()&&(!musicEnabled()||(state.production?.music&&state.musicCurrent))){await pending(async()=>{await api('render-preview',{revision:state.revision,productionRevision:state.productionRevision});render(await api('status'),true);});window.location.hash='#finish';$('finish').scrollIntoView?.({block:'start'});return;}
  if(isDirty()||state.rows.some(r=>!r.reviewed))throw new Error('READING_REVIEW_REQUIRED');if(dirtyFields.has('settings')||!state.voiceConfirmed)throw new Error('VOICE_CONFIRMATION_REQUIRED');await pending(async()=>{await savePlanning();});if(state.rows.some(r=>!r.audioCurrent&&r.attempts>0))throw new Error('REGENERATION_CONFIRM_REQUIRED');
  await pending(async()=>{const ids=state.rows.filter(r=>!r.audioCurrent).map(r=>r.id),createMusic=musicEnabled()&&(!state.production?.music||!state.musicCurrent);await api('generate',{ids,consent:true,revision:state.revision,productionRevision:state.productionRevision,regenerate:false,createMusic,createVideo:true,musicDirection:''});advanceAfterAudio=true;render(await api('status'),true);});maybeAdvanceAudio();message(!state.busy&&state.video?.stage==='complete'&&!state.video.running&&state.video.result?videoCompletionMessage(state.video):'音声'+(musicEnabled()?'・BGM':'')+'・動画の作成を開始しました。完了後に④で確認できます。');
@@ -458,10 +458,33 @@ function renderExtras(){
   if(!dirtyFields.has('review')){$('review-overall').value=production?.review?.overall||'';for(const [id,editor]of rowEditors){const note=production?.review?.cuts?.find(c=>c.rowId===id)?.instruction||'';cutInstructions.set(id,note);editor.instruction.value=note;}}$('review-request-state').textContent=state.busy&&state.progress?.phase?state.progress.phase:dirtyFields.has('review')?'修正指示：未保存':hasCorrections()?'修正指示：保存済み · 送信・反映ボタンで反映できます。':correctionOutcome||'修正指示はありません。';
   if(production&&!dirtyFields.has('production')){const b=production.brief;scriptEdited=b.scriptEdited===true;$('theme-auto').checked=b.themeAuto===true;$('script-mode').value=b.scriptMode;$('asset-mode').value=b.assetMode;$('production-instructions').value=b.instructions;$('script-input').value=b.scriptEdited?b.script:(b.script||state.rows.map(r=>r.caption).join('\n'));scriptReadings=b.readings;storyboard=b.storyboard;directionProposal=b.direction||((b.storyboard?.template)?{title:b.storyboard.title,template:b.storyboard.template,motion:b.storyboard.motion}:undefined);$('auto-direction').checked=b.autoDirection??(b.titleMode!=='manual'&&!state.rows.length);$('source-text').value=b.references?.text||'';$('source-urls').value=(b.references?.urls||[]).join('\n');$('title-mode').value=b.titleMode||'auto';$('voice-mode').value=b.voiceMode||'auto';renderSourceSummary();}
   $('brief-state').textContent=dirtyFields.has('production')?'制作条件：未保存':'制作条件：保存済み';
-  $('material-list').replaceChildren(...(production?.assets||[]).map(a=>{const item=element('div');item.append(element('a',a.name+' · '+(a.size/1024/1024).toFixed(2)+' MB',{href:'/materials/'+a.file,download:a.name}));if(!isFinalized()&&a.file!==production?.music?.file){const remove=element('button','素材一覧から削除',{type:'button',class:'quiet','aria-label':a.name+'を素材一覧から削除'});remove.disabled=!!(state.busy||localBusy);remove.addEventListener('click',guarded(async()=>{if(isDirty())throw new Error('STALE_REVISION');await pending(async()=>render(await api('remove-material',{file:a.file,revision:state.revision,productionRevision:state.productionRevision}),true));message('素材一覧から外しました。元のファイルは保持しています。');}));item.append(remove);}return item;}));
+  const materialsLocked=!!(state.busy||state.video?.running||state.promo?.running||localBusy||isFinalized());
+  $('material-list').replaceChildren(...(production?.assets||[]).map(asset=>{
+    const item=element('div'),usedAsMusic=asset.file===production?.music?.file;
+    item.append(element('a',asset.name+' · '+(asset.size/1024/1024).toFixed(2)+' MB',{href:'/materials/'+asset.file,download:asset.name}));
+    if(isFinalized())return item;
+    const label=usedAsMusic?'BGMを素材一覧から外す':'素材一覧から削除';
+    const accessibleLabel=asset.name+(usedAsMusic?'のBGM使用をやめて素材一覧から外す':'を素材一覧から削除');
+    const remove=element('button',label,{type:'button',class:'quiet','aria-label':accessibleLabel});
+    remove.disabled=materialsLocked;
+    remove.addEventListener('click',guarded(async()=>{
+      if(isDirty())throw new Error('STALE_REVISION');
+      await pending(async()=>render(await api('remove-material',{file:asset.file,revision:state.revision,productionRevision:state.productionRevision}),true));
+      message(usedAsMusic?'BGMを素材一覧から外しました。次の動画はBGMなしで作成します。':'素材一覧から外しました。元のファイルは保持しています。');
+    }));
+    item.append(remove);
+    return item;
+  }));
+  $('restore-automatic-music').hidden=musicEnabled()||isFinalized();
+  $('restore-automatic-music').disabled=materialsLocked;
   if(state.unsavedDraft&&!dirtyFields.has('production')){const draft=state.unsavedDraft.result;scriptEdited=true;$('script-input').value=draft.script;scriptReadings=draft.readings;storyboard=draft.storyboard;directionProposal=draft.direction;dirtyFields.add('production');$('save-draft-result').hidden=false;actionMessage('source-status','生成結果は保持していますが未保存です。保存し直してください。',true);}
   refreshSampleAudio();
 }
+$('restore-automatic-music').addEventListener('click',guarded(async()=>{
+  if(isDirty())throw new Error('STALE_REVISION');
+  await pending(async()=>render(await api('music-preference',{enabled:true,revision:state.revision,productionRevision:state.productionRevision}),true));
+  message('次回の動画作成でBGMを自動生成します。');
+}));
 for(const id of ['source-text','source-urls','title-mode','voice-mode','script-mode','asset-mode','production-instructions','script-input'])$(id).addEventListener('input',()=>{if(!dirtyFields.has('production'))productionBaseline=state.productionRevision;dirtyFields.add('production');$('brief-state').textContent='制作条件：未保存';updateControls();});
 $('preview-consent').addEventListener('change',updateControls);
 $('bank-consent').addEventListener('change',()=>{renderExtras();updateControls();});

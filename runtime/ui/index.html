@@ -21,11 +21,12 @@
 <details class="panel product-intro">
   <summary>画面素材から短い紹介動画を作る</summary>
   <div class="product-intro-form">
-    <p class="help">画像や操作録画から短い紹介MP4を書き出せます。声や字幕を付けて通常制作する場合は、下の「素材・台本」から進み、③で動画をカットに割り当てます。</p>
+    <p class="help">画像や操作録画から短い紹介MP4を書き出せます。内蔵の自動録画は、このPCで動くブラウザー版アプリ専用です。</p>
+    <a href="/mcp-guide.html#desktop-recording" target="_blank" rel="noopener">デスクトップ操作動画の作り方・Computer Useの導入</a>
     <label>動画タイトル<input id="promo-title" type="text" maxlength="90" placeholder="紹介するアプリや機能"></label>
     <details class="promo-recording">
-      <summary>操作を録画する</summary>
-      <label>デモ用アプリのURL<input id="recording-url" type="url" maxlength="500" placeholder="http://127.0.0.1:5000/"></label>
+      <summary>操作を録画する（ローカルWebアプリ専用）</summary>
+      <label>録画するローカルWebアプリのURL<input id="recording-url" type="url" maxlength="500" placeholder="http://127.0.0.1:5000/"></label>
       <label>操作手順<textarea id="recording-steps" rows="4" maxlength="2400" placeholder="クリック｜開始&#10;入力｜タイトル｜デモ用サンプル"></textarea></label>
       <p class="help">別のローカルアプリを、ログインしていない状態で開きます。例に沿って1行に1操作（最大7件）を書き、画面のボタン名や入力欄名をそのまま使ってください。入力にはサンプルデータを使用してください。</p>
       <div class="input-row"><button id="recording-start" type="button" disabled>録画を開始</button><button id="recording-stop" type="button" class="secondary" hidden>録画・編集を停止</button><button id="recording-setup" type="button" class="secondary" hidden>録画機能を再セットアップ</button></div>
@@ -59,6 +60,7 @@
 <section class="panel" id="planning"><div class="section-head"><div><p class="eyebrow">01 / BRIEF &amp; MATERIALS</p><h2>素材と台本を用意する</h2></div><span id="brief-state" class="badge">制作条件</span><button id="revise-planning" data-revise-step="planning" type="button" class="quiet">ここから修正</button><button id="cancel-planning" data-cancel data-step="planning" type="button" class="secondary stage-cancel">制作画面を一時退避</button></div>
 <label>動画素材の用意<select id="asset-mode"><option value="provided">提供素材から選ぶ（画像生成なし）</option><option value="ai">AIにすべてまかせる</option><option value="mixed" selected>提供素材から選び、不足する絵をAIで補う</option></select></label>
 <div id="material-drop" class="material-drop" tabindex="0" role="button" aria-label="動画素材を追加"><strong>素材をここへドラッグ＆ドロップ</strong><span>画像・動画・音声・PDF・UTF-8テキスト / 1ファイル100MBまで</span><input id="material-files" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.mp4,.webm,.mp3,.wav,.pdf,.txt" aria-label="動画素材ファイルを選ぶ"></div><div id="material-list" class="material-list"></div>
+<button id="restore-automatic-music" type="button" class="quiet" hidden disabled>BGMの自動生成を再開する</button>
 <p class="help">まず素材をまとめて入れ、どんな動画にしたいかを下に書いてください。追加しただけではGoogleへ送信しません。</p>
 <p class="help">素材 → 構成・台本のドラフト → 確認 → 音声 → 動画。初稿でよければ、そのまま進めます。修正するときだけ制作指示を書き直して再作成します。</p>
 <div class="source-intake"><h3>参考資料をまとめて渡す</h3><label>参考本文を貼り付ける<textarea autocomplete="off" id="source-text" rows="5" maxlength="60000" placeholder="メモ、記事の本文、商品説明など。複数の資料をまとめて貼れます。"></textarea></label><label>参考URL（1行に1件・公開ページのみ）<textarea autocomplete="off" id="source-urls" rows="2" maxlength="20000" placeholder="https://..."></textarea></label><p class="help">資料はローカルに保存します。AIで台本を作る送信操作を選んだときだけ、ファイルの中身・参考本文・URLをGeminiへ渡します。送信するファイルは合計12MB・20件まで、URLは10件まで。URLはアプリが公開本文を取得してからAIへ渡します。本文を取得できなければ台本APIには送信しません。ログイン・有料部分やページ内リンクの先までは読みません。</p></div>

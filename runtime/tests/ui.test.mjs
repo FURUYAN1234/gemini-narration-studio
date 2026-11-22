@@ -42,6 +42,16 @@ test('video creation includes automatic BGM when absent, including legacy disabl
  const call=ui.requests.find(r=>r.route==='generate');assert.ok(call);assert.equal(call.input.createMusic,true);assert.equal(call.input.createVideo,true);assert.equal(call.input.musicDirection,'');assert.deepEqual(call.input.ids,[]);assert.equal(ui.state().production.musicEnabled,true);assert.equal(ui.requests.filter(r=>r.route==='generate').length,1);assert.equal(ui.requests.some(r=>r.route==='generate-music'),false);
 });
 
+test('explicit BGM removal makes subsequent video creation use the prepared narration without generating another BGM',async()=>{
+ const ui=await setup({rows:[{id:'one',caption:'説明。',speech:'せつめい。',reviewed:true,audio:{file:'one.wav'},audioCurrent:true}]});
+ ui.externalMusicRemoved();
+ await ui.poll();
+ await ui.get('generate-all').emit('click');
+ assert.equal(ui.requests.filter(r=>r.route==='render-preview').length,1);
+ assert.equal(ui.requests.some(r=>['music-preference','generate'].includes(r.route)),false);
+ assert.equal(ui.get('restore-automatic-music').hidden,false);
+});
+
 test('video creation reuses prepared audio and BGM without paid regeneration and never offers separate audio playback',async()=>{
  const ui=await setup({rows:[{id:'one',caption:'説明。',speech:'せつめい。',reviewed:true,audio:{file:'one.wav'},audioCurrent:true}]});const music={file:'a'.repeat(64)+'.mp3',durationSeconds:30,level:.16};ui.externalMusic(music);ui.externalMusicEnabled(false);await ui.poll();assert.equal(ui.get('finish').hidden,true);assert.equal(ui.get('generate-all').disabled,false);
  await ui.get('generate-all').emit('click');assert.equal(ui.requests.filter(r=>r.route==='render-preview').length,1);assert.equal(ui.requests.some(r=>['generate','generate-music'].includes(r.route)),false);assert.deepEqual(ui.state().production.music,music);assert.equal(ui.state().production.musicEnabled,true);
@@ -782,6 +792,7 @@ async function setup({beforeBootstrap,adoptionWait,adoptionError,titleReading,im
     externalRevision:()=>{state.revision='revision-'+ ++revision;},externalBusy:value=>{state.busy=value;},externalFinalize:()=>{state.production.finalization={revision:state.revision,inputsHash:'fixture-hash'};},
     externalMusic:(music,current=true)=>{state.production.music=music;state.musicCurrent=current;},
     externalMusicEnabled:enabled=>{state.production.musicEnabled=enabled;},
+    externalMusicRemoved:()=>{delete state.production.music;state.production.musicEnabled=false;state.production.musicRemoved=true;},
     externalCutInfo: (id,value)=>Object.assign(state.rows.find(r=>r.id===id),value),
   };
 }

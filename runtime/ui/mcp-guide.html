@@ -18,10 +18,17 @@
 <h2>できること</h2>
 <ul>
 <li><code>studio_project</code> で制作・素材・録画・書き出し状況を確認します。</li>
-<li><code>studio_record_demo</code> でローカルデモの操作を録画します。操作名と時刻をGeminiへ送ることに同意した場合、<code>studio_edit_recording</code> でカット案を作れます。</li>
+<li><code>studio_record_demo</code> で、このPCで動くブラウザー版アプリ（<code>http://127.0.0.1:ポート/</code>）を自動操作して録画します。操作名と時刻をGeminiへ送ることに同意した場合、<code>studio_edit_recording</code> でカット案を作れます。</li>
 <li><code>studio_render_promo</code> で画像・録画にカット範囲・字幕・任意の音声を指定して短い紹介MP4を作ります。BGMと切り替え音を使わない場合は <code>soundEnabled: false</code> を指定します。完成動画は制作画面の下部で再生できます。</li>
 <li><code>studio_render_preview</code> で作成済みの音声と素材から確認用のナレーション動画を作ります。</li>
 </ul>
+<h2 id="desktop-recording">デスクトップ画面・Windowsアプリの操作動画</h2>
+<p>デスクトップ画面やWindowsアプリの操作も、画面録画を取り込めば、接続したMCPでカット編集・字幕追加・MP4書き出しができます。AIにWindowsアプリを操作させる場合はCodexのComputer Useを使い、映像は画面録画ツールで収録します。</p>
+<ol>
+<li>Computer Useが未導入の場合は、Windows版のCodexで「プラグイン」を開き、<strong>Computer Use</strong> を検索してインストールします。制作チャットで <code>@Computer Use</code> を選び、録画対象のアプリを指定します。プラグインの提供状況は利用プランや組織の設定によって異なります。<a href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">プラグイン一覧を開く</a> ／ <a href="https://help.openai.com/ja-jp/articles/20001256-plugins-in-chatgpt" target="_blank" rel="noopener noreferrer">OpenAI公式のプラグイン導入手順</a></li>
+<li>画面の録画を開始し、デモを実行します。Windows 11では Snipping Tool の <kbd>Windows</kbd>＋<kbd>Shift</kbd>＋<kbd>R</kbd> で録画範囲を選べます。Computer Useを使えない場合は手動操作で録画できます。<a href="https://support.microsoft.com/ja-jp/windows/apps/use-snipping-tool-to-capture-screenshots" target="_blank" rel="noopener noreferrer">Microsoft公式の画面録画手順</a></li>
+<li>保存したMP4を「素材・台本」に追加し、MCPでカット範囲と字幕を指定して紹介動画を書き出します。通常のナレーション制作ではMP4・WebMを取り込み、③でカットに割り当てられます。</li>
+</ol>
 <p>紹介動画にはGemini APIキーは要りません。音声を新規に作る場合は、スタジオのAPI設定と読み・音声の確認手順を使います。</p>
 <p><a href="/narrated-video-production.zip" download>制作スキルを取得</a> ／ <a href="/">制作画面へ戻る</a></p>
 </main>

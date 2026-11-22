@@ -6,9 +6,9 @@ Operation guide / 操作ガイド: Open the PDF to review the application workfl
 
 Read both Japanese A4 guides from the app header or the public installation page. / 日本語A4の操作・API設定ガイドは、アプリ上部と公開導入ページから別タブで開けます。
 
-# Narrated Video Maker / ナレーション動画メーカー v1.4.0
+# Narrated Video Maker / ナレーション動画メーカー v1.4.1
 
-[Release notes / 更新内容](docs/releases/v1.4.0.md)
+[Release notes / 更新内容](docs/releases/v1.4.1.md)
 
 > **MIT License; your outputs remain yours.** You may use, modify, redistribute and sell the app, including in paid products and services, without individual permission from FURU. Retain the copyright and MIT license notices in copies or substantial portions of the software. External API fees and third-party terms are separate. / **アプリはMITライセンス。成果物の権利は従来どおり利用者に帰属します。** アプリの利用・改変・再配布・販売、有料商品やサービスへの組み込みに、FURUへの個別許可は不要です。ソフトウェアの複製または重要な部分には著作権表示とMITの許諾表示を残してください。外部API料金と第三者の条件は別です。
 
@@ -71,6 +71,8 @@ The public website is a download and installation guide. Video processing runs o
 
 - Open the studio with `start_narration_studio.bat`, import PNG/JPEG/WebP screenshots, then open the product-demo panel. The MP4 includes optional locally generated music and transition sounds. Play and save it at the bottom of the page. / バッチ起動後に実画面の画像を取り込み、紹介動画フォームでMP4を書き出せます。BGMと切り替え音はPCで作成し、オフにもできます。完成動画の再生と保存はページ下部です。
 - The studio toolbar provides the downloadable production skill and the MCP setup guide. The local MCP bridge can record and edit a demo and render it as MP4 in the approved project. / 画面上部に制作スキルとMCP導入ガイドがあります。許可したMCP接続で制作スキルから録画・編集・MP4書き出しを進められます。
+- Built-in automatic recording requires a local web app. For Windows desktop demos, import a screen recording and use MCP to specify clips and captions and export an MP4. Codex Computer Use can operate the desktop app while a separate tool records the screen. / 内蔵の自動録画はローカルWebアプリ専用です。Windowsアプリの画面録画を取り込めば、MCPでカット範囲・字幕を指定し、MP4を書き出せます。AIによるWindowsアプリの操作にはCodexのComputer Useを使い、映像は別の画面録画ツールで収録します。
+- Remove the current BGM from the materials list to make the next video without it. The source audio is kept locally, and you can turn automatic BGM generation back on from the same section. / 「素材・台本」で使用中のBGMを素材一覧から外すと、次の動画をBGMなしで作成できます。元の音声ファイルはPCに残り、同じ欄からBGMの自動生成を再開できます。
 - The tool credits remain on the final card when the optional legacy watermark is turned off. The watermark defaults to on. / 末尾は制作環境を表示します。従来の透かしは初期値オンで、オフにすると透かしだけ消えます。
 
 1. Open the latest Release above. Under Assets, choose **Source code (zip)**. / 上の最新版ダウンロードを開き、Assets欄の **Source code (zip)** をクリックします。
