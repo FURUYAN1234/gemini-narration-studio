@@ -64,6 +64,8 @@ The public website is a download and installation guide. Video processing runs o
 
 ### Product demos and MCP / 紹介動画とMCP
 
+- Operation recordings, MP4 and WebM are available as footage in the main narration workflow. After preparing the script and choosing a voice, select the clip in each cut in Step 3. The narration and captions use the normal rendering path. / 操作録画・MP4・WebMは通常のナレーション制作にも使えます。素材と台本を準備して声を選び、③で使う動画をカットごとに選択します。ナレーションや字幕は通常の工程で付けられます。
+
 - The Windows batch launcher prepares the pinned recording browser on first launch. Record a separate signed-out `http://127.0.0.1:port/` demo using sample data. / Windowsバッチが初回に録画用Chromiumを準備します。「操作を録画する」で未ログインの別のローカルアプリのURLとサンプル操作を指定します。
 - Edit up to six clips or screenshots. Set the order, start, duration, heading and caption, and add optional WAV/MP3 narration. Gemini can propose cuts with your consent to share only operation names and timings. / 画像と動画を最大6カットに並べ、開始位置・長さ・見出し・字幕と任意のナレーションを指定できます。操作名と時刻の送信を選べば、Geminiがカット案を作れます。
 

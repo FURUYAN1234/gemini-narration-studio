@@ -91,6 +91,19 @@ export async function mediaDuration(root,file,signal) {
   throw new Error('RECORDING_MEDIA_INVALID');
 }
 
+export async function videoDuration(root,file,signal) {
+  try {
+    const {stdout}=await exec(rendererTool(root,'ffprobe'),['-v','error','-select_streams','v:0','-show_entries','stream=duration:stream_tags=DURATION:format=duration','-of','json',file],{windowsHide:true,signal,timeout:20_000});
+    const result=JSON.parse(stdout),stream=result.streams?.[0];
+    if(stream){
+      const stamp=stream.tags?.DURATION?.match(/^(\d+):(\d+):(\d+(?:\.\d+)?)$/);
+      const seconds=Number(stream.duration)||(stamp?Number(stamp[1])*3600+Number(stamp[2])*60+Number(stamp[3]):Number(result.format?.duration));
+      if(seconds>0&&Number.isFinite(seconds))return seconds;
+    }
+  } catch(error){if(signal?.aborted)throw error;}
+  throw new Error('RECORDING_MEDIA_INVALID');
+}
+
 export async function captureRecording({input,chromium,rendererRoot,outputDir,signal}) {
   const {url,steps}=normalizeRecording(input);
   const work=await mkdtemp(path.join(outputDir,'recording-'));

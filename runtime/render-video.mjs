@@ -7,11 +7,12 @@ import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {prepareReviewedAudio,preparePreviewAudio} from './client.mjs';
 import {themeTokens} from './themes.mjs';
-import {ProductionInputs,safeText} from './production.mjs';
+import {ProductionInputs,safeText,isCutVideo} from './production.mjs';
 import {fullDecodeVideo,extractVideoAudio,renderErrorCode} from './video.mjs';
 import {presentationDesign,presentationMotion} from './designs.mjs';
 import {videoCredits} from './video-credits.mjs';
 import {promoPresentation} from './promo.mjs';
+import {videoDuration} from './demo-recording.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url)),args=process.argv.slice(2),option=name=>{const index=args.indexOf(name);return index<0?undefined:args[index+1];};
 const report=event=>console.log(JSON.stringify(event));
@@ -41,14 +42,20 @@ try{
   const artworkTools=new Set();
   await mkdir(path.join(publicDir,'cuts'),{recursive:true});
   for(const row of data.rows){
-    const asset=production.cutImage(row);
-    if(asset){await writeFile(path.join(publicDir,'cuts',asset.file),await production.readAsset(asset.file));row.image='cuts/'+asset.file;row.layout='split';}
+    const asset=production.cutMedia(row);
+    if(asset){
+      const destination=path.join(publicDir,'cuts',asset.file),src='cuts/'+asset.file;
+      await writeFile(destination,await production.readAsset(asset.file));
+      if(isCutVideo(asset.file)){row.video=src;row.videoFrames=Math.max(1,Math.floor(await videoDuration(rendererRoot,destination,controller.signal)*data.fps));}
+      else row.image=src;
+      row.layout='split';
+    }
     const visual=scenes[row.id]||{};if(visual.imageFocus)row.imageFocus=visual.imageFocus;row.title=typeof visual.title==='string'?visual.title.slice(0,200):row.scene||data.title;
     const source=visual.artworkSource;
     if(asset&&source?.file===asset.file&&typeof source.tool==='string'&&source.tool.length<=80){
       const tool=safeText(source.tool,80);if(tool)artworkTools.add(tool);
     }
-    row.explanation=resolveExplanation({...row,explanation:visual.explanation},data.presentation.explainScenes);
+    row.explanation=row.video?undefined:resolveExplanation({...row,explanation:visual.explanation},data.presentation.explainScenes);
     row.points=Array.isArray(visual.points)?visual.points.filter(v=>typeof v==='string').slice(0,6).map(v=>v.slice(0,160)):[];
   }
   const music=production.effectiveMusic();if(music){await writeFile(path.join(publicDir,'cuts',music.file),await production.readAsset(music.file));data.music={src:'cuts/'+music.file,durationSeconds:music.durationSeconds,level:music.level};}
@@ -72,7 +79,7 @@ try{
   if(!video||Boolean(audio)!==requireAudio||video.width!==composition.width||video.height!==composition.height||Math.abs(Number(metadata.format.duration)-composition.durationInFrames/composition.fps)>0.25)throw new Error('VIDEO_MEDIA_QA_FAILED');
   if(!promo)await extractVideoAudio(ffmpeg,output,output.replace(/\.mp4$/,'.m4a'),{signal:controller.signal});
   checkCanceled();
-  await writeFile(path.join(sourceDir,'video','media-qa.json'),JSON.stringify({fullDecode:true,frames:composition.durationInFrames,fps:composition.fps,metadata,provider:data.provider,settings:data.settings,...(data.music?{music:data.music}:{}),...(data.bookends?{bookends:data.bookends}:{}),rows:data.rows.map(r=>({id:r.id,image:r.image,file:r.file,frames:r.frames,explanation:r.explanation?.type})),renderedAt:new Date().toISOString()},null,2));report({stage:'verifying',progress:1});
+  await writeFile(path.join(sourceDir,'video','media-qa.json'),JSON.stringify({fullDecode:true,frames:composition.durationInFrames,fps:composition.fps,metadata,provider:data.provider,settings:data.settings,...(data.music?{music:data.music}:{}),...(data.bookends?{bookends:data.bookends}:{}),rows:data.rows.map(r=>({id:r.id,image:r.image,video:r.video,file:r.file,frames:r.frames,explanation:r.explanation?.type})),renderedAt:new Date().toISOString()},null,2));report({stage:'verifying',progress:1});
 }catch(error){
   // This local renderer never receives credentials. Keep bounded, redacted
   // diagnostics on disk so encoding failures can be diagnosed without UI logs.

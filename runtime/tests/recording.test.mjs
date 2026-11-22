@@ -40,3 +40,21 @@ test('saved operation recordings reopen with timing and preserve original bytes'
   assert.deepEqual(asset.recording,recordingMetadata(metadata));
   assert.deepEqual(await restored.readAsset(asset.file),fixture);
 });
+
+test('a recording remains selectable in the regular narration workflow after reopening',async t=>{
+  const dir=await mkdtemp(path.join(os.tmpdir(),'narration-film-cut-'));
+  t.after(()=>rm(dir,{recursive:true,force:true}));
+  const p=await ProductionInputs.open(dir);
+  const row={id:'demo',scene:'第一場面',caption:'操作画面',speech:'そうさがめん'};
+  await p.addAsset('操作録画.mp4',Buffer.from('xxxxftyp fixture only'),{origin:'operation-recording',recording:metadata});
+  const [asset]=p.status().assets;
+  assert.equal(p.cutInfo(row).cutVideo,undefined);
+  assert.ok(p.cutInfo(row).cutFingerprint,'a video in the material list is optional');
+  await p.assignCutImage(row,asset.file);
+  const saved=await ProductionInputs.open(dir);
+  assert.equal(saved.cutInfo(row).cutVideo.file,asset.file);
+  assert.equal(saved.cutImage(row),null);
+  assert.equal(saved.cutFingerprint(row),p.cutFingerprint(row));
+  await saved.removeAsset(asset.file,[row]);
+  assert.equal(saved.cutMedia(row),null);
+});

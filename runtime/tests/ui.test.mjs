@@ -27,8 +27,8 @@ test('a diagram-only cut explains that images are optional while ordinary cuts r
  const ui=await setup({rows:[{id:'one',caption:'参加者は25人です。',speech:'さんかしゃはにじゅうごにんです。',cutVisual:{title:'参加者',points:[],explanation}}]});
  ui.get('explain-scenes').checked=true;await ui.get('explain-scenes').emit('change');
  const text=()=>[...ui.get('rows').walk()].map(e=>e.textContent).join('\n');
- assert.match(text(),/このカットは図解で表示します。画像の追加は任意です/);assert.doesNotMatch(text(),/このカットの画像は未準備/);
- ui.get('explain-scenes').checked=false;await ui.get('explain-scenes').emit('change');assert.match(text(),/このカットの画像は未準備/);
+ assert.match(text(),/このカットは図解で表示します。画像の追加は任意です/);assert.doesNotMatch(text(),/このカットの映像素材は未準備/);
+ ui.get('explain-scenes').checked=false;await ui.get('explain-scenes').emit('change');assert.match(text(),/このカットの映像素材は未準備/);
  assert.equal(ui.requests.some(r=>['generate','source-plan','generate-image','draft-script'].includes(r.route)),false);
 });
 

@@ -11,14 +11,14 @@ import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {NarrationSession,SAMPLE_SETTINGS,VOICE_GENDERS,previewFingerprint} from './core.mjs';
 import {themeTokens,THEME_NAMES} from './themes.mjs';
-import {ProductionInputs,MAX_ASSET_BYTES,isHiraganaReading,normalizeReview,normalizeBrief,normalizeDraftRecord,validateAsset,safeText,normalizeBookends,normalizeScriptReadings,isScriptReadingReady} from './production.mjs';
+import {ProductionInputs,MAX_ASSET_BYTES,isHiraganaReading,normalizeReview,normalizeBrief,normalizeDraftRecord,validateAsset,safeText,normalizeBookends,normalizeScriptReadings,isScriptReadingReady,isCutVideo} from './production.mjs';
 import {assertScriptOperation,parseScriptParts,FRESH_BRIEF,FRESH_PRESENTATION} from './script-flow.mjs';
 import {VoiceSamples} from './samples.mjs';
 import {StudioVideo,findRendererRoot,mediaRange} from './video.mjs';
 import {VIDEO_TEMPLATES} from './designs.mjs';
 import {atomicWrite} from './atomic-write.mjs';
 import {preparePromo,promoVisual,promoVoice} from './promo.mjs';
-import {captureRecording,normalizeRecording} from './demo-recording.mjs';
+import {captureRecording,normalizeRecording,videoDuration} from './demo-recording.mjs';
 import {makeSkillArchive} from '../mcp/skill-archive.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
@@ -76,11 +76,11 @@ export async function startServer({session,port=6181,startupMode='resume',sample
     const saved=imageProposal||production.status().imageProposal;
     if(saved&&(saved.revision!==session.revision()||saved.productionRevision!==production.finalInputsHash()||!imageProposal)){
       imageProposal=null;
-      try{const scenes=saved.scenes.filter(s=>session.status().rows.some(r=>r.id===s.id&&r.caption===s.caption)),targets=scenes.map(s=>session.status().rows.find(r=>r.id===s.id));
+      try{const scenes=saved.scenes.filter(s=>session.status().rows.some(r=>r.id===s.id&&r.caption===s.caption&&!isCutVideo(production.cutMedia(r)?.file))),targets=scenes.map(s=>session.status().rows.find(r=>r.id===s.id));
         if(scenes.length){const checked=makeImageProposal(scenes.map(s=>({...s,imageReason:s.reason})),targets);imageProposal={...checked,...(saved.revision===checked.revision&&saved.productionRevision===checked.productionRevision?{id:saved.id}:{}),scenes:checked.scenes.map((s,i)=>({...s,...(scenes[i].generationPrompt?{generationPrompt:safeText(scenes[i].generationPrompt,3000)}:{})}))};}
       }catch{}
     }
-    if(!imageProposal){const rows=session.status().rows.filter(r=>r.id!==production.status().bookends?.titleRowId),scenes=production.status().brief.storyboard?.scenes;if(rows.length&&scenes?.length===rows.length&&rows.some(r=>!production.cutImage(r)&&production.imagePlan(r)))try{imageProposal=makeImageProposal(scenes.map((s,i)=>production.cutImage(rows[i])?{...s,imageFile:production.cutImage(rows[i]).file,imagePrompt:'',imageReferences:[]}:s),rows);}catch{}}
+    if(!imageProposal){const rows=session.status().rows.filter(r=>r.id!==production.status().bookends?.titleRowId),scenes=production.status().brief.storyboard?.scenes;if(rows.length&&scenes?.length===rows.length&&rows.some(r=>!production.cutMedia(r)&&production.imagePlan(r)))try{const remaining=rows.map((row,index)=>({row,scene:scenes[index]})).filter(({row})=>!isCutVideo(production.cutMedia(row)?.file));imageProposal=makeImageProposal(remaining.map(({row,scene})=>production.cutImage(row)?{...scene,imageFile:production.cutImage(row).file,imagePrompt:'',imageReferences:[]}:scene),remaining.map(({row})=>row));}catch{}}
     return imageProposal;
   }
   async function queueImageCandidates(scenes){
@@ -244,12 +244,12 @@ export async function startServer({session,port=6181,startupMode='resume',sample
         if(assets[route]){res.setHeader('Content-Type',route==='/'?'text/html; charset=utf-8':route.endsWith('.mjs')?'text/javascript; charset=utf-8':'text/css; charset=utf-8');return res.end(await readFile(path.join(here,'ui',assets[route])));}
         if(/^\/samples\/[a-f0-9]{64}\.wav$/.test(route)){res.setHeader('Content-Type','audio/wav');return res.end(await samples.read(route.slice(9,-4)));}
         if(route==='/api/music-audio'){const music=production.status().music;if(!music)return json(res,404,{error:'MUSIC_REQUIRED'});production.assertMusicCurrent(session.status());res.setHeader('Content-Type','audio/mpeg');return res.end(await production.readAsset(music.file));}
-        if(route==='/api/recording-media'){
+        if(['/api/recording-media','/api/cut-media'].includes(route)){
           const file=new URL(req.url,url).searchParams.get('file');
-          if(!production.status().assets.some(asset=>asset.file===file&&asset.recording))return json(res,404,{error:'ASSET_NOT_FOUND'});
+          if(!production.status().assets.some(asset=>asset.file===file&&(route==='/api/recording-media'?asset.recording:isCutVideo(asset.file))))return json(res,404,{error:'ASSET_NOT_FOUND'});
           const bytes=await production.readAsset(file);
           let range;try{range=mediaRange(req.headers.range,bytes.length);}catch{res.writeHead(416,{'Content-Range':`bytes */${bytes.length}`});return res.end();}
-          res.setHeader('Content-Type','video/mp4');res.setHeader('Accept-Ranges','bytes');res.setHeader('Content-Length',range.end-range.start+1);
+          res.setHeader('Content-Type',file.endsWith('.webm')?'video/webm':'video/mp4');res.setHeader('Accept-Ranges','bytes');res.setHeader('Content-Length',range.end-range.start+1);
           if(range.partial)res.setHeader('Content-Range',`bytes ${range.start}-${range.end}/${bytes.length}`);
           res.writeHead(range.partial?206:200);return res.end(bytes.subarray(range.start,range.end+1));
         }
@@ -373,7 +373,7 @@ export async function startServer({session,port=6181,startupMode='resume',sample
             const candidate=makeImageProposal([{caption:row.caption,imagePrompt:prompt,imageReferences:input.references??(file?[file]:[]),imageReason:'指定したカットだけの再生成'}],[row]);
             if(imageProposal){imageProposal.scenes=[...imageProposal.scenes.filter(s=>s.id!==row.id),...candidate.scenes];imageProposal.id=randomUUID();}else imageProposal=candidate;
           }else if(route==='/api/plan-images'||route==='/api/prepare-images'&&!currentImageProposal()){
-            const targets=input.id?rows.filter(r=>r.id===input.id):rows;if(!targets.length)throw new Error('ROW_NOT_FOUND');
+            const targets=input.id?rows.filter(r=>r.id===input.id):rows.filter(r=>!isCutVideo(production.cutMedia(r)?.file));if(!targets.length)throw new Error('ROW_NOT_FOUND');
             const brief={...production.status().brief,scriptMode:'existing',script:targets.map(r=>r.caption).join('\n'),instructions:'台本の字幕を一字も変更せず、各カットに使う画像だけを提案してください。提供素材を内容に合う場面へ割り当て、不足する場合だけ新規画像の指示を作成します。'+safeText(input.instructions||'',2000),autoDirection:false,references:{text:targets.map(r=>r.caption).join('\n'),urls:[]}};
             const images=production.status().assets.filter(a=>/\.(png|jpe?g|webp)$/.test(a.file));const plan=await session.planSources(brief,images,file=>production.readAsset(file));imageProposal=makeImageProposal(plan.storyboard?.scenes,targets);
           }
@@ -403,7 +403,7 @@ export async function startServer({session,port=6181,startupMode='resume',sample
           const result={...attempt.result,storyboard:brief.storyboard},remaining=brief.assetMode!=='provided'&&brief.storyboard.scenes.some(s=>!s.imageFile),finished={...attempt,result,state:remaining||result.warnings.length?'partial':'complete'};if(!remaining)delete finished.error;
           await production.saveAuthoring({...production.status().authoring,version:1,lastAttempt:finished},brief);return json(res,200,status());
         }
-        if(session.busy)throw new Error('BUSY');if(input.revision!==session.revision())throw new Error('STALE_REVISION');const row=session.status().rows.find(r=>r.id===input.id);if(!row)throw new Error('ROW_NOT_FOUND');await production.assignCutImage(row,input.file);if(imageProposal){imageProposal.scenes=imageProposal.scenes.filter(s=>s.id!==row.id);imageProposal.productionRevision=production.finalInputsHash();imageProposal.id=randomUUID();if(!imageProposal.scenes.length)imageProposal=null;}await production.saveImageProposal(imageProposal||undefined);return json(res,200,status());
+        if(session.busy)throw new Error('BUSY');if(input.revision!==session.revision())throw new Error('STALE_REVISION');const row=session.status().rows.find(r=>r.id===input.id);if(!row)throw new Error('ROW_NOT_FOUND');if(rendererRoot&&isCutVideo(input.file)&&production.status().assets.some(a=>a.file===input.file))await videoDuration(rendererRoot,await production.assetPath(input.file));await production.assignCutImage(row,input.file);if(imageProposal){imageProposal.scenes=imageProposal.scenes.filter(s=>s.id!==row.id);imageProposal.productionRevision=production.finalInputsHash();imageProposal.id=randomUUID();if(!imageProposal.scenes.length)imageProposal=null;}await production.saveImageProposal(imageProposal||undefined);return json(res,200,status());
       }
       if(route==='/api/bookends'){
         if(session.busy||video.status(session.revision()).running)throw new Error('BUSY');

@@ -2,7 +2,7 @@ import {PromoSlide} from './promo-presentation';
 import {ExplanationSlide} from './explain-presentation';
 import type {Explanation} from './explain-presentation';
 import React,{useState,useEffect} from 'react';
-import {AbsoluteFill,Audio,Composition,Img,Sequence,interpolate,staticFile,useCurrentFrame,delayRender,continueRender,cancelRender} from 'remotion';
+import {AbsoluteFill,Audio,Composition,Freeze,Img,OffthreadVideo,Sequence,interpolate,staticFile,useCurrentFrame,delayRender,continueRender,cancelRender} from 'remotion';
 import {loadLocalFont} from './font-loader.mjs';
 import {captionAtFrame,fitSubtitleText} from './subtitles.mjs';
 import {musicVolume,musicClips,musicClipGain} from './music.mjs';
@@ -10,7 +10,7 @@ import {MotionSlide,FocusArtwork,CutTransition} from './motion-presentation';
 import {EXPANDED_LAYOUTS,templateGeometry,fitText,motionFrame,ease,pointSchedule} from './motion.mjs';
 
 // Layouts adapt reveal.js themes (MIT; see vendor/reveal-LICENSE.txt).
-export type Slide={video?:string;videoStart?:number;explanation?:Explanation;id:string;scene?:string;caption:string;src:string;from:number;frames:number;title?:string;points?:string[];image?:string;imageFocus?:{x:number;y:number;zoom:number;label:string};layout?:'title'|'split'|'steps';subtitles?:{text:string;from:number;to:number}[]};
+export type Slide={video?:string;videoStart?:number;videoFrames?:number;explanation?:Explanation;id:string;scene?:string;caption:string;src:string;from:number;frames:number;title?:string;points?:string[];image?:string;imageFocus?:{x:number;y:number;zoom:number;label:string};layout?:'title'|'split'|'steps';subtitles?:{text:string;from:number;to:number}[]};
 export type Design={name:string;layout:'split'|'visual'|'steps'|'editorial'|'focus'|'poster'|'gallery'|'rail'|'stack';background:string;foreground:string;heading:string;accent:string;decoration:string;titleSize:number;imageSide:string;imageRatio:number;radius:number};
 export type PresentationData={promo?:boolean;promoAudio?:string;promoNarration?:string;bookends?:{titleRowId?:string;endLabel:string;endUrl:string;owner:string;creationYear:number;from:number;frames:number;watermarkEnabled?:boolean;tools?:string[]};gapFrames?:number;music?:{src:string;durationSeconds:number;level:number};title:string;fps:number;durationInFrames:number;rows:Slide[];design?:Design;motion?:{version:1;style:'cinematic'|'kinetic'|'editorial';intensity:'subtle'|'standard'|'bold';transitions?:string[];transitionTones?:string[]}|null};
 export type Theme={name:string;background:string;foreground:string;heading:string;accent:string};
@@ -29,8 +29,16 @@ const useJapaneseFont=()=>{
  const [handle]=useState(()=>delayRender('Load presentation Japanese font'));
  useEffect(()=>{void loadLocalFont({handle,FontFace,fonts:document.fonts,url:staticFile('narration/NotoSansJP.ttf'),family:font,delayRender,continueRender,cancelRender});},[handle]);
 };
+const CutMedia=({row,style}:{row:Slide;style:React.CSSProperties})=>{
+  const frame=useCurrentFrame();
+  if(row.video){
+    const last=Math.max(0,(row.videoFrames??row.frames)-1);
+    return <Freeze frame={last} active={frame>last}><OffthreadVideo muted src={staticFile(row.video)} style={style}/></Freeze>;
+  }
+  return row.image?<Img src={staticFile(row.image)} style={style}/>:null;
+};
 const SlideView=({row,data,theme,index}:{row:Slide;data:PresentationData;theme:Theme;index:number})=>{
-  const frame=useCurrentFrame(),opacity=interpolate(frame,[0,12],[0,1],{extrapolateRight:'clamp'}),layout=row.layout||(index===0?'title':row.image?'split':'steps');
+  const frame=useCurrentFrame(),opacity=interpolate(frame,[0,12],[0,1],{extrapolateRight:'clamp'}),layout=row.layout||(index===0?'title':row.image||row.video?'split':'steps');
   const points=row.points||[];
   return <AbsoluteFill style={{background:theme.background,color:theme.heading,fontFamily:font,padding:'65px 85px',overflow:'hidden'}}>
     <div style={{position:'absolute',right:-120,top:-200,width:700,height:700,borderRadius:'50%',border:`1px solid ${theme.accent}`,opacity:.22}}/>
@@ -39,7 +47,7 @@ const SlideView=({row,data,theme,index}:{row:Slide;data:PresentationData;theme:T
       <div style={{height:5,width:80,background:theme.accent,marginBottom:32}}/>
       <FittedHeading text={row.title||row.caption} width={layout==='split'?820:1600} height={layout==='split'?250:340} size={layout==='title'?82:58} lineHeight={1.4}/>
       {layout==='steps'&&points.length>0&&<div style={{display:'flex',gap:25,marginTop:45}}>{points.map((point,i)=><div key={i} style={{flex:1,border:`1px solid ${theme.accent}`,borderRadius:16,padding:30,fontSize:30,lineHeight:1.7}}><div style={{fontSize:22,color:theme.accent,marginBottom:22}}>0{i+1}</div>{point}</div>)}</div>}
-      {layout==='split'&&<div style={{display:'flex',gap:55,marginTop:35}}><div style={{flex:1,fontSize:31,lineHeight:1.8,color:theme.foreground}}>{points.map((point,i)=><p key={i}>{point}</p>)}</div>{row.image&&<Img src={staticFile(row.image)} style={{width:720,height:510,objectFit:'contain',borderRadius:15}}/>}</div>}
+      {layout==='split'&&<div style={{display:'flex',gap:55,marginTop:35}}><div style={{flex:1,fontSize:31,lineHeight:1.8,color:theme.foreground}}>{points.map((point,i)=><p key={i}>{point}</p>)}</div><CutMedia row={row} style={{width:720,height:510,objectFit:'contain',borderRadius:15}}/></div>}
     </div>
     <div style={{position:'absolute',bottom:45,left:85,right:85,borderTop:`1px solid ${theme.accent}`,paddingTop:22,fontSize:32,lineHeight:1.6}}><SubtitleText text={captionAtFrame(row,frame)}/></div>
     <Audio src={staticFile(row.src)}/>
@@ -47,7 +55,7 @@ const SlideView=({row,data,theme,index}:{row:Slide;data:PresentationData;theme:T
 };
 const DesignedSlide=({row,data,index,design:d}:{row:Slide;data:PresentationData;index:number;design:Design})=>{
  const frame=useCurrentFrame(),opacity=interpolate(frame,[0,12],[0,1],{extrapolateRight:'clamp'}),title=row.title||row.scene||data.title,points=row.points||[];
- const image=row.image?<Img src={staticFile(row.image)} style={{width:'100%',height:'100%',objectFit:'contain',borderRadius:d.radius}}/>:null;
+ const image=row.image||row.video?<CutMedia row={row} style={{width:'100%',height:'100%',objectFit:'contain',borderRadius:d.radius}}/>:null;
  const heading=<FittedHeading text={title} width={d.layout==='visual'?665:['steps','focus'].includes(d.layout)?1750:1750*(1-d.imageRatio)-60} height={['steps','focus'].includes(d.layout)?210:300} size={d.titleSize}/>;
  const notes=<div style={{fontSize:32,lineHeight:1.8,color:d.foreground}}>{points.map((point,i)=><p key={i}>{point}</p>)}</div>;
  const grid=d.decoration==='grid'?{backgroundImage:`linear-gradient(${d.accent}22 1px,transparent 1px),linear-gradient(90deg,${d.accent}22 1px,transparent 1px)`,backgroundSize:'60px 60px'}:{};
@@ -67,7 +75,7 @@ const DesignedSlide=({row,data,index,design:d}:{row:Slide;data:PresentationData;
 };
 // New structures use the same bounded geometry with motion on or off.
 const ExpandedSlide=({row,data,index,design:d}:{row:Slide;data:PresentationData;index:number;design:Design})=>{
- const frame=Math.min(useCurrentFrame(),row.frames-1),points=row.points||[],g=templateGeometry(d.layout,{hasImage:!!row.image,pointCount:points.length});
+ const frame=Math.min(useCurrentFrame(),row.frames-1),points=row.points||[],g=templateGeometry(d.layout,{hasImage:!!(row.image||row.video),pointCount:points.length});
  const moving=!!data.motion,state=moving?motionFrame({frame,frames:row.frames,fps:data.fps,motion:data.motion}):null,reveal=state?.reveal??ease(frame/Math.max(1,Math.min(12,row.frames*.15)));
  const box=(b:{x:number;y:number;w:number;h:number}):React.CSSProperties=>({position:'absolute',left:b.x,top:b.y,width:b.w,height:b.h,boxSizing:'border-box'});
  const text=(value:string,b:{x:number;y:number;w:number;h:number},size:number,role:string,color:string)=>{
@@ -78,6 +86,7 @@ const ExpandedSlide=({row,data,index,design:d}:{row:Slide;data:PresentationData;
  return <AbsoluteFill data-video-layout={d.layout} style={{background:d.background,fontFamily:font,color:d.foreground,overflow:'hidden'}}>
   <div style={{position:'absolute',left:110,right:110,top:90,borderBottom:`2px solid ${d.accent}`,paddingBottom:18,fontSize:22,color:d.accent,display:'flex',justifyContent:'space-between'}}><span>{row.scene||data.title}</span><span>{String(index+1).padStart(2,'0')} / {data.rows.length}</span></div>
   <div style={{opacity:reveal,transform:`translateY(${(1-reveal)*(data.motion?.style==='kinetic'?35:16)}px)`}}>{text(row.title||row.scene||data.title,g.heading,d.layout==='poster'?d.titleSize*1.7:d.titleSize,'heading',d.heading)}</div>
+  {g.image&&row.video&&<div style={{...box(g.image),overflow:'hidden',opacity:reveal,border:`1px solid ${d.accent}66`,borderRadius:d.radius,padding:18}}><CutMedia row={row} style={{width:'100%',height:'100%',objectFit:'contain'}}/></div>}
   {g.image&&row.image&&(row.imageFocus?<FocusArtwork image={row.image} focus={row.imageFocus} box={g.image} d={d} frame={frame} frames={row.frames} reveal={reveal}/>:<div style={{...box(g.image),overflow:'hidden',opacity:reveal,border:`1px solid ${d.accent}66`,borderRadius:d.radius,padding:18}}><Img src={staticFile(row.image)} style={{width:'100%',height:'100%',objectFit:'contain',transform:state?`scale(${state.scale}) translateX(${state.pan*.15}px)`:'none'}}/></div>)}
   {d.layout==='rail'&&g.points.length>1&&<div aria-hidden="true" style={{position:'absolute',left:g.points[0].x+20,top:g.points[0].y+20,width:2,height:g.points.at(-1)!.y-g.points[0].y,background:d.accent,opacity:.55}}/>}
   {points.map((point,i)=>{
@@ -106,5 +115,5 @@ const Bookend=({data,theme,row}:{data:PresentationData;theme:Theme;row?:Slide})=
   {row&&<Audio src={staticFile(row.src)}/>}
  </AbsoluteFill>;
 };
-export const NarratedPresentation=({data,theme}:{data:PresentationData;theme:Theme})=>{useJapaneseFont();return <AbsoluteFill><BackgroundMusic data={data}/>{data.rows.map((row,index)=><Sequence key={row.id} from={row.from} durationInFrames={row.frames+(data.gapFrames??7)}>{data.bookends?.titleRowId===row.id?<Bookend data={data} theme={theme} row={row}/>:data.promo?<PromoSlide row={row} data={data} index={index}/>:<CutTransition row={row} data={data} palette={data.design||theme}>{row.explanation?<ExplanationSlide row={row} data={data} theme={theme}/>:data.design&&EXPANDED_LAYOUTS.includes(data.design.layout)?<ExpandedSlide row={row} data={data} index={index} design={data.design}/>:data.motion?<MotionSlide row={row} data={data} index={index} design={data.design} theme={theme} motion={data.motion}/>:data.design?<DesignedSlide row={row} data={data} index={index} design={data.design}/>:<SlideView row={row} data={data} theme={theme} index={index}/>}</CutTransition>}</Sequence>)}{data.bookends&&data.bookends.frames>0&&<Sequence from={data.bookends.from} durationInFrames={data.bookends.frames}><Bookend data={data} theme={theme}/></Sequence>}</AbsoluteFill>;};
+export const NarratedPresentation=({data,theme}:{data:PresentationData;theme:Theme})=>{useJapaneseFont();return <AbsoluteFill><BackgroundMusic data={data}/>{data.rows.map((row,index)=><Sequence key={row.id} from={row.from} durationInFrames={row.frames+(data.gapFrames??7)}>{data.bookends?.titleRowId===row.id?<Bookend data={data} theme={theme} row={row}/>:data.promo?<PromoSlide row={row} data={data} index={index}/>:<CutTransition row={row} data={data} palette={data.design||theme}>{row.explanation?<ExplanationSlide row={row} data={data} theme={theme}/>:data.design&&EXPANDED_LAYOUTS.includes(data.design.layout)?<ExpandedSlide row={row} data={data} index={index} design={data.design}/>:data.motion&&!row.video?<MotionSlide row={row} data={data} index={index} design={data.design} theme={theme} motion={data.motion}/>:data.design?<DesignedSlide row={row} data={data} index={index} design={data.design}/>:<SlideView row={row} data={data} theme={theme} index={index}/>}</CutTransition>}</Sequence>)}{data.bookends&&data.bookends.frames>0&&<Sequence from={data.bookends.from} durationInFrames={data.bookends.frames}><Bookend data={data} theme={theme}/></Sequence>}</AbsoluteFill>;};
 export const NarratedPresentationComposition=({data,theme}:{data:PresentationData;theme:Theme})=><Composition id="GeminiNarratedPresentation" component={NarratedPresentation} defaultProps={{data,theme}} durationInFrames={data.durationInFrames} fps={data.fps} width={1920} height={1080}/>;
