@@ -23,6 +23,8 @@ export function PromoSlide({row,data,index}:{row:Slide;data:PresentationData;ind
   const zoom=interpolate(frame,[0,row.frames],[1,1.09],clamp);
   const trace=interpolate(frame,[13,44],[0,1],clamp);
   const compact=(row.title?.length??0)>24||(row.caption?.length??0)>70;
+  const titleLength=Array.from(row.title||'').length;
+  const titleSize=compact?42:titleLength<=12?Math.min(64,Math.floor(495/Math.max(titleLength,1))):64;
   const W=1160;
   return <AbsoluteFill style={{background:palette.paper,color:'#f6fbff',fontFamily:'Noto Sans JP, sans-serif',overflow:'hidden'}}>
     <div style={{position:'absolute',inset:0,background:`radial-gradient(ellipse at ${imageLeft?'29%':'72%'} 44%, ${palette.glow}, transparent 74%)`}}/>
@@ -40,7 +42,7 @@ export function PromoSlide({row,data,index}:{row:Slide;data:PresentationData;ind
     </div>
     <div style={{position:'absolute',top:compact?222:295,left:imageLeft?1296:88,width:510,opacity:copy*(1-exit),transform:`translateY(${(1-copy)*66-exit*24}px)`}}>
       <div style={{width:86*copy,height:6,borderRadius:4,background:palette.accent,marginBottom:36}}/>
-      <div style={{fontSize:compact?42:64,fontWeight:850,lineHeight:1.24,textWrap:'balance',overflowWrap:'anywhere'}}>{row.title}</div>
+      <div lang="ja" style={{fontSize:titleSize,fontWeight:850,lineHeight:1.24,lineBreak:'strict',textWrap:'balance',overflowWrap:'anywhere'}}>{row.title}</div>
       {row.caption&&<div style={{fontSize:compact?24:30,lineHeight:1.6,color:'#dde7ee',marginTop:24,overflowWrap:'anywhere'}}>{row.caption}</div>}
     </div>
   </AbsoluteFill>;
