@@ -253,12 +253,17 @@ test('one creation action includes video and preserves post-generation review wi
 });
 
 test('narration-only synthesis requires reviewed readings and sends no video or music request',async()=>{
- const ui=await setup({secondReviewed:false});
+ const ui=await setup({secondReviewed:false,confirmResult:false});
  const button=ui.get('generate-narration-only');
+ assert.match(html,/id="generate-narration-only" aria-describedby="narration-only-disclosure"/);
+ const disclosure=ui.get('narration-only-disclosure');
+ assert.equal(disclosure.hidden,false);
+ assert.match(disclosure.textContent,/Google.*Gemini TTSを2回.*API料金/);
  assert.equal(button.disabled,true);
  await ui.get('confirm-script').emit('click');
  assert.equal(button.disabled,false);
  await button.emit('click');
+ assert.equal(ui.confirmations.length,0);
  const calls=ui.requests.filter(request=>request.route==='generate');
  assert.equal(calls.length,1);
  assert.equal(calls[0].input.consent,true);
@@ -476,8 +481,12 @@ test('review shows only the next useful actions, makes the send action explicit 
  assert.equal(ui.get('generate-all').disabled,false);assert.match(ui.get('generation-state').textContent,/Google.*API/);
  const repaired=await setup({rows:[{id:'one',caption:'字幕。',speech:'よみ。',reviewed:true,attempts:1,audio:{file:'old.wav'},audioCurrent:false,listenedCurrent:false}],confirmResult:false});
  const regenerate=[...repaired.get('rows').walk()].find(e=>e.dataset.generate==='one');assert.ok(regenerate);
- await regenerate.emit('click');assert.equal(repaired.requests.some(r=>r.route==='generate'),false);
- assert.equal(repaired.confirmations.length,1);
+ await regenerate.emit('click');
+ const requests=repaired.requests.filter(r=>r.route==='generate');
+ assert.equal(requests.length,1);
+ assert.deepEqual(requests[0].input.ids,['one']);
+ assert.equal(requests[0].input.regenerate,true);
+ assert.equal(repaired.confirmations.length,0);
 });
 
 test('generated narration leaves all cuts editable until one final review, with no individual cut buttons',async()=>{

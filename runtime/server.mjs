@@ -123,6 +123,7 @@ export async function startServer({session,port=6181,startupMode='resume',sample
   const assertAdopted=()=>{if(production.status().authoring?.pendingAdoption)throw new Error('ADOPTION_CONFLICT');const brief=production.status().brief,body=session.status().rows.filter(r=>r.id!==production.status().bookends?.titleRowId).map(r=>r.caption).join('\n');if(brief.scriptEdited===true&&parseScriptParts(brief.script).join('\n')!==body)throw new Error('SCRIPT_ADOPTION_REQUIRED');};
   const startPreviewVideo=async()=>{
     assertReadyReadings();
+    if(session.status().rows.some(row=>row.audioCurrent&&!row.listenedCurrent&&row.audioReview?.status==='needs_listening'))throw new Error('AUDIO_LISTEN_REQUIRED');
     assertAdopted();production.assertNoCorrections();production.assertNoPendingImages(session.status());production.assertBookends(session.status());production.assertMusicCurrent(session.status());
     const manifest=await session.exportPreviewManifest({persist:false}),inputsHash=production.finalInputsHash();
     await atomicWrite(path.join(session.outputDir,'narration-preview-manifest.json'),JSON.stringify({...manifest,productionRevision:inputsHash},null,2));
@@ -271,7 +272,7 @@ export async function startServer({session,port=6181,startupMode='resume',sample
         }
         if(route.startsWith('/materials/')){const file=route.slice(11),asset=production.status().assets.find(a=>a.file===file);if(!asset)return json(res,404,{error:'ASSET_NOT_FOUND'});res.setHeader('Content-Type','application/octet-stream');res.setHeader('Content-Disposition','attachment');return res.end(await production.readAsset(file));}
         if(/^\/audio\/[a-f0-9]{64}\.wav$/.test(route)){
-          const file=route.slice(7);if(!session.status().rows.some(r=>r.audio?.file===file))return json(res,404,{error:'AUDIO_NOT_FOUND'});
+          const file=route.slice(7);if(!session.status().rows.some(r=>r.audio?.file===file||r.audioReview?.previous?.file===file))return json(res,404,{error:'AUDIO_NOT_FOUND'});
           const target=await realpath(path.join(session.outputDir,'audio',file)),root=await realpath(path.join(session.outputDir,'audio'));
           if(path.dirname(target)!==root)return json(res,404,{error:'AUDIO_NOT_FOUND'});
           res.setHeader('Content-Type','audio/wav');return res.end(await readFile(target));
@@ -658,6 +659,7 @@ export async function startServer({session,port=6181,startupMode='resume',sample
       else if(route==='/api/approve'){const row=session.status().rows.find(r=>r.id===input.id);if(row&&row.id!==production.status().bookends?.titleRowId)normalizeScriptReadings(row.caption,[row]);await session.approve(input.id,input.revision);}
       else if(route==='/api/unapprove')await session.revokeReadingApprovals(input.revision);
       else if(route==='/api/listened')await session.markListened(input.id,input.revision);
+      else if(route==='/api/auto-audio-review')await session.setAutoAudioReview(input.enabled,input.revision);
       else if(route==='/api/confirm-cut'){if(session.busy)throw new Error('BUSY');if(input.revision!==session.revision())throw new Error('STALE_REVISION');const row=session.status().rows.find(r=>r.id===input.id);if(!row)throw new Error('ROW_NOT_FOUND');inputBusy=true;try{await production.confirmCut(row,input.fingerprint);await session.markListened(input.id,input.revision);}finally{inputBusy=false;}}
       else if(route==='/api/reopen-cut'){if(session.busy)throw new Error('BUSY');if(input.revision!==session.revision())throw new Error('STALE_REVISION');if(!session.status().rows.some(r=>r.id===input.id))throw new Error('ROW_NOT_FOUND');inputBusy=true;try{await production.reopenCut(input.id);await session.reopenListening(input.id);}finally{inputBusy=false;}}
       else if(route==='/api/finalize'){assertAdopted();if(input.confirmIrreversible!==true)throw new Error('FINAL_CONFIRMATION_REQUIRED');if(session.busy)throw new Error('BUSY');if(input.revision!==session.revision())throw new Error('STALE_REVISION');inputBusy=true;try{await production.finalize(session.status());}finally{inputBusy=false;}}
@@ -679,9 +681,10 @@ export async function startServer({session,port=6181,startupMode='resume',sample
         if(withMusic)await musicDependency();
         inputBusy=true;narrationError=null;narrationCanceled=false;narrationStage=input.ids.length?'ナレーションを作成しています…':'BGMを作成しています…';
         (async()=>{try{
-          if(input.ids.length)await session.generate(input.ids,{regenerate:input.regenerate===true});
+          if(input.ids.length)await session.generate(input.ids,{regenerate:input.regenerate===true,titleRowId:production.status().bookends?.titleRowId});
           if(session.status().error)throw new Error(session.status().error);
           if(narrationCanceled)throw new Error('CANCELED');
+          if((withMusic||withVideo)&&session.status().rows.some(row=>row.audioCurrent&&!row.listenedCurrent&&row.audioReview?.status==='needs_listening'))return;
           if(withMusic){narrationStage='BGMを作成しています…';await createMusic(input.musicDirection);}
           if(narrationCanceled)throw new Error('CANCELED');if(withVideo)await startPreviewVideo();
         }catch(error){narrationError=/^[A-Z][A-Z_]+$/.test(error.message)?error.message:'REQUEST_FAILED';}finally{inputBusy=false;narrationStage=null;}})();

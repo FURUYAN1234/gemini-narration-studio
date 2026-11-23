@@ -28,13 +28,17 @@ test('toolbar, API labels and promo controls fit without clipping or crowding at
    const gaps=buttonsInForm.slice(1).map((control,i)=>control.top-buttonsInForm[i].bottom);
    const result=document.querySelector('#promo-result');
    const resultAtEnd=Boolean(document.querySelector('#finish').compareDocumentPosition(result)&Node.DOCUMENT_POSITION_FOLLOWING)&&result.nextElementSibling.tagName==='FOOTER'&&result.contains(document.querySelector('#promo-player'));
-   return {offset:Math.abs((text.top+text.bottom-box.top-box.bottom)/2),width:innerWidth,scrollWidth:document.documentElement.scrollWidth,manualLeft:button.left,manualRight:button.right,buttons:[...document.querySelectorAll('.top .manual-button')].map(e=>({left:e.getBoundingClientRect().left,right:e.getBoundingClientRect().right,href:e.getAttribute('href'),target:e.target})),manualCount:document.querySelectorAll('.top .manual-button').length,extra:document.querySelectorAll('.manual-save').length,apiReadable:apiText.height>0&&apiText.top>=apiBox.top&&apiText.bottom<=apiBox.bottom,apiHeight:apiBox.height,gaps,resultAtEnd};
+   const reviewHelp=document.querySelector('#auto-audio-review-help'),reviewBox=reviewHelp.getBoundingClientRect(),reviewText=rect(reviewHelp);
+   const reviewReadable=reviewText.height>0&&reviewText.left>=reviewBox.left&&reviewText.right<=reviewBox.right+1&&reviewText.bottom<=reviewBox.bottom+1;
+   return {offset:Math.abs((text.top+text.bottom-box.top-box.bottom)/2),width:innerWidth,scrollWidth:document.documentElement.scrollWidth,manualLeft:button.left,manualRight:button.right,buttons:[...document.querySelectorAll('.top .manual-button')].map(e=>({left:e.getBoundingClientRect().left,right:e.getBoundingClientRect().right,href:e.getAttribute('href'),target:e.target})),manualCount:document.querySelectorAll('.top .manual-button').length,extra:document.querySelectorAll('.manual-save').length,apiReadable:apiText.height>0&&apiText.top>=apiBox.top&&apiText.bottom<=apiBox.bottom,apiHeight:apiBox.height,gaps,resultAtEnd,reviewReadable};
   });
   assert.ok(observed.offset<2,JSON.stringify({width,...observed}));
   assert.equal(observed.manualCount,2);assert.deepEqual(observed.buttons.map(b=>b.href),['/narration-guide.pdf','/narration-api-guide.pdf']);for(const b of observed.buttons){assert.equal(b.target,'_blank');assert.ok(b.left>=0&&b.right<=width,JSON.stringify({width,b}));}assert.equal(observed.extra,0);
   assert.ok(observed.manualLeft>=0&&observed.manualRight<=width);assert.ok(observed.scrollWidth<=width);
   assert.ok(observed.apiReadable&&observed.apiHeight>=44,JSON.stringify({width,...observed}));
   assert.ok(observed.gaps.every(gap=>gap>=12),JSON.stringify({width,...observed}));
+  assert.equal(observed.width,width);
+  assert.equal(observed.reviewReadable,true,JSON.stringify({width,...observed}));
   assert.equal(observed.resultAtEnd,true);
  }
 });

@@ -62,10 +62,10 @@ test('presentation starts font blocking at component mount after Remotion module
 function wav() {
   const b=Buffer.alloc(48); b.write('RIFF');b.writeUInt32LE(40,4);b.write('WAVE',8);b.write('fmt ',12);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(24000,24);b.writeUInt32LE(48000,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(4,40);return b;
 }
-async function setup(t, provider) {
+async function setup(t, provider, takeInspector) {
   const dir=await mkdtemp(path.join(tmpdir(),'narration-test-'));
   t.after(()=>rm(dir,{recursive:true,force:true}));
-  const s=await NarrationSession.open({outputDir:dir, provider});
+  const s=await NarrationSession.open({outputDir:dir, provider, takeInspector});
   await (await ProductionInputs.open(dir)).saveMusicEnabled(false);await s.replaceJob({title:'回帰テスト',rows:[row]});return {s,dir};
 }
 test('dictionary handles longest matches, treats terms literally and preserves captions',()=>{
@@ -79,6 +79,70 @@ test('unreviewed rows and absent credentials block requests before provider exec
   await assert.rejects(s.generate(['intro']),/API_KEY_REQUIRED/);
   s.setKey('test-only-key');
   await assert.rejects(s.generate(['intro']),/READING_REVIEW_REQUIRED/);assert.equal(calls,0);
+});
+test('auto audio review is off by default and saves a passing assessment when enabled',async t=>{
+  let inspected=0;
+  const {s,dir}=await setup(t,async()=>wav(),async()=>{inspected++;return {verdict:'no_material_issue'};});
+  s.setKey('test-only-key');await s.approve(row.id,s.revision());await s.generate([row.id]);
+  assert.equal(inspected,0);
+  await assert.rejects(s.setAutoAudioReview(true,'stale'),/STALE_REVISION/);
+  await s.setAutoAudioReview(true,s.revision());await s.generate([row.id],{regenerate:true});
+  assert.equal(inspected,1);
+  const current=(await NarrationSession.open({outputDir:dir})).status();
+  assert.equal(current.autoAudioReview,true);
+  assert.equal(current.rows[0].audioReview.status,'pass');assert.equal(current.rows[0].listenedCurrent,false);
+});
+test('auto audio review tries one equivalent repair, preserves the old audio and reopens for human listening',async t=>{
+  const repair={caption:'動画はAPIで作成します。',speech:'どうがはえー・ぴー・あいでさくせいします。'};
+  const synthesis=[],inspections=[];
+  const {s,dir}=await setup(t,async({text})=>{synthesis.push(text);return wav();},async evidence=>{
+    inspections.push(evidence.speech);
+    return inspections.length===1?{verdict:'needs_review',repair}:{verdict:'no_material_issue',meaningPreserved:true};
+  });
+  s.setKey('test-only-key');await s.approve(row.id,s.revision());
+  await s.setAutoAudioReview(true,s.revision());await s.generate([row.id]);
+  const current=(await NarrationSession.open({outputDir:dir})).status().rows[0];
+  assert.deepEqual(synthesis,[row.speech,repair.speech]);assert.deepEqual(inspections,synthesis);
+  assert.equal(current.caption,row.caption);assert.equal(current.speech,repair.speech);
+  assert.equal(current.reviewed,true);assert.equal(current.audioCurrent,true);assert.equal(current.listenedCurrent,false);
+  assert.equal(current.audioReview.status,'repaired');assert.equal(current.audioReview.spokenCaption,repair.caption);
+  assert.equal(current.audioReview.previous.speech,row.speech);
+  assert.ok((await readdir(path.join(dir,'audio'))).includes(current.audioReview.previous.file));
+});
+test('auto audio review leaves ambiguous, invalid and unverified changes for listening',async t=>{
+  for(const [label, verdict, repair, retryCount] of [
+    ['uncertain','uncertain',null,1],
+    ['lost identifier','needs_review',{caption:'動画を作成します。',speech:'どうがをさくせいします。'},1],
+    ['meaning changed','needs_review',{caption:'APIを削除します。',speech:'えー・ぴー・あいをさくじょします。'},2],
+  ])await t.test(label,async item=>{
+    let inspected=0,synthesized=0;
+    const {s}=await setup(item,async()=>{synthesized++;return wav();},async()=>++inspected===1?{verdict,repair}:{verdict:'no_material_issue',meaningPreserved:false});
+    s.setKey('test-only-key');await s.approve(row.id,s.revision());
+    await s.setAutoAudioReview(true,s.revision());await s.generate([row.id]);
+    const current=s.status().rows[0];
+    assert.equal(synthesized,retryCount);assert.equal(inspected,retryCount);
+    assert.equal(current.speech,row.speech);assert.equal(current.audioCurrent,true);assert.equal(current.audioReview.status,'needs_listening');
+  });
+});
+test('cancelling audio review preserves the first take and does not restart it when reopened',async t=>{
+  let cancelAfterInspection;
+  const inspecting=new Promise(resolve=>{cancelAfterInspection=resolve;});
+  let finishInspection;
+  const {s,dir}=await setup(t,async()=>wav(),async()=>{
+    cancelAfterInspection();
+    return new Promise(resolve=>{finishInspection=resolve;});
+  });
+  s.setKey('test-only-key');await s.approve(row.id,s.revision());
+  await s.setAutoAudioReview(true,s.revision());
+  const generation=s.generate([row.id]);
+  await inspecting;
+  s.cancel();
+  finishInspection({verdict:'no_material_issue'});
+  await assert.rejects(generation,/CANCELED/);
+  const restored=await NarrationSession.open({outputDir:dir});
+  assert.equal(restored.status().rows[0].audioReview.status,'needs_listening');
+  assert.equal(restored.status().rows[0].audioCurrent,true);
+  assert.equal(restored.status().rows[0].attempts,1);
 });
 test('explicit approval is tied to exact caption and reading; edits revoke it',async t=>{
   const {s}=await setup(t,async()=>wav());s.setKey('test-only-key');
@@ -137,7 +201,7 @@ test('audio parser accepts WAV and Interactions audio output; rejects missing/tr
   assert.throws(()=>decodeAudio({outputs:[]}),/AUDIO/);
   assert.throws(()=>decodeAudio({outputs:[{type:'audio',mime_type:'audio/wav',data:Buffer.alloc(48).toString('base64')}]}),/WAV/);
   const request=buildRequest(row.speech,{model:'gemini-3.8-flash-tts',voice:'Kore',style:'落ち着いて'});
-  assert.equal(request.input[0].content[0].text,row.speech);assert.equal(request.input[0].content[0].annotations[0].style,'落ち着いて');
+  assert.equal(request.input[0].content[0].text,row.speech);assert.match(request.input[0].content[0].annotations[0].style,/^落ち着いて .*相づち.*付け足さない/);
   assert.equal(request.store,false);assert.equal(request.response_format.mime_type,'audio/wav');
 });
 test('HTTP gate blocks foreign origin, missing CSRF, arbitrary paths and pre-review synthesis',async t=>{

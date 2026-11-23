@@ -6,9 +6,9 @@ Operation guide / 操作ガイド: Open the PDF to review the application workfl
 
 Read both Japanese A4 guides from the app header or the public installation page. / 日本語A4の操作・API設定ガイドは、アプリ上部と公開導入ページから別タブで開けます。
 
-# Narrated Video Maker / ナレーション動画メーカー v1.4.3
+# Narrated Video Maker / ナレーション動画メーカー v1.4.4
 
-[Release notes / 更新内容](docs/releases/v1.4.3.md)
+[Release notes / 更新内容](docs/releases/v1.4.4.md)
 
 > **MIT License; your outputs remain yours.** You may use, modify, redistribute and sell the app, including in paid products and services, without individual permission from FURU. Retain the copyright and MIT license notices in copies or substantial portions of the software. External API fees and third-party terms are separate. / **アプリはMITライセンス。成果物の権利は従来どおり利用者に帰属します。** アプリの利用・改変・再配布・販売、有料商品やサービスへの組み込みに、FURUへの個別許可は不要です。ソフトウェアの複製または重要な部分には著作権表示とMITの許諾表示を残してください。外部API料金と第三者の条件は別です。
 
@@ -107,6 +107,8 @@ The key is held only in the local server's memory, and must be entered again aft
 4. Check each cut's picture, displayed caption and reading. Correct names, numbers and pronunciations; replace pictures by dropping a file onto that cut. Press **全文の読みを確定** after reviewing. / 各カットの絵、表示字幕、読みを確認します。名前、数字、読み方を直し、画像はそのカットへファイルをドロップして差し替えられます。確認後に **全文の読みを確定** を押します。
 5. Press **動画を作成**. Missing narration and BGM are prepared automatically, then the video is rendered locally; existing valid audio and BGM are reused. / **動画を作成** を押します。不足するナレーションとBGMを自動で用意してからPC上で動画を作り、作成済みの有効な音声とBGMは再利用します。
 6. Play the completed video and check the picture, captions, pronunciation and BGM. Confirm it only after that review; MP4 and M4A are saved to Windows Downloads. / 完成動画を再生して画像、字幕、読み方、BGMを確認します。確認後に確定し、MP4とM4AはWindowsのダウンロードに保存されます。
+
+For audio alone, press **ナレーション音声だけ作成** after reviewing the reading and voice. Enable **生成した音声をAIで検査・修正する** for a project to send generated audio and the script to Gemini for review. A clearly flawed take can receive one equivalent rephrasing and one further check. Listen to any take marked **要試聴** before proceeding. / 音声だけが必要なら、読みと声を確定して **ナレーション音声だけ作成** を押します。制作ごとに **生成した音声をAIで検査・修正する** を選ぶと、音声と台本をGeminiへ送って確認します。明確な異常は同じ意味に言い換えて1回まで再合成し、再検査します。**要試聴** の音声は聞いて採用するか判断してください。
 
 ![Picture and reading review / 絵と読みを確認する実画面](docs/screenshots/cut-review-current.jpg)
 

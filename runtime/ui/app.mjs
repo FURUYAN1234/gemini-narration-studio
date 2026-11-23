@@ -107,6 +107,7 @@ function updateDesign(){
  $('design-selection').textContent=sealed?'この動画は最終確定済みです。見本の比較だけできます。':dirtyFields.has('design')?'選択した見本は次のSTEPへ進むと保存します。':'動画に使うデザイン：'+applied;
 }
 function isCutConfirmed(row){return !!(row?.cutConfirmed??row?.listenedCurrent);}
+function needsAudioListen(row){return !!(row?.audioCurrent&&!row.listenedCurrent&&row.audioReview?.status==='needs_listening');}
 function isFinalized(){return !!state.production?.finalization;}
 function hasGenerationOutput(){return !!(state.video?.running||state.video?.result||state.video?.error||state.video?.stage&&state.video.stage!=='idle'||isFinalized());}
 function selectedSettings(){return {model:$('model').value,voice:$('voice').value,style:$('style').value,pitch:$('pitch').value||'standard'};}
@@ -288,7 +289,11 @@ function updateControls(){
   const needsMusic=musicEnabled()&&(!state.production?.music||!state.musicCurrent);$('generate-all').disabled=state.busy||localBusy||state.video?.running||sealed||!state.keyConfigured||hasCorrections()||!state.rows.length||(!ready.length&&!needsMusic);
   $('generate-all').textContent='動画を作成';
   const narrationOnly=$('generate-narration-only');
-  narrationOnly.hidden=sealed||!state.rows.some(row=>!row.audioCurrent&&!row.attempts);
+  const uncreatedNarrationCount=state.rows.filter(row=>!row.audioCurrent&&!row.attempts).length;
+  narrationOnly.hidden=sealed||!uncreatedNarrationCount;
+  const narrationOnlyDisclosure=$('narration-only-disclosure');
+  narrationOnlyDisclosure.hidden=narrationOnly.hidden;
+  narrationOnlyDisclosure.textContent='音声だけ作成する場合は、確定した読みと声の設定をGoogleへ送り、Gemini TTSを'+uncreatedNarrationCount+'回実行します。API料金が発生する場合があります。';
   narrationOnly.disabled=!!(lock||state.video?.running||!state.keyConfigured||!state.voiceConfirmed||hasCorrections()||state.rows.some(row=>!row.reviewed));
   $('generate-all').hidden=sealed||state.rows.some(r=>!r.audioCurrent&&r.attempts>0);$('generate-all').disabled=state.busy||localBusy||state.video?.running||sealed||hasCorrections()||isDirty()||!state.rows.length||state.rows.some(r=>!r.reviewed)||state.titleReadingPreparationRequired||!state.voiceConfirmed||dirtyFields.has('settings')||state.rows.some(r=>!r.audioCurrent&&r.attempts>0)||((ready.length||needsMusic)&&!state.keyConfigured);$('retry-audio').hidden=sealed||!state.rows.some(r=>!r.audioCurrent&&r.attempts>0);$('retry-audio').disabled=state.busy||localBusy||sealed||!state.keyConfigured||state.rows.some(r=>!r.reviewed)||state.titleReadingPreparationRequired||!state.voiceConfirmed;
   updateVideo();
@@ -302,13 +307,17 @@ function updateControls(){
   $('generation-next-state').textContent=!readingDone?'読みを確定してから、音声・動画を作成します。':'下の1つのボタンで音声'+(musicEnabled()?'・BGM':'')+'・動画を順番に作成します。';
   const complete=!!state.rows.length&&state.rows.every(r=>r.reviewed&&r.audioCurrent);
   $('generation-tools').hidden=sealed||!!state.video?.result;
-  $('generation-state').textContent=state.busy?(state.progress?.phase||'作成中です。'):!state.rows.length?'01で台本を用意してください。':!state.keyConfigured?'画面上部でGemini APIキーを登録してください。':'確定した読みをGoogleへ送信します。未確定の読みは、先に「全文の読みを確定」で確認してください。音声は対象カットごとにAPI1回'+(musicEnabled()?'、必要なBGMはLyria 3.5で1回':'')+'。料金が発生する場合があります。自動再試行はありません。';
+  $('auto-audio-review').checked=state.autoAudioReview===true;
+  $('auto-audio-review').disabled=!!(lock||state.video?.running);
+  const listeningNeeded=state.rows.some(needsAudioListen);
+  $('generate-all').disabled||=listeningNeeded;
+  $('generation-state').textContent=state.busy?(state.progress?.phase||'作成中です。'):listeningNeeded?'「要試聴」のカットを再生し、採用するか、読みを直して作り直してください。':!state.rows.length?'01で台本を用意してください。':!state.keyConfigured?'画面上部でGemini APIキーを登録してください。':'確定した読みをGoogleへ送信します。未確定の読みは、先に「全文の読みを確定」で確認してください。音声は対象カットごとにAPI1回'+(musicEnabled()?'、必要なBGMはLyria 3.5で1回':'')+'。料金が発生する場合があります。';
   $('confirm-full').hidden=!complete||state.video?.result?.reviewState!=='pending';
   renderImageProposal();
   $('confirm-full').disabled=lock||!!state.video?.running||!state.video?.available||needsMusic||hasCorrections()||!complete||state.rows.some(r=>r.cutFingerprint===null)||(state.presentation?.mode==='ai'&&!state.presentation.design);
   syncWorkflow();if(!workflowPaused){if(!state.rows.length&&!hasVideoAssets())for(const id of ['connection','reading'])$(id).hidden=window.location.hash!=='#'+id;$('finish').hidden=!hasGenerationOutput();}
   $('handoff-info').textContent=sealed?'全カット最終確定済み・編集不可。この内容を動画へ渡せます。':hasCorrections()?'修正指示が残っています。指摘した箇所を直して確認してから、動画へ渡せます。':isDirty()?'編集中の内容を反映してから音声を渡してください。':!complete?'声・ピッチを選び、全文確認で読みを確定して音声・動画をまとめて作成してください。':'完成した動画を再生し、画像・字幕・音声を確認してから確定してください。';
-  for(const b of document.querySelectorAll('[data-generate]')){const row=state.rows.find(r=>r.id===b.dataset.generate);b.hidden=!!row?.audioCurrent||sealed;b.disabled=lock||sealed||!state.keyConfigured||!row?.reviewed;}
+  for(const b of document.querySelectorAll('[data-generate]')){const row=state.rows.find(r=>r.id===b.dataset.generate);b.hidden=!!row?.audioCurrent&&!needsAudioListen(row)||sealed;b.disabled=lock||sealed||!state.keyConfigured||!row?.reviewed;}
   updateCutImages();updateApiBoundary();
 }
 function updateApiBoundary(){
@@ -319,7 +328,7 @@ function updateApiBoundary(){
  $('connection').inert=planningBlocked;$('reading').inert=planningBlocked;$('finish').inert=finishBlocked;
  for(const button of document.querySelectorAll('[data-go-step]')){const step=button.dataset.goStep;if(step==='finish')button.hidden=!hasGenerationOutput();if(missing&&(['connection','reading'].includes(step)?planningBlocked:step==='finish'&&finishBlocked))button.disabled=true;else button.disabled=!!(state.busy||localBusy);}
 }
-function maybeAdvanceAudio(){updateApiBoundary();if(!advanceAfterAudio||state.busy||localBusy)return;if(state.error){advanceAfterAudio=false;return;}if(!state.rows.length||state.rows.some(r=>!r.audioCurrent)||(musicEnabled()&&(!state.production?.music||!state.musicCurrent)))return;advanceAfterAudio=false;window.location.hash='#finish';$('finish').scrollIntoView?.({block:'start'});message(!state.busy&&state.video?.stage==='complete'&&!state.video.running&&state.video.result?videoCompletionMessage(state.video):state.video?.running?'音声'+(musicEnabled()?'とBGM':'')+'を準備しました。続けて動画を作成しています。完成後に動画と音声を確認してください。':'音声の準備が完了しました。動画の状態を④で確認してください。');}
+function maybeAdvanceAudio(){updateApiBoundary();if(!advanceAfterAudio||state.busy||localBusy)return;if(state.error||state.rows.some(needsAudioListen)){advanceAfterAudio=false;return;}if(!state.rows.length||state.rows.some(r=>!r.audioCurrent)||(musicEnabled()&&(!state.production?.music||!state.musicCurrent)))return;advanceAfterAudio=false;window.location.hash='#finish';$('finish').scrollIntoView?.({block:'start'});message(!state.busy&&state.video?.stage==='complete'&&!state.video.running&&state.video.result?videoCompletionMessage(state.video):state.video?.running?'音声'+(musicEnabled()?'とBGM':'')+'を準備しました。続けて動画を作成しています。完成後に動画と音声を確認してください。':'音声の準備が完了しました。動画の状態を④で確認してください。');}
 const refreshPromoTools=$('promo-add')?initPromoTools({$,element,api,guarded,render,readState:()=>state,errors}):()=>{};
 function renderStudioTools(){
   const mcp=state.mcp||{},entered=$('mcp-access');
@@ -332,7 +341,7 @@ function renderStudioTools(){
 $('mcp-access')?.addEventListener('click',guarded(async()=>{
   await pending(async()=>render(await api('mcp-access',{enabled:!state.mcp?.allowed,projectId:state.projectId})));
 }));
-function render(next,force=false){state=next;renderStudioTools();if(state.keyConfigured)$('api-required-alert').hidden=true;$('resume-info').textContent=state.resumed?'保存した制作「'+state.title+'」を再開しています。':projectHasContent()?'制作中の動画です。別の制作を始めると、台本・素材のない空の制作を開きます。':'新規制作です。台本・素材はまだ登録されていません。';let keyLost=false;try{keyLost=!state.keyConfigured&&window.sessionStorage?.getItem('narration-had-key')==='yes';if(state.keyConfigured)window.sessionStorage?.setItem('narration-had-key','yes');}catch{}$('key-reset-notice').hidden=!keyLost;if(lastKeyConfigured!==state.keyConfigured){$('api-settings').open=!state.keyConfigured&&!isFinalized();lastKeyConfigured=state.keyConfigured;}$('api-connection').classList.toggle('needs-key',!state.keyConfigured&&!isFinalized());$('api-summary').textContent=state.keyConfigured?'APIキーを変更・解除':'Gemini APIキーを登録';$('key-state').textContent=state.keyConfigured?'キー登録済み':'APIキー未設定';$('key-state').classList.toggle('ready',state.keyConfigured);$('review-count').textContent=`${state.rows.filter(r=>r.reviewed).length} / ${state.rows.length} 読み確認済み`;$('progress').textContent=state.busy&&state.production?.authoring?.lastAttempt?.state==='running'?'指定した台本・読みの作成処理を実行中です。完了を待っています。':state.busy?`${state.progress?.phase||'合成中'}：${state.progress?.completed||0} / ${state.progress?.total||0} カット（自動再試行なし）`:state.progress?`合成終了：${state.progress.completed} / ${state.progress.total} カット`:'';
+function render(next,force=false){state=next;renderStudioTools();if(state.keyConfigured)$('api-required-alert').hidden=true;$('resume-info').textContent=state.resumed?'保存した制作「'+state.title+'」を再開しています。':projectHasContent()?'制作中の動画です。別の制作を始めると、台本・素材のない空の制作を開きます。':'新規制作です。台本・素材はまだ登録されていません。';let keyLost=false;try{keyLost=!state.keyConfigured&&window.sessionStorage?.getItem('narration-had-key')==='yes';if(state.keyConfigured)window.sessionStorage?.setItem('narration-had-key','yes');}catch{}$('key-reset-notice').hidden=!keyLost;if(lastKeyConfigured!==state.keyConfigured){$('api-settings').open=!state.keyConfigured&&!isFinalized();lastKeyConfigured=state.keyConfigured;}$('api-connection').classList.toggle('needs-key',!state.keyConfigured&&!isFinalized());$('api-summary').textContent=state.keyConfigured?'APIキーを変更・解除':'Gemini APIキーを登録';$('key-state').textContent=state.keyConfigured?'キー登録済み':'APIキー未設定';$('key-state').classList.toggle('ready',state.keyConfigured);$('review-count').textContent=`${state.rows.filter(r=>r.reviewed).length} / ${state.rows.length} 読み確認済み`;$('progress').textContent=state.busy&&state.production?.authoring?.lastAttempt?.state==='running'?'指定した台本・読みの作成処理を実行中です。完了を待っています。':state.busy?`${state.progress?.phase||'合成中'}：${state.progress?.completed||0} / ${state.progress?.total||0} カット`:state.progress?`合成終了：${state.progress.completed} / ${state.progress.total} カット`:'';
   $('theme').value=screenTheme||state.presentation?.theme||'moon';applyTheme($('theme').value);
   if(!dirtyFields.has('design')&&!designPreviewOnly)$('design-instructions').value=state.presentation?.instructions||'';
   if((force||state.revision!==lastRevision)&&!isDirty()){
@@ -342,6 +351,20 @@ function render(next,force=false){state=next;renderStudioTools();if(state.keyCon
       const box=element('article',undefined,{class:'row','data-row-id':r.id}),head=element('div',undefined,{class:'row-head'});head.append(element('strong',String(index+1).padStart(2,'0')+'カット'),element('span',r.cutVisual?.title||r.scene||'ナレーション'),element('span',r.reviewed?'読み確認済み':'読み未確認'));box.append(head);const imageBox=element('figure',undefined,{class:'cut-image-box'});imageBox.hidden=true;cutImages.set(r.id,imageBox);const content=element('div',undefined,{class:'cut-review-content'}),copy=element('div',undefined,{class:'cut-review-copy'});content.append(imageBox,copy);box.append(content);
       if(r.readingPreparationRequired)box.append(element('p','この読みは要修正の候補です。ひらがなの読みと文の対応を直してください。台本の再生成は不要です。',{class:'help error'}));
       const captionParts=sentences(r.caption),speechParts=sentences(r.speech),pairs=[],editor={id:r.id,box,pairs,baseline:r};rowEditors.set(r.id,editor);if(r.audio){const preview=element('audio',undefined,{controls:'',preload:'metadata',src:'/audio/'+r.audio.file,'aria-label':`${index+1}カットの音声`,class:'cut-audio'});copy.append(preview);if(!r.audioCurrent)copy.append(element('p','修正前の音声です。本文の変更を反映するには再合成します。',{class:'help'}));}else copy.append(element('p','このカットの音声はまだ作成されていません。',{class:'help'}));
+      if(r.audioCurrent&&r.audioReview?.status==='pass')copy.append(element('p','AI音声検査で明確な問題は見つかりませんでした。',{class:'help'}));
+      if(r.audioCurrent&&r.audioReview?.status==='repaired'){
+        copy.append(element('p','AIが同じ意味に言い換えて音声を作り直しました。今回の発話：'+r.audioReview.spokenCaption,{class:'help'}));
+        if(r.audioReview.previous)copy.append(element('a','修正前の音声を聴く',{href:'/audio/'+r.audioReview.previous.file,target:'_blank',rel:'noopener'}));
+      }
+      if(needsAudioListen(r)){
+        const acknowledge=element('button','試聴した音声を採用（APIなし）',{type:'button',class:'secondary'});
+        acknowledge.disabled=!!(state.busy||localBusy||isFinalized());
+        acknowledge.addEventListener('click',guarded(async()=>{
+          await pending(async()=>render(await api('listened',{id:r.id,revision:state.revision}),true));
+          message('このカットの音声を確認済みにしました。');
+        }));
+        copy.append(element('p','要試聴。AI検査で判断できなかったか、再合成で解消できませんでした。上の音声を聞いて確認してください。',{class:'help'}),acknowledge);
+      }
       for(let n=0;n<Math.max(captionParts.length,speechParts.length);n++){
         const grid=element('div',undefined,{class:'row-grid sentence-pair'}),cap=element('textarea',undefined,{rows:2,'aria-label':`${index+1}場面・${n+1}文目の字幕`}),speech=element('textarea',undefined,{rows:2,'aria-label':`${index+1}場面・${n+1}文目の読み上げ文`});cap.value=captionParts[n]||'';speech.value=speechParts[n]||'';const pair={cap,speech,saved:{caption:cap.value,speech:speech.value},commit:element('button','この文の変更を保存',{type:'button',class:'secondary sentence-confirm','data-commit-sentence':r.id+':'+n})};pairs.push(pair);pair.commit.addEventListener('click',guarded(async()=>{await pending(async()=>{state=await api('status');await saveEditor(editor,pair);});message('この文の修正を保存しました。全文の読みは一括で確定できます。');}));grid.append(element('span',`${n+1}文目`,{class:'sentence-number'}));
         for(const [label,input]of [['字幕（表示用）',cap],['読み上げ文（ひらがな・音声用）',speech]]){const l=element('label',label);l.append(input);grid.append(l);input.addEventListener('input',()=>{box.dataset.dirty='true';approve.disabled=true;fitSentencePair(cap,speech);updateControls();});input.disabled=state.busy||isFinalized();}
@@ -354,7 +377,20 @@ function render(next,force=false){state=next;renderStudioTools();if(state.keyCon
       approve.addEventListener('click',guarded(async()=>{await pending(async()=>{state=await api('status');await saveEditor(editor);render(await api('approve',{id:r.id,revision:state.revision}),true);});message('この場面の修正と読みを確定しました。');}));actions.append(save,approve);
       const instructionLabel=element('label','このカットへの修正指示'),instruction=editor.instruction=element('textarea',undefined,{rows:3,maxlength:2000,'aria-label':`${index+1}カットへの修正指示`,placeholder:'例：この名前の読みを直して。説明を短くして。画像を台本に合わせて。'});instruction.value=dirtyFields.has('review')?(cutInstructions.get(r.id)||''):(state.production?.review?.cuts?.find(c=>c.rowId===r.id)?.instruction||'');cutInstructions.set(r.id,instruction.value);instruction.addEventListener('input',()=>{cutInstructions.set(r.id,instruction.value);dirtyFields.add('review');updateControls();});instructionLabel.append(instruction);
       const applyCut=element('button','このカットの修正指示を送信・反映（API利用）',{type:'button',class:'secondary','data-apply-review':r.id});applyCut.addEventListener('click',guarded(()=>applyReview(r.id),'review-request-state'));
-      if(r.attempts>0){const generate=element('button','このカットの音声を作り直す',{type:'button','data-generate':r.id,class:'secondary'});generate.addEventListener('click',guarded(async()=>{if(isDirty())throw new Error('STALE_REVISION');if(!window.confirm('このカットをGoogleへ再送し、追加の音声合成を1回行います。続けますか？'))return;await api('generate',{ids:[r.id],consent:true,regenerate:true});render(await api('status'),true);message('このカットの音声作成を開始しました。');}));actions.append(generate);}
+      if(r.attempts>0){
+        const generate=element('button','このカットの音声を作り直す（API 1回）',{type:'button','data-generate':r.id,class:'secondary'});
+        generate.addEventListener('click',guarded(async()=>{
+          if(isDirty())throw new Error('STALE_REVISION');
+          if(state.busy||localBusy||isFinalized())throw new Error('BUSY');
+          if(!state.keyConfigured)throw new Error('API_KEY_REQUIRED');
+          await pending(async()=>{
+            await api('generate',{ids:[r.id],consent:true,regenerate:true,revision:state.revision,productionRevision:state.productionRevision});
+            render(await api('status'),true);
+          });
+          message('このカットの音声作成を開始しました。');
+        }));
+        actions.append(generate);
+      }
       copy.append(actions,instructionLabel,applyCut,element('p','修正指示は最後にまとめて反映できます。音声・画像を見直し、最後のボタンで全カットを一括確認します。',{class:'help'}));$('rows').append(box);for(const pair of pairs)fitSentencePair(pair.cap,pair.speech);
     });
     $('dictionary-list').replaceChildren(...state.dictionary.map((item,i)=>{const chip=element('span',`${item.term} → ${item.reading}`,{class:'dictionary-chip'}),remove=element('button','×',{type:'button','aria-label':`${item.term}を辞書から削除`});remove.addEventListener('click',guarded(async()=>render(await api('dictionary',{items:state.dictionary.filter((_,n)=>n!==i)}),true)));chip.append(remove);return chip;}));lastRevision=state.revision;
@@ -383,8 +419,13 @@ $('add-row').addEventListener('click',guarded(()=>{throw new Error('MANUAL_CUT_E
 $('save-title').addEventListener('click',guarded(async()=>{const next=await api('title',{title:$('job-title').value});dirtyFields.delete('title');render(next,true);message('タイトルを反映しました。');}));
 $('dictionary-form').addEventListener('submit',guarded(async()=>{const next=await api('dictionary',{items:[...state.dictionary,{term:$('term').value,reading:$('pronunciation').value}]});$('term').value='';$('pronunciation').value='';render(next,true);message('読み辞書に追加しました。');}));
 $('apply-dictionary').addEventListener('click',guarded(async()=>{render(await api('apply-dictionary',{}),true);message('辞書を反映しました。変更された行を確認し直してください。');}));
+$('auto-audio-review').addEventListener('change',guarded(async()=>{
+ const enabled=$('auto-audio-review').checked;
+ await pending(async()=>render(await api('auto-audio-review',{enabled,revision:state.revision})));
+},'generation-state'));
 $('generate-all').addEventListener('click',guarded(async()=>{
  if(state.busy||localBusy||isFinalized()||hasCorrections())throw new Error('BUSY');
+ if(state.rows.some(needsAudioListen))return;
  if(isDirty()||state.rows.some(r=>!r.reviewed))throw new Error('READING_REVIEW_REQUIRED');if(dirtyFields.has('settings')||!state.voiceConfirmed)throw new Error('VOICE_CONFIRMATION_REQUIRED');
   if(musicEnabled()&&state.production?.musicEnabled!==true)await pending(enableAutomaticMusic);
  if(state.rows.length&&state.rows.every(r=>r.audioCurrent)&&!isDirty()&&(!musicEnabled()||(state.production?.music&&state.musicCurrent))){await pending(async()=>{await api('render-preview',{revision:state.revision,productionRevision:state.productionRevision});render(await api('status'),true);});window.location.hash='#finish';$('finish').scrollIntoView?.({block:'start'});return;}
@@ -394,7 +435,6 @@ $('generate-all').addEventListener('click',guarded(async()=>{
 $('generate-narration-only').addEventListener('click',guarded(async()=>{
  const ids=state.rows.filter(row=>!row.audioCurrent&&!row.attempts).map(row=>row.id);
  if(!ids.length||state.busy||localBusy||state.video?.running||isFinalized()||isDirty()||hasCorrections()||!state.keyConfigured||!state.voiceConfirmed||state.rows.some(row=>!row.reviewed))throw new Error('READING_REVIEW_REQUIRED');
- if(!window.confirm('確定した読みと声の設定をGoogleへ送り、音声合成を'+ids.length+'回行います。続けますか？'))return;
  await pending(async()=>{await api('generate',{ids,consent:true,revision:state.revision,productionRevision:state.productionRevision});render(await api('status'),true);});
  message('ナレーション音声の作成を開始しました。');
 }));

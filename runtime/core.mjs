@@ -12,6 +12,7 @@ import {normalizePresentation,normalizeDesign,assertDesignReady,DESIGN_SCHEMA,AU
 import {buildSourcePlanRequest,normalizeSourcePlan,collectSources,resolveSourceUrls,voiceInstruction} from './source-plan.mjs';
 import {TRANSITION_INSTRUCTION} from './motion.mjs';
 import {googleCorrections,normalizeCorrectionResult} from './corrections.mjs';
+import {inspectNarrationTake,narrationRepair} from './narration-review.mjs';
 
 export const MODELS=['gemini-3.8-flash-tts','gemini-3.8-flash-lite-tts'];
 export const VOICES=['Kore','Aoede','Puck','Charon','Zephyr','Fenrir','Leda','Orus','Callirrhoe','Autonoe','Enceladus','Iapetus','Umbriel','Algieba','Despina','Erinome','Algenib','Rasalgethi','Laomedeia','Achernar','Alnilam','Schedar','Gacrux','Pulcherrima','Achird','Zubenelgenubi','Vindemiatrix','Sadachbia','Sadaltager','Sulafat'];
@@ -92,7 +93,8 @@ export function decodeAudio(response) {
 export function buildRequest(speech, config) {
   const s=settings(config);
   const pitch=s.pitch==='low'?'声の高さは自然な範囲で低めに。':s.pitch==='high'?'声の高さは自然な範囲で高めに。':'';
-  return {model:s.model,store:false,input:[{type:'user_input',content:[{type:'text',text:text(speech,'SPEECH'),annotations:[{type:'speech_metadata',style:[s.style,pitch].filter(Boolean).join(' ')}]}]}],response_format:{type:'audio',mime_type:'audio/wav',sample_rate:24000},generation_config:{speech_config:[{voice:s.voice}]}};
+  const fidelity='台本にある言葉を順番どおりに読む。台本にない挨拶、相づち、つなぎの言葉は付け足さない。語の途中に間を挟まない。';
+  return {model:s.model,store:false,input:[{type:'user_input',content:[{type:'text',text:text(speech,'SPEECH'),annotations:[{type:'speech_metadata',style:[s.style,pitch,fidelity].filter(Boolean).join(' ')}]}]}],response_format:{type:'audio',mime_type:'audio/wav',sample_rate:24000},generation_config:{speech_config:[{voice:s.voice}]}};
 }
 export function previewFingerprint(config){return hash(settings(config));}
 export const PREVIEW_TEXT='こんにちは。このこえで、あなたのどうがを、わかりやすくおつたえします。';
@@ -197,9 +199,9 @@ async function googleDesign({key,title,instructions,signal}){
 import {recordingEditRequest,recordingCuts} from './recording-edits.mjs';
 
 export class NarrationSession {
-  #key=''; #provider; #controller; #saving=Promise.resolve();
-  constructor({outputDir,provider=googleSynthesis,draftProvider=googleDraft,designProvider=googleDesign,correctionProvider=googleCorrections,sourceResolver=resolveSourceUrls}) {
-    this.outputDir=path.resolve(outputDir);this.#provider=provider;this.draftProvider=draftProvider;this.designProvider=designProvider;this.correctionProvider=correctionProvider;this.sourceResolver=sourceResolver;
+  #key=''; #provider; #takeInspector; #controller; #saving=Promise.resolve();
+  constructor({outputDir,provider=googleSynthesis,draftProvider=googleDraft,designProvider=googleDesign,correctionProvider=googleCorrections,sourceResolver=resolveSourceUrls,takeInspector=inspectNarrationTake}) {
+    this.outputDir=path.resolve(outputDir);this.#provider=provider;this.#takeInspector=takeInspector;this.draftProvider=draftProvider;this.designProvider=designProvider;this.correctionProvider=correctionProvider;this.sourceResolver=sourceResolver;
     this.job={version:1,title:'新しい動画',presentation:normalizePresentation(FRESH_PRESENTATION),settings:{model:MODELS[0],voice:'Kore',style:'自然な日本語で、落ち着いて明瞭に話す。'},dictionary:[],rows:[]};
     this.busy=false;this.error=null;this.progress=null;
   }
@@ -208,12 +210,21 @@ export class NarrationSession {
     try{
       const saved=JSON.parse(await readFile(path.join(s.outputDir,'job.json'),'utf8'));
       s.job={version:1,title:text(saved.title,'TITLE',200),presentation:normalizePresentation(saved.presentation||{theme:'moon'}),settings:settings(saved.settings),dictionary:normalizeDictionary(saved.dictionary||[]),rows:normalizeRows(saved.rows)};
+      if(saved.autoAudioReview===true)s.job.autoAudioReview=true;
       for(const r of s.job.rows){
         const old=saved.rows.find(x=>x.id===r.id);
         if(old.approval===s.rowHash(r))r.approval=old.approval;
         r.attempts=Number.isSafeInteger(old.attempts)&&old.attempts>=0?old.attempts:0;
         if(old.audio&&/^[a-f0-9]{64}\.wav$/.test(old.audio.file)){
           try{const bytes=await readFile(path.join(s.outputDir,'audio',old.audio.file));const info=wavInfo(bytes);if(hash(bytes.toString('base64'))===old.audio.contentHash){r.audio={file:old.audio.file,fingerprint:old.audio.fingerprint,contentHash:old.audio.contentHash,...info};if(old.listened===old.audio.fingerprint)r.listened=old.listened;}}catch{}
+        }
+        const review=old.audioReview;
+        if(r.audio&&review?.file===r.audio.file&&['checking','pass','repaired','needs_listening'].includes(review.status)){
+          r.audioReview={file:review.file,status:review.status==='checking'?'needs_listening':review.status};
+          if(review.status==='repaired'&&/^[a-f0-9]{64}\.wav$/.test(review.previous?.file||'')&&isHiraganaReading(review.previous.speech)&&typeof review.spokenCaption==='string'){
+            r.audioReview.previous={file:review.previous.file,speech:text(review.previous.speech,'SPEECH')};
+            r.audioReview.spokenCaption=text(review.spokenCaption,'CAPTION');
+          }
         }
       }
     }catch(error){if(error.code!=='ENOENT')fail('SAVED_JOB_INVALID');}
@@ -222,13 +233,13 @@ export class NarrationSession {
   rowHash(r){return hash({caption:r.caption,speech:r.speech});}
   audioHash(r){return hash({speech:r.speech,settings:this.job.settings});}
   revision(){return hash(this.job);}
-  status(){return {sessionId:hash(this.outputDir),title:this.job.title,presentation:this.job.presentation,settings:this.job.settings,dictionary:this.job.dictionary,revision:this.revision(),keyConfigured:!!this.#key,busy:this.busy,error:this.error,providerDiagnostic:this.error?this.providerDiagnostic||'':'',progress:this.progress,models:MODELS,voices:VOICES,rows:this.job.rows.map(r=>({...r,reviewed:r.approval===this.rowHash(r),audioCurrent:!!r.audio&&r.audio.fingerprint===this.audioHash(r),listenedCurrent:!!r.audio&&r.listened===this.audioHash(r),hints:inspectReading(r.speech)}))};}
+  status(){return {sessionId:hash(this.outputDir),title:this.job.title,presentation:this.job.presentation,settings:this.job.settings,dictionary:this.job.dictionary,revision:this.revision(),keyConfigured:!!this.#key,autoAudioReview:this.job.autoAudioReview===true,busy:this.busy,error:this.error,providerDiagnostic:this.error?this.providerDiagnostic||'':'',progress:this.progress,models:MODELS,voices:VOICES,rows:this.job.rows.map(r=>({...r,reviewed:r.approval===this.rowHash(r),audioCurrent:!!r.audio&&r.audio.fingerprint===this.audioHash(r),listenedCurrent:!!r.audio&&r.listened===this.audioHash(r),hints:inspectReading(r.speech)}))};}
   #idle(){if(this.busy)fail('BUSY');}
   #row(id){const r=this.job.rows.find(r=>r.id===id);if(!r)fail('ROW_NOT_FOUND');return r;}
   async #save(){const snapshot=JSON.stringify(this.job,null,2);this.#saving=this.#saving.catch(()=>{}).then(()=>atomicWrite(path.join(this.outputDir,'job.json'),snapshot));await this.#saving;}
   setKey(value){this.#idle();if(typeof value!=='string'||/[\s\u0000-\u001f]/u.test(value)||value.length>256||value.length<8)fail('INVALID_API_KEY');this.#key=value;this.error=null;}
   async openRelated(outputDir,{fresh=false}={}){
-    this.#idle();const next=await NarrationSession.open({outputDir,provider:this.#provider,draftProvider:this.draftProvider,designProvider:this.designProvider,correctionProvider:this.correctionProvider,sourceResolver:this.sourceResolver});
+    this.#idle();const next=await NarrationSession.open({outputDir,provider:this.#provider,draftProvider:this.draftProvider,designProvider:this.designProvider,correctionProvider:this.correctionProvider,sourceResolver:this.sourceResolver,takeInspector:this.#takeInspector});
     next.#key=this.#key;
     if(fresh)await next.replaceJob(next.job);
     return next;
@@ -331,26 +342,76 @@ export class NarrationSession {
   async approve(id,revision){this.#idle();if(revision!==this.revision())fail('STALE_REVISION');const r=this.#row(id);if(r.readingState==='pending'||!r.speech)fail('READING_PREPARATION_REQUIRED');if(!isHiraganaReading(r.speech))fail('HIRAGANA_READING_REQUIRED');r.approval=this.rowHash(r);await this.#save();}
   async revokeReadingApprovals(revision){this.#idle();if(revision!==this.revision())fail('STALE_REVISION');for(const row of this.job.rows){row.approval=null;row.listened=null;}await this.#save();}
   async markListened(id,revision){this.#idle();if(revision!==this.revision())fail('STALE_REVISION');const r=this.#row(id);if(!r.audio||r.audio.fingerprint!==this.audioHash(r))fail('AUDIO_REQUIRED');r.listened=r.audio.fingerprint;await this.#save();}
+  async setAutoAudioReview(enabled,revision){
+    this.#idle();if(revision!==this.revision())fail('STALE_REVISION');
+    if(typeof enabled!=='boolean')fail('INVALID_AUDIO_REVIEW_PREFERENCE');
+    if(enabled)this.job.autoAudioReview=true;else delete this.job.autoAudioReview;
+    await this.#save();
+  }
   validateGeneration(ids,{regenerate=false}={}) {
     this.#idle();if(!this.#key)fail('API_KEY_REQUIRED');
     if(!Array.isArray(ids)||!ids.length||new Set(ids).size!==ids.length)fail('INVALID_SELECTION');
     return ids.map(id=>{const r=this.#row(id);if(r.readingState==='pending'||!r.speech)fail('READING_PREPARATION_REQUIRED');if(r.approval!==this.rowHash(r))fail('READING_REVIEW_REQUIRED');if(!isHiraganaReading(r.speech))fail('HIRAGANA_READING_REQUIRED');if(r.attempts>0&&!regenerate)fail('REGENERATION_CONFIRM_REQUIRED');return r;});
   }
+  async #makeTake(row,signal){
+    const bytes=await this.#provider({key:this.#key,text:row.speech,settings:{...this.job.settings},signal});
+    signal.throwIfAborted();
+    const info=wavInfo(bytes),fingerprint=this.audioHash(row),contentHash=hash(bytes.toString('base64'));
+    const file=hash({fingerprint,contentHash})+'.wav';
+    await writeFile(path.join(this.outputDir,'audio',file),bytes);
+    return {bytes,audio:{file,fingerprint,contentHash,...info}};
+  }
+  async #reviewTake(row,take,allowRewrite,signal){
+    const inspect=(caption,speech,source,original)=>this.#takeInspector({
+      bytes:source.bytes,durationSeconds:source.audio.durationSeconds,caption,speech,original,
+      allowRewrite:allowRewrite&&!original,
+      request:async(endpoint,payload)=>{
+        if(JSON.stringify(payload).includes(this.#key))fail('CREDENTIAL_IN_TEXT');
+        const result=parseGoogleJson(await googleRequest(endpoint,payload,this.#key,signal));
+        if(JSON.stringify(result).includes(this.#key))fail('PROVIDER_INVALID_RESPONSE');
+        return result;
+      },
+    });
+    const note={file:take.audio.file,status:'needs_listening'};
+    try{
+      const first=await inspect(row.caption,row.speech,take);
+      signal.throwIfAborted();
+      if(first.verdict==='no_material_issue')return {...note,status:'pass'};
+      const phrasing=allowRewrite&&first.verdict==='needs_review'&&narrationRepair(row,first.repair);
+      if(!phrasing)return note;
+      const revised={...row,speech:phrasing.speech};
+      row.attempts++;await this.#save();
+      const candidate=await this.#makeTake(revised,signal);
+      const second=await inspect(phrasing.caption,phrasing.speech,candidate,row);
+      signal.throwIfAborted();
+      if(second.verdict!=='no_material_issue'||!second.meaningPreserved)return note;
+      const previous={file:take.audio.file,speech:row.speech};
+      row.speech=phrasing.speech;row.approval=this.rowHash(row);row.audio=candidate.audio;
+      return {file:candidate.audio.file,status:'repaired',previous,spokenCaption:phrasing.caption};
+    }catch(error){
+      signal.throwIfAborted();
+      return note;
+    }
+  }
   async generate(ids,options={}) {
     const rows=this.validateGeneration(ids,options);this.busy=true;this.error=null;this.providerDiagnostic='';this.#controller=new AbortController();
     try{
       for(const [index,r] of rows.entries()){
-        if(this.#controller.signal.aborted)fail('CANCELED');
+        const signal=this.#controller.signal;if(signal.aborted)fail('CANCELED');
         this.progress={completed:index,total:rows.length,rowId:r.id};r.attempts++;await this.#save();
-        const bytes=await this.#provider({key:this.#key,text:r.speech,settings:{...this.job.settings},signal:this.#controller.signal});
-        if(this.#controller.signal.aborted)fail('CANCELED');
-        const info=wavInfo(bytes), fingerprint=this.audioHash(r), contentHash=hash(bytes.toString('base64')),file=hash({fingerprint,contentHash})+'.wav';
-        await writeFile(path.join(this.outputDir,'audio',file),bytes);
-        r.audio={file,fingerprint,contentHash,...info};r.listened=null;await this.#save();
+        const take=await this.#makeTake(r,signal);
+        r.audio=take.audio;r.listened=null;delete r.audioReview;
+        if(this.job.autoAudioReview)r.audioReview={file:take.audio.file,status:'checking'};
+        await this.#save();
+        if(this.job.autoAudioReview){
+          this.progress={...this.progress,phase:'生成した音声を自動検査しています…'};
+          try{r.audioReview=await this.#reviewTake(r,take,r.id!==options.titleRowId,signal);}
+          finally{if(r.audioReview.status==='checking')r.audioReview.status='needs_listening';await this.#save();}
+        }
         this.progress={completed:index+1,total:rows.length,rowId:r.id};
       }
     }catch(error){
-      this.error=providerError(error);
+      this.error=this.#controller.signal.aborted?'CANCELED':providerError(error);
       throw new Error(this.error);
     }finally{this.busy=false;this.#controller=null;}
   }
