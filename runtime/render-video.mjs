@@ -12,6 +12,7 @@ import {fullDecodeVideo,extractVideoAudio,renderErrorCode} from './video.mjs';
 import {presentationDesign,presentationMotion} from './designs.mjs';
 import {videoCredits} from './video-credits.mjs';
 import {promoPresentation} from './promo.mjs';
+import {renderHyperframesPromo} from './hyperframes-promo.mjs';
 import {videoDuration} from './demo-recording.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url)),args=process.argv.slice(2),option=name=>{const index=args.indexOf(name);return index<0?undefined:args[index+1];};
@@ -32,6 +33,12 @@ try{
   report({stage:'preparing',progress:0});await mkdir(publicDir,{recursive:true});
   const promo=args.includes('--promo');
   const data=promo?await promoPresentation(sourceDir,publicDir):await (args.includes('--preview')?preparePreviewAudio({sourceDir,publicDir}):prepareReviewedAudio({sourceDir,publicDir}));
+  const bins=path.join(rendererRoot,'node_modules','@remotion','compositor-win32-x64-msvc');
+  const ffmpeg=path.join(bins,process.platform==='win32'?'ffmpeg.exe':'ffmpeg'),ffprobe=path.join(bins,process.platform==='win32'?'ffprobe.exe':'ffprobe');await stat(ffmpeg);await stat(ffprobe);
+  let composition;
+  if(promo&&data.renderer==='hyperframes'){
+    composition=await renderHyperframesPromo({data,project:publicDir,output,browser:browserExecutable,signal:controller.signal,report});
+  }else{
   const theme=await themeTokens(promo?'moon':data.presentation.theme);
   await mkdir(path.join(publicDir,'narration'),{recursive:true});
   if(!promo){
@@ -78,19 +85,18 @@ try{
   const entry=path.join(work,'main.tsx');await writeFile(entry,"import React from 'react';import {registerRoot} from 'remotion';import {NarratedPresentationComposition} from './presentation';import payload from './public/video-data.json';registerRoot(()=> <NarratedPresentationComposition data={payload.data} theme={payload.theme}/>);\n");
   checkCanceled();report({stage:'bundling',progress:0});
   const serveUrl=await bundle({entryPoint:entry,publicDir,outDir:path.join(work,'bundle'),onProgress:progress=>report({stage:'bundling',progress:progress/100}),webpackOverride:config=>({...config,resolve:{...config.resolve,modules:[path.join(rendererRoot,'node_modules'),...(config.resolve?.modules||['node_modules'])]}})});
-  checkCanceled();const composition=await selectComposition({serveUrl,id:'GeminiNarratedPresentation',browserExecutable,logLevel:'error'});checkCanceled();
+  checkCanceled();composition=await selectComposition({serveUrl,id:'GeminiNarratedPresentation',browserExecutable,logLevel:'error'});checkCanceled();
   report({stage:'rendering',progress:0,totalFrames:composition.durationInFrames});let last=-1;
   await renderMedia({serveUrl,composition,browserExecutable,cancelSignal:cancellation.cancelSignal,codec:'h264',audioCodec:'aac',crf:19,pixelFormat:'yuv420p',outputLocation:output,concurrency:1,timeoutInMilliseconds:120000,logLevel:'error',onProgress:p=>{const percent=Math.floor(p.progress*100);if(percent!==last){last=percent;report({stage:'rendering',progress:p.progress,renderedFrames:p.renderedFrames,encodedFrames:p.encodedFrames,totalFrames:composition.durationInFrames});}}});checkCanceled();
+  }
   report({stage:'verifying',progress:0});
-  const bins=path.join(rendererRoot,'node_modules','@remotion','compositor-win32-x64-msvc');
-  const ffmpeg=path.join(bins,process.platform==='win32'?'ffmpeg.exe':'ffmpeg'),ffprobe=path.join(bins,process.platform==='win32'?'ffprobe.exe':'ffprobe');await stat(ffmpeg);await stat(ffprobe);
   const requireAudio=!promo||!!data.promoAudio||!!data.promoNarration;
   const run=promisify(execFile);checkCanceled();await fullDecodeVideo(ffmpeg,output,{signal:controller.signal,requireAudio});
   const {stdout}=await run(ffprobe,['-v','error','-show_streams','-show_format','-of','json',output],{windowsHide:true,maxBuffer:1024*1024,signal:controller.signal});checkCanceled();const metadata=JSON.parse(stdout),video=metadata.streams.find(s=>s.codec_type==='video'),audio=metadata.streams.find(s=>s.codec_type==='audio');
   if(!video||Boolean(audio)!==requireAudio||video.width!==composition.width||video.height!==composition.height||Math.abs(Number(metadata.format.duration)-composition.durationInFrames/composition.fps)>0.25)throw new Error('VIDEO_MEDIA_QA_FAILED');
   if(!promo)await extractVideoAudio(ffmpeg,output,output.replace(/\.mp4$/,'.m4a'),{signal:controller.signal});
   checkCanceled();
-  await writeFile(path.join(sourceDir,'video','media-qa.json'),JSON.stringify({fullDecode:true,frames:composition.durationInFrames,fps:composition.fps,metadata,provider:data.provider,settings:data.settings,...(data.music?{music:data.music}:{}),...(data.bookends?{bookends:data.bookends}:{}),rows:data.rows.map(r=>({id:r.id,image:r.image,video:r.video,videoStart:r.videoStart,videoFrames:r.videoFrames,from:r.from,file:r.file,frames:r.frames,explanation:r.explanation?.type})),renderedAt:new Date().toISOString()},null,2));report({stage:'verifying',progress:1});
+  await writeFile(path.join(sourceDir,'video','media-qa.json'),JSON.stringify({fullDecode:true,renderer:data.renderer||'remotion',frames:composition.durationInFrames,fps:composition.fps,metadata,provider:data.provider,settings:data.settings,...(data.music?{music:data.music}:{}),...(data.bookends?{bookends:data.bookends}:{}),rows:data.rows.map(r=>({id:r.id,image:r.image,video:r.video,videoStart:r.videoStart,videoFrames:r.videoFrames,from:r.from,file:r.file,frames:r.frames,explanation:r.explanation?.type,effect:r.effect})),renderedAt:new Date().toISOString()},null,2));report({stage:'verifying',progress:1});
 }catch(error){
   // This local renderer never receives credentials. Keep bounded, redacted
   // diagnostics on disk so encoding failures can be diagnosed without UI logs.

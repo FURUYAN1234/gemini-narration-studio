@@ -6,15 +6,17 @@ import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {recordingRuntime} from './runtime/demo-recording.mjs';
+import {ensureHyperframes,hyperframesInstallation} from './runtime/hyperframes-runtime.mjs';
 
 export const appRoot = path.dirname(fileURLToPath(import.meta.url));
 export function options(args, home=os.homedir()) {
-  const allowed = new Set(['--no-browser','--setup-only','--resume','--output','--port']);
+  const allowed = new Set(['--no-browser','--setup-only','--install-hyperframes','--resume','--output','--port']);
   const result={openBrowser:true,setupOnly:false,output:path.join(home,'GeminiNarrationStudio'),port:6181,startupMode:'new'};
   for(let i=0;i<args.length;i++) {
     const flag=args[i]; if(!allowed.has(flag))throw new Error('UNKNOWN_LAUNCH_OPTION');
     if(flag==='--no-browser')result.openBrowser=false;
     else if(flag==='--setup-only')result.setupOnly=true;
+    else if(flag==='--install-hyperframes')result.installHyperframes=true;
     else if(flag==='--resume')result.startupMode='resume';
     else {
       const value=args[++i]; if(!value||value.startsWith('--'))throw new Error('MISSING_LAUNCH_VALUE');
@@ -51,7 +53,7 @@ export async function ensureSetup(root=appRoot) {
   await access(path.join(root,'node_modules','.remotion','chrome-headless-shell'));
 }
 export async function runtimeIdentity(root=appRoot){
- const files=['launch.mjs','package-lock.json','scripts/recording-runtime/package-lock.json','scripts/recording-runtime/package.json'];
+ const files=['launch.mjs','package-lock.json','scripts/recording-runtime/package-lock.json','scripts/recording-runtime/package.json','scripts/hyperframes-runtime/package-lock.json','scripts/hyperframes-runtime/package.json'];
  async function walk(dir,prefix){for(const entry of await readdir(dir,{withFileTypes:true})){const name=prefix+entry.name;if(entry.isDirectory()){if(entry.name!=='tests')await walk(path.join(dir,entry.name),name+'/');}else if(/\.(mjs|tsx|html|css|json)$/.test(name))files.push(name);}}
  await walk(path.join(root,'runtime'),'runtime/');const hash=createHash('sha256');
   await walk(path.join(root,'mcp'),'mcp/');
@@ -91,6 +93,10 @@ export async function launch(args=process.argv.slice(2),home=os.homedir()) {
   if(Number(process.versions.node.split('.')[0])<22)throw new Error('NODE_22_REQUIRED');
   const config=options(args,home);
   process.chdir(appRoot);
+  if(config.installHyperframes){
+    const install=await ensureHyperframes(runNode);
+    console.log('NARRATION_HYPERFRAMES_'+(install.reused?'REUSED ':'INSTALLED ')+install.version);
+  }
   const recording=recordingRuntime();
   const prepareRecording=()=>recording.prepare().then(ready=>console.log(ready?'NARRATION_RECORDING_READY':'NARRATION_RECORDING_SETUP_UNAVAILABLE: 録画機能だけ再試行できます。'));
   if(config.setupOnly){await ensureSetup();await prepareRecording();console.log('NARRATION_STUDIO_SETUP_READY');return;}
@@ -109,7 +115,7 @@ export async function launch(args=process.argv.slice(2),home=os.homedir()) {
   const {NarrationSession}=await import('./runtime/core.mjs');
   const {startServer}=await import('./runtime/server.mjs');
   const session=await NarrationSession.open({outputDir:config.output});
-  const service=await startServer({session,port:config.port,startupMode:config.startupMode,sampleDir:path.join(config.output,'voice-samples'),videoRendererRoot:appRoot,recording,launcherStatus:{app:'gemini-narration-studio',version:JSON.parse(await readFile(path.join(appRoot,'package.json'),'utf8')).version,output:config.output,...identity}});
+  const service=await startServer({session,port:config.port,startupMode:config.startupMode,sampleDir:path.join(config.output,'voice-samples'),videoRendererRoot:appRoot,recording,hyperframes:await hyperframesInstallation(),launcherStatus:{app:'gemini-narration-studio',version:JSON.parse(await readFile(path.join(appRoot,'package.json'),'utf8')).version,output:config.output,...identity}});
   console.log('NARRATION_STUDIO_READY '+service.url);
   console.log('制作データ: '+config.output);
   void prepareRecording();

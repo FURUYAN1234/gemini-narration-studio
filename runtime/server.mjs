@@ -24,7 +24,7 @@ import {makeSkillArchive} from '../mcp/skill-archive.mjs';
 const here=path.dirname(fileURLToPath(import.meta.url));
 const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(data));};
 async function body(req,limit=2_000_000){let bytes=0,parts=[];for await(const chunk of req){bytes+=chunk.length;if(bytes>limit)throw new Error('BODY_TOO_LARGE');parts.push(chunk);}return JSON.parse(Buffer.concat(parts).toString('utf8'));}
-export async function startServer({session,port=6181,startupMode='resume',sampleDir=path.join(session.outputDir,'..','voice-samples'),bundledSampleDir=path.join(here,'vendor','voice-samples'),videoRendererRoot,downloadsDir,videoRunner,launcherStatus,musicFactory,recording}) {
+export async function startServer({session,port=6181,startupMode='resume',sampleDir=path.join(session.outputDir,'..','voice-samples'),bundledSampleDir=path.join(here,'vendor','voice-samples'),videoRendererRoot,downloadsDir,videoRunner,launcherStatus,musicFactory,recording,hyperframes}) {
   if(!['new','resume'].includes(startupMode))throw new Error('INVALID_STARTUP_MODE');
   const root=session.outputDir,projectsDir=path.join(root,'projects'),pointer=path.join(root,'active-project.json');
   await mkdir(projectsDir,{recursive:true});if(path.dirname(await realpath(projectsDir))!==await realpath(root))throw new Error('INVALID_PROJECT');const projectPattern=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -70,7 +70,7 @@ export async function startServer({session,port=6181,startupMode='resume',sample
   const openPromo=()=>StudioVideo.open({sourceDir:path.join(session.outputDir,'promo'),rendererRoot,downloadsDir,runner:videoRunner});
   let promo=await openPromo();
   let mcpAllowed=false,mcpAttached=false,mcpRender=null,mcpGrant=0;
-  const promoStatus=()=>promo.status(promo.state.result?.revision);
+  const promoStatus=()=>({...promo.status(promo.state.result?.revision),hyperframesVersion:hyperframes?.version||null});
   const mcpStatus=()=>({allowed:mcpAllowed,attached:mcpAttached,projectId,ownsRender:!!mcpRender&&mcpRender.target.completion===mcpRender.completion&&mcpRender.target.state.running});
   const samples=await new VoiceSamples([sampleDir,bundledSampleDir]).load();let inputBusy=false,sampleProgress=null,bankCanceled=false,bankError=null,narrationStage=null,narrationError=null,narrationCanceled=false;
   let fullAudioCache=null,imageProposal=null,authoringProgress=null;
@@ -133,7 +133,10 @@ export async function startServer({session,port=6181,startupMode='resume',sample
     if(session.busy||inputBusy||video.state.running||promo.state.running)throw new Error('BUSY');
     if(input.projectId!==projectId||input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');
     inputBusy=true;
-    try{return promo.start({...await preparePromo(promo.sourceDir,input,production,rendererRoot),promo:true});}
+    try{
+      const draft=await preparePromo(promo.sourceDir,input,production,rendererRoot,!!hyperframes);
+      return {...promo.start({...draft,promo:true}),renderer:draft.renderer};
+    }
     finally{inputBusy=false;}
   };
   const assertRecordingIdle=()=>{

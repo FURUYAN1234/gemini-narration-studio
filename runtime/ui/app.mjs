@@ -287,6 +287,9 @@ function updateControls(){
   $('production-voice-info').textContent=state.voiceConfirmed?`本番の声：${state.settings.voice} ／ 高さ：${state.settings.pitch==='low'?'低め':state.settings.pitch==='high'?'高め':'標準'}${dirtyFields.has('settings')?'（選択中の変更はまだ未反映）':''}。`:'本番の声はまだ確定していません。';
   const needsMusic=musicEnabled()&&(!state.production?.music||!state.musicCurrent);$('generate-all').disabled=state.busy||localBusy||state.video?.running||sealed||!state.keyConfigured||hasCorrections()||!state.rows.length||(!ready.length&&!needsMusic);
   $('generate-all').textContent='動画を作成';
+  const narrationOnly=$('generate-narration-only');
+  narrationOnly.hidden=sealed||!state.rows.some(row=>!row.audioCurrent&&!row.attempts);
+  narrationOnly.disabled=!!(lock||state.video?.running||!state.keyConfigured||!state.voiceConfirmed||hasCorrections()||state.rows.some(row=>!row.reviewed));
   $('generate-all').hidden=sealed||state.rows.some(r=>!r.audioCurrent&&r.attempts>0);$('generate-all').disabled=state.busy||localBusy||state.video?.running||sealed||hasCorrections()||isDirty()||!state.rows.length||state.rows.some(r=>!r.reviewed)||state.titleReadingPreparationRequired||!state.voiceConfirmed||dirtyFields.has('settings')||state.rows.some(r=>!r.audioCurrent&&r.attempts>0)||((ready.length||needsMusic)&&!state.keyConfigured);$('retry-audio').hidden=sealed||!state.rows.some(r=>!r.audioCurrent&&r.attempts>0);$('retry-audio').disabled=state.busy||localBusy||sealed||!state.keyConfigured||state.rows.some(r=>!r.reviewed)||state.titleReadingPreparationRequired||!state.voiceConfirmed;
   updateVideo();
   const active=state.busy||state.video?.running,canUndoReading=!sealed&&state.rows.some(r=>r.reviewed);if(!active&&cancelRequested){cancelRequested=false;$('cancel-status').textContent='中止処理が終了しました。保存済みの台本・素材・音声は保持しています。';}
@@ -387,6 +390,13 @@ $('generate-all').addEventListener('click',guarded(async()=>{
  if(state.rows.length&&state.rows.every(r=>r.audioCurrent)&&!isDirty()&&(!musicEnabled()||(state.production?.music&&state.musicCurrent))){await pending(async()=>{await api('render-preview',{revision:state.revision,productionRevision:state.productionRevision});render(await api('status'),true);});window.location.hash='#finish';$('finish').scrollIntoView?.({block:'start'});return;}
  if(isDirty()||state.rows.some(r=>!r.reviewed))throw new Error('READING_REVIEW_REQUIRED');if(dirtyFields.has('settings')||!state.voiceConfirmed)throw new Error('VOICE_CONFIRMATION_REQUIRED');await pending(async()=>{await savePlanning();});if(state.rows.some(r=>!r.audioCurrent&&r.attempts>0))throw new Error('REGENERATION_CONFIRM_REQUIRED');
  await pending(async()=>{const ids=state.rows.filter(r=>!r.audioCurrent).map(r=>r.id),createMusic=musicEnabled()&&(!state.production?.music||!state.musicCurrent);await api('generate',{ids,consent:true,revision:state.revision,productionRevision:state.productionRevision,regenerate:false,createMusic,createVideo:true,musicDirection:''});advanceAfterAudio=true;render(await api('status'),true);});maybeAdvanceAudio();message(!state.busy&&state.video?.stage==='complete'&&!state.video.running&&state.video.result?videoCompletionMessage(state.video):'音声'+(musicEnabled()?'・BGM':'')+'・動画の作成を開始しました。完了後に④で確認できます。');
+}));
+$('generate-narration-only').addEventListener('click',guarded(async()=>{
+ const ids=state.rows.filter(row=>!row.audioCurrent&&!row.attempts).map(row=>row.id);
+ if(!ids.length||state.busy||localBusy||state.video?.running||isFinalized()||isDirty()||hasCorrections()||!state.keyConfigured||!state.voiceConfirmed||state.rows.some(row=>!row.reviewed))throw new Error('READING_REVIEW_REQUIRED');
+ if(!window.confirm('確定した読みと声の設定をGoogleへ送り、音声合成を'+ids.length+'回行います。続けますか？'))return;
+ await pending(async()=>{await api('generate',{ids,consent:true,revision:state.revision,productionRevision:state.productionRevision});render(await api('status'),true);});
+ message('ナレーション音声の作成を開始しました。');
 }));
 async function undoReading(){await pending(async()=>{const next=await api('unapprove',{revision:state.revision});render(next);});actionMessage('cancel-status','読みの確定を取り消しました。台本・素材・音声を保持して、編集に戻れます。');}
 $('unconfirm-script').addEventListener('click',guarded(undoReading,'cancel-status'));

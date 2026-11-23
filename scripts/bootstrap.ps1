@@ -14,19 +14,19 @@ function Test-StudioNode {
 }
 
 function Assert-StudioArchive {
-    param([string]$Archive, [string]$ExpectedHash)
+    param([string]$Archive, [string]$ExpectedHash, [string]$Failure = 'NODE_DOWNLOAD_CHECKSUM_FAILED')
     $stream = [IO.File]::OpenRead($Archive)
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $actual = [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-','').ToLowerInvariant() }
     finally { $stream.Dispose(); $sha.Dispose() }
     if ($ExpectedHash -notmatch '^[a-f0-9]{64}$' -or $actual -ne $ExpectedHash) {
-        throw 'NODE_DOWNLOAD_CHECKSUM_FAILED: archive was not installed.'
+        throw ($Failure + ': archive was not installed.')
     }
 }
 
 function Expand-StudioArchive {
-    param([string]$Archive, [string]$Destination, [string]$ExpectedHash)
-    Assert-StudioArchive $Archive $ExpectedHash
+    param([string]$Archive, [string]$Destination, [string]$ExpectedHash, [string]$Failure = 'NODE_DOWNLOAD_CHECKSUM_FAILED')
+    Assert-StudioArchive $Archive $ExpectedHash $Failure
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $fullDestination = [IO.Path]::GetFullPath($Destination)
     if ($fullDestination.StartsWith('\\')) { $fullDestination = '\\?\UNC\' + $fullDestination.Substring(2) }
@@ -88,9 +88,51 @@ function Get-StudioNode {
     }
 }
 
+function Test-HyperFramesFFmpeg {
+    param([string]$Directory)
+    foreach ($command in @('ffmpeg', 'ffprobe')) {
+        $exe = Join-Path $Directory "bin\$command.exe"
+        if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { return $false }
+        $versionLine = @(& $exe -version 2>$null)[0]
+        if ($LASTEXITCODE -ne 0 -or $versionLine -notmatch "^$command version 8\.1\.2-essentials_build-") { return $false }
+    }
+    return $true
+}
+
+function Initialize-HyperFramesFFmpeg {
+    $cacheRoot = Join-Path $env:LOCALAPPDATA 'GeminiNarrationStudio\runtime\hyperframes'
+    $folder = 'ffmpeg-8.1.2-essentials_build'
+    $destination = Join-Path $cacheRoot $folder
+    if (Test-HyperFramesFFmpeg $destination) { Write-Host 'NARRATION_HYPERFRAMES_FFMPEG_REUSED 8.1.2'; return }
+    if (Test-Path -LiteralPath $destination) { throw 'HYPERFRAMES_FFMPEG_CACHE_INCOMPLETE' }
+    New-Item -ItemType Directory -Path $cacheRoot -Force | Out-Null
+    $stage = Join-Path $cacheRoot ('.ffmpeg-setup-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $stage | Out-Null
+    try {
+        Write-Host 'First HyperFrames setup: downloading the pinned Windows FFmpeg build...'
+        $ProgressPreference = 'SilentlyContinue'
+        $archive = Join-Path $stage ($folder + '.zip')
+        $url = 'https://github.com/GyanD/codexffmpeg/releases/download/8.1.2/' + $folder + '.zip'
+        Invoke-WebRequest -UseBasicParsing -TimeoutSec 300 -Uri $url -OutFile $archive
+        Expand-StudioArchive $archive $stage 'db580001caa24ac104c8cb856cd113a87b0a443f7bdf47d8c12b1d740584a2ec' 'HYPERFRAMES_FFMPEG_CHECKSUM_FAILED'
+        $extracted = Join-Path $stage $folder
+        if (-not (Test-HyperFramesFFmpeg $extracted)) { throw 'HYPERFRAMES_FFMPEG_VERIFICATION_FAILED' }
+        try { [IO.Directory]::Move($extracted, $destination) }
+        catch { if (-not (Test-HyperFramesFFmpeg $destination)) { throw } }
+        Write-Host 'NARRATION_HYPERFRAMES_FFMPEG_READY 8.1.2'
+    } finally {
+        $cacheFull = [IO.Path]::GetFullPath($cacheRoot).TrimEnd('\') + '\'
+        $stageFull = [IO.Path]::GetFullPath($stage)
+        if ($stageFull.StartsWith($cacheFull,[StringComparison]::OrdinalIgnoreCase) -and (Split-Path -Leaf $stageFull) -match '^\.ffmpeg-setup-[a-f0-9]{32}$') {
+            Remove-Item -LiteralPath $stageFull -Recurse -Force
+        }
+    }
+}
+
 if ($MyInvocation.InvocationName -ne '.') {
     try {
         $studioNode = Get-StudioNode
+        if ($LaunchArgs -contains '--install-hyperframes') { Initialize-HyperFramesFFmpeg }
         $env:PATH = (Split-Path -Parent $studioNode) + ';' + $env:PATH
         & $studioNode (Join-Path (Split-Path -Parent $PSScriptRoot) 'launch.mjs') @LaunchArgs
         exit $LASTEXITCODE

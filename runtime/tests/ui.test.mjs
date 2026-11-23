@@ -252,6 +252,21 @@ test('one creation action includes video and preserves post-generation review wi
  assert.ok(html.indexOf('id="confirm-full"')>html.indexOf('id="finish"'));assert.ok(html.indexOf('id="generate-script"')<html.indexOf('id="script-input"'));assert.ok(html.indexOf('id="regenerate-script"')<html.indexOf('id="script-input"'));
 });
 
+test('narration-only synthesis requires reviewed readings and sends no video or music request',async()=>{
+ const ui=await setup({secondReviewed:false});
+ const button=ui.get('generate-narration-only');
+ assert.equal(button.disabled,true);
+ await ui.get('confirm-script').emit('click');
+ assert.equal(button.disabled,false);
+ await button.emit('click');
+ const calls=ui.requests.filter(request=>request.route==='generate');
+ assert.equal(calls.length,1);
+ assert.equal(calls[0].input.consent,true);
+ assert.equal(calls[0].input.createVideo,undefined);
+ assert.equal(calls[0].input.createMusic,undefined);
+ assert.equal(ui.requests.some(request=>['render-preview','render-video','confirm-video','listened'].includes(request.route)),false);
+});
+
 test('one planning action ends STEP01 and music/pause precede narration without an extra consent checkbox',()=>{
  assert.equal([...html.matchAll(/id="plan-sources"/g)].length,1);
  assert.ok(html.indexOf('id="script-input"')<html.indexOf('id="plan-sources"'));

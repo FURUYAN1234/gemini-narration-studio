@@ -12,6 +12,7 @@ const stages=['preparing','bundling','rendering','verifying','saving','complete'
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
 export function renderErrorCode(error){
   const message=String(error.message||'');
+  if(message.startsWith('HYPERFRAMES_RENDER_FAILED\n'))return 'HYPERFRAMES_RENDER_FAILED';
   if(/delayRender\(\).*Load presentation Japanese font.*not cleared/.test(message))return 'VIDEO_FONT_TIMEOUT';
   return /^[A-Z_]+$/.test(message)?message:'VIDEO_RENDER_FAILED';
 }
@@ -60,11 +61,11 @@ export class StudioVideo {
   record(){return path.join(this.sourceDir,'video-render.json');}
   status(revision,inputsHash){const result=this.state.result;return {...this.state,available:!!this.rendererRoot,result:result&&result.revision===revision&&(!result.inputsHash||inputsHash===undefined||result.inputsHash===inputsHash)?result:null};}
   async save(){await writeFile(this.record(),JSON.stringify(this.state,null,2));}
-  start({revision,title,preview=false,inputsHash,promo=false}){
+  start({revision,title,preview=false,inputsHash,promo=false,renderer}){
     if(this.state.running)throw new Error('BUSY');
     if(this.state.result?.revision===revision&&this.state.result.inputsHash===inputsHash&&(promo||this.state.result.audio))return {started:false,cached:true};
     if(!this.rendererRoot)throw new Error('VIDEO_RENDERER_REQUIRED');
-    this.controller=new AbortController();this.state={running:true,stage:'preparing',progress:0,error:null,result:null,steps:['preparing']};
+    this.controller=new AbortController();this.state={running:true,stage:'preparing',progress:0,error:null,result:null,steps:['preparing'],...(renderer?{renderer}:{})};
     this.completion=this.render({revision,title,preview,inputsHash,promo});return {started:true};
   }
   async confirmReview({revision,inputsHash}){

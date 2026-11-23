@@ -22,6 +22,9 @@
 <li><code>studio_render_promo</code> で画像・録画にカット範囲・字幕・任意の音声を指定して短い紹介MP4を作ります。BGMと切り替え音を使わない場合は <code>soundEnabled: false</code> を指定します。完成動画は制作画面の下部で再生できます。</li>
 <li><code>studio_render_preview</code> で作成済みの音声と素材から確認用のナレーション動画を作ります。</li>
 </ul>
+<h2>紹介動画のHyperFrames書き出し</h2>
+<p>Windowsのアプリフォルダーで <code>start_narration_studio.bat --install-hyperframes --setup-only</code> を実行します。同じ版が導入済みなら再利用します。導入後はスタジオを起動し直すと、紹介動画の「自動」でHyperFramesが選ばれます。</p>
+<p><code>studio_render_promo</code> の <code>renderer</code> は <code>auto</code>（省略時）、<code>hyperframes</code>、<code>remotion</code> から選べます。HyperFramesではカットごとに <code>focus</code>（映像枠内の百分率の位置と大きさ、ラベル）、<code>steps</code>（2〜4件）、<code>comparison</code>（ラベルと値の2組）を渡せます。演出を省略すると入力に合う表示を選び、操作録画ではカット内の操作名と時刻を手順の表示に使えます。静止画は <code>frames</code> でフレーム単位の長さを指定でき、録画は <code>holdFrames</code> で末尾の画を保持できます（30 fps）。</p>
 <h2 id="desktop-recording">デスクトップ画面・Windowsアプリの操作動画</h2>
 <p>デスクトップ画面やWindowsアプリの操作も、画面録画を取り込めば、接続したMCPでカット編集・字幕追加・MP4書き出しができます。AIにWindowsアプリを操作させる場合はCodexのComputer Useを使い、映像は画面録画ツールで収録します。</p>
 <ol>

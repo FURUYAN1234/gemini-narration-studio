@@ -17,7 +17,9 @@ export function initPromoTools({$,element,api,guarded,render,readState,errors}){
     RECORDING_FAILED:'録画できませんでした。ボタン・入力欄の名前とデモ画面を確認してください。',
     RECORDING_SETUP_REQUIRED:'録画機能のセットアップが終わるまでお待ちください。',
     INVALID_PROMO_VIDEO_RANGE:'カットの開始と長さを元の動画内に収めてください。最短は0.6秒です。',
-    PROMO_NARRATION_TOO_LONG:'ナレーションがカットの合計時間を超えています。映像を延ばすか音声を短くしてください。'
+    PROMO_NARRATION_TOO_LONG:'ナレーションがカットの合計時間を超えています。映像を延ばすか音声を短くしてください。',
+    HYPERFRAMES_INSTALL_REQUIRED:'先にバッチでHyperFramesを導入してください。',
+    HYPERFRAMES_RENDER_FAILED:'HyperFramesで書き出せませんでした。診断を確認してください。'
   });
   function drawCuts(){
     $('promo-cuts').replaceChildren(...cuts.map((cut,index)=>{
@@ -69,6 +71,13 @@ export function initPromoTools({$,element,api,guarded,render,readState,errors}){
     }
     const intro=state.promo||{},recording=state.recording||{},edit=recording.edit;
     const busy=intro.running||state.busy||state.video?.running;
+    const renderer=$('promo-renderer');
+    renderer.disabled=!!busy;
+    $('promo-hyperframes-option').disabled=!intro.hyperframesVersion;
+    if(renderer.value==='hyperframes'&&!intro.hyperframesVersion)renderer.value='auto';
+    $('promo-renderer-help').textContent=intro.hyperframesVersion
+      ? '自動はHyperFramesを使用します。操作録画に手順があれば、カットごとに表示します。'
+      : '自動はRemotionを使用します。HyperFramesは start_narration_studio.bat --install-hyperframes --setup-only で導入できます。';
     if(recording.asset&&recording.asset!==lastRecorded){
       lastRecorded=recording.asset;
       $('recording-source').value=recording.asset;
@@ -91,7 +100,8 @@ export function initPromoTools({$,element,api,guarded,render,readState,errors}){
     $('recording-edit').disabled=busy||!selected||!$('recording-consent').checked;
     $('recording-apply').hidden=!selected||edit?.file!==selected||!edit?.cuts;
     $('recording-edit-status').textContent=edit?.running?'Geminiでカット案を作成中…':selected&&edit?.file===selected&&edit.error?(errors[edit.error]||'AIでカット案を作成できませんでした。 ('+edit.error+')'):!$('recording-apply').hidden?edit.cuts.length+'カットの案ができました。反映後に開始位置や字幕を調整できます。':'';
-    $('promo-status').textContent=intro.running?'紹介動画を書き出し中 · '+Math.round((intro.progress||0)*100)+'%':intro.error?(errors[intro.error]||'紹介動画を書き出せませんでした。')+' ('+intro.error+')':intro.result?'書き出しが完了しました。':'';
+    const engine=intro.renderer==='hyperframes'?'HyperFrames':intro.renderer==='remotion'?'Remotion':'';
+    $('promo-status').textContent=intro.running?'紹介動画を書き出し中 · '+Math.round((intro.progress||0)*100)+'%'+(engine?' · '+engine:''):intro.error?(errors[intro.error]||'紹介動画を書き出せませんでした。')+' ('+intro.error+')':intro.result?'書き出しが完了しました。'+(engine?' '+engine:''):'';
     $('promo-result-link').hidden=$('promo-result').hidden=!intro.result;
     if(intro.result?.file!==promoShown){
       promoShown=intro.result?.file;
@@ -124,7 +134,7 @@ export function initPromoTools({$,element,api,guarded,render,readState,errors}){
   $('promo-start').addEventListener('click',guarded(async()=>{
     const title=$('promo-title').value.trim();
     if(!title||!cuts.length||cuts.some(cut=>!cut.title.trim()))throw new Error('動画タイトル、カット素材、各カットの見出しを入力してください。');
-    await api('promo',{...identity(),title,cuts,narration:$('promo-narration').value,soundEnabled:$('promo-sound').checked,watermarkEnabled:$('promo-watermark').checked});
+    await api('promo',{...identity(),title,cuts,renderer:$('promo-renderer').value,narration:$('promo-narration').value,soundEnabled:$('promo-sound').checked,watermarkEnabled:$('promo-watermark').checked});
     await refresh();
   },'promo-status'));
   return update;

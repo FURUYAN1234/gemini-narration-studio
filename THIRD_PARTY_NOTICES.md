@@ -8,6 +8,8 @@
 - Chrome Headless Shell and Remotion FFmpeg are installed by the renderer setup; their original package notices apply.
 - Playwright Core 1.65.1 is installed from npm under Apache-2.0, with its original license and notices. Playwright installs the pinned Chromium release under its original third-party notices. The application ZIP contains the dependency manifests.
 - Model Context Protocol TypeScript server SDK 2.4.0: Apache-2.0. The installed npm package retains its original license and notices.
+- HyperFrames 0.9.83 and GSAP 3.14.2 are optional, installed using the pinned npm lockfile. [HyperFrames license](https://github.com/heygen-com/hyperframes/blob/main/LICENSE) and [GSAP license](https://gsap.com/standard-license/). They retain their installed package notices.
+- The optional HyperFrames setup downloads [Gyan's FFmpeg 8.1.2 Windows essentials ZIP](https://github.com/GyanD/codexffmpeg/releases/tag/8.1.2), checks its pinned SHA-256 and retains its original files and license. The existing Remotion renderer has its own FFmpeg.
 
 Browser setup uses the official [Remotion ensureBrowser API](https://www.remotion.dev/docs/renderer/ensure-browser). No other Antigravity application is required to render.
 

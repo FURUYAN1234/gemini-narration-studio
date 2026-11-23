@@ -1,0 +1,9 @@
+{
+  "name": "narration-studio-hyperframes-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "gsap": "3.14.2",
+    "hyperframes": "0.9.83"
+  }
+}
