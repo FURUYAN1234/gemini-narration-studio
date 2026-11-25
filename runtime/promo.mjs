@@ -92,15 +92,25 @@ export async function preparePromo(dir,input,production,rendererRoot,hyperframes
   const narration=input.narration??'';
   if(typeof narration!=='string'||narration&&(!promoVoice.test(narration)||!assets.some(a=>a.file===narration)))throw new Error('INVALID_PROMO_NARRATION');
   let narrationSeconds;
+  if(input.openingTitleRequired!==undefined&&typeof input.openingTitleRequired!=='boolean')throw new Error('INVALID_OPENING_TITLE_PREFERENCE');
+  const titleCall=input.titleCall??'';
+  if(narration&&input.openingTitleRequired!==false&&!titleCall)throw new Error('PROMO_TITLE_CALL_REQUIRED');
   if(narration){
     const duration=await mediaDuration(rendererRoot,await stage(narration));
     if(duration>cuts.reduce((sum,cut)=>sum+((cut.frames??cut.seconds*30)+(cut.holdFrames??0))/30,0))throw new Error('PROMO_NARRATION_TOO_LONG');
     if(renderer==='hyperframes')narrationSeconds=duration;
   }
+  let opening;
+  if(titleCall){
+    if(typeof titleCall!=='string'||!promoVoice.test(titleCall)||titleCall===narration||!assets.some(a=>a.file===titleCall))throw new Error('INVALID_PROMO_TITLE_CALL');
+    const duration=await mediaDuration(rendererRoot,await stage(titleCall));
+    if(duration<=0||duration>20)throw new Error('INVALID_PROMO_TITLE_CALL');
+    opening={file:titleCall,seconds:duration,frames:Math.max(75,Math.ceil((duration+.35)*30))};
+  }
   if(input.watermarkEnabled!==undefined&&typeof input.watermarkEnabled!=='boolean')throw new Error('INVALID_WATERMARK_PREFERENCE');
   if(input.soundEnabled!==undefined&&typeof input.soundEnabled!=='boolean')throw new Error('INVALID_PROMO_SOUND');
   const watermarkEnabled=input.watermarkEnabled??(production.status().watermarkEnabled!==false);
-  const draft={templateVersion:renderer==='hyperframes'?5:narration||cuts.some(cut=>promoVideo.test(cut.image))?3:2,title,cuts,watermarkEnabled,soundEnabled:input.soundEnabled??true,...(renderer==='hyperframes'?{renderer}:{}),...(narration?{narration}:{}),...(narrationSeconds?{narrationSeconds}:{})};
+  const draft={templateVersion:renderer==='hyperframes'?5:narration||cuts.some(cut=>promoVideo.test(cut.image))?3:2,title,cuts,watermarkEnabled,soundEnabled:input.soundEnabled??true,...(renderer==='hyperframes'?{renderer}:{}),...(narration?{narration}:{}),...(narrationSeconds?{narrationSeconds}:{}),...(opening?{opening}:{})};
   const revision=createHash('sha256').update(JSON.stringify(draft)).digest('hex');
   await atomicWrite(path.join(dir,'promo.json'),JSON.stringify({...draft,revision}));
   return {title,revision,renderer};
@@ -109,7 +119,7 @@ export async function preparePromo(dir,input,production,rendererRoot,hyperframes
 export async function promoPresentation(dir,publicDir) {
   const input=JSON.parse(await readFile(path.join(dir,'promo.json'),'utf8'));
   const fps=30,gapFrames=0;
-  let from=0;
+  let from=input.opening?.frames??0;
   const rows=[];
   await mkdir(path.join(publicDir,'shots'),{recursive:true});
   for(const [index,cut] of input.cuts.entries()){
@@ -139,5 +149,15 @@ export async function promoPresentation(dir,publicDir) {
     await writeFile(path.join(publicDir,promoNarration),bytes);
     promoNarrationSeconds=input.narrationSeconds;
   }
-  return {title:input.title,promo:true,renderer:input.renderer||'remotion',...(promoAudio?{promoAudio}:{}),...(promoNarration?{promoNarration,promoNarrationSeconds}:{}),rows,fps,gapFrames,bookends,durationInFrames};
+  let promoOpening;
+  if(input.opening){
+    const {file,seconds,frames}=input.opening;
+    if(!promoVoice.test(file))throw new Error('INVALID_PROMO_TITLE_CALL');
+    const bytes=await readFile(path.join(dir,file));
+    if(createHash('sha256').update(bytes).digest('hex')!==file.split('.')[0])throw new Error('PROMO_ASSET_CHANGED');
+    const src='shots/'+file;
+    await writeFile(path.join(publicDir,src),bytes);
+    promoOpening={id:'promo-opening',caption:input.title,src,from:0,frames,seconds};
+  }
+  return {title:input.title,promo:true,...(promoOpening?{promoOpening}:{}),renderer:input.renderer||'remotion',...(promoAudio?{promoAudio}:{}),...(promoNarration?{promoNarration,promoNarrationSeconds}:{}),rows,fps,gapFrames,bookends,durationInFrames};
 }

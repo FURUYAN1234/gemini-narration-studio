@@ -24,7 +24,7 @@ async function fixture(t){
 test('new video isolates a sealed project, preserves its files/key, and allows design and palette selection',async t=>{
  const f=await fixture(t),old=await f.status(),oldToken=f.token();
  const created=await f.post('new-project',{sessionId:old.sessionId,revision:old.revision,discardPrevious:true});assert.equal(created.code,200);
- const next=created.data;assert.notEqual(next.sessionId,old.sessionId);assert.equal(next.rows.length,0);assert.equal(next.production.finalization,null);assert.equal(next.production.assets.length,0);assert.equal(next.keyConfigured,true);assert.equal(next.video.result,null);assert.equal(next.projects,undefined);
+ const next=created.data;assert.notEqual(next.sessionId,old.sessionId);assert.equal(next.rows.length,0);assert.equal(next.production.finalization,null);assert.equal(next.production.assets.length,0);assert.equal(next.production.brief.openingTitleRequired,true);assert.equal(next.keyConfigured,true);assert.equal(next.video.result,null);assert.equal(next.projects,undefined);
  await f.refresh();assert.equal((await f.post('presentation',{revision:next.revision,presentation:{theme:'black',mode:'template',template:'blueprint'}})).code,200);
  assert.equal((await f.post('title',{title:'Second project'},oldToken)).data.error,'CSRF_TOKEN_REQUIRED');
  assert.deepEqual(await readFile(path.join(f.dir,'job.json')),f.original);assert.deepEqual(await readFile(path.join(f.dir,'production.json')),f.seal);

@@ -52,8 +52,8 @@ tool('studio_record_demo','Record only the localhost demo URL and exact UI steps
 tool('studio_edit_recording','Draft ordered cuts and Japanese captions from the names and timing of recorded operations. Call only after the user approves sending those details to Gemini. Never sends footage or entered values. Poll studio_project for recording.edit.','recording-edit',z.object({
   ...identity,file:recordingFile,sendOperationNamesToGemini:z.literal(true)
 }).strict(),false,true);
-tool('studio_render_promo','Render an animated product demo from imported screenshots or MP4s. Auto uses installed HyperFrames, otherwise Remotion. HyperFrames auto-selects a reveal, focus on the supplied region, sequential steps or a two-item comparison from supplied data. Poll studio_project for the verified MP4.','promo',z.object({
-  ...identity,title:z.string().min(1).max(90),watermarkEnabled:z.boolean().optional(),soundEnabled:z.boolean().optional(),narration:z.string().regex(/^[a-f0-9]{64}\.(wav|mp3)$/).optional(),
+tool('studio_render_promo','Render an animated product demo from imported screenshots or MP4s. Auto uses installed HyperFrames, otherwise Remotion. HyperFrames auto-selects a reveal, focus on the supplied region, sequential steps or a two-item comparison from supplied data. For narration, provide a separate titleCall audio asset to open before the body. Set openingTitleRequired to false only for an intentional exception. Poll studio_project for the verified MP4.','promo',z.object({
+  ...identity,title:z.string().min(1).max(90),watermarkEnabled:z.boolean().optional(),soundEnabled:z.boolean().optional(),narration:z.string().regex(/^[a-f0-9]{64}\.(wav|mp3)$/).optional(),titleCall:z.string().regex(/^[a-f0-9]{64}\.(wav|mp3)$/).optional(),openingTitleRequired:z.boolean().optional(),
   renderer:z.enum(['auto','hyperframes','remotion']).optional(),
   cuts:z.array(z.object({
     image:z.string().regex(/^[a-f0-9]{64}\.(png|jpe?g|webp|mp4)$/),

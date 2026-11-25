@@ -9,6 +9,21 @@ import {startServer} from '../server.mjs';
 import {prepareReviewedAudio} from '../client.mjs';
 import {musicSignature,musicTimeline} from '../music.mjs';
 
+test('an explanation requiring an opening title cannot render a body-only edit',async t=>{
+ const {s,dir}=await setup(t);
+ const p=await ProductionInputs.open(dir);
+ assert.doesNotThrow(()=>p.assertBookends(s.status()));
+ await p.saveBrief({...p.status().brief,openingTitleRequired:true});
+ const reopened=await ProductionInputs.open(dir);
+ assert.equal(reopened.status().brief.openingTitleRequired,true);
+ assert.throws(()=>reopened.assertBookends(s.status()),/TITLE_READING_REQUIRED/);
+ await s.appendRow({id:'app-name',caption:'アプリ名',speech:'あぷりめい'},{prepend:true});
+ await reopened.saveBookends({titleRowId:'app-name',endLabel:'制作',endUrl:'https://example.com',owner:'作者',creationYear:2026,endSeconds:4});
+ assert.doesNotThrow(()=>reopened.assertBookends(s.status()));
+ await s.updateRow('app-name',{speech:'App'});
+ assert.throws(()=>reopened.assertBookends(s.status()),/TITLE_READING_REQUIRED/);
+});
+
 test('ending watermark defaults on, persists off, and retains opening and closing credit timing',async t=>{
  for(const enabled of [true,false]){
   const {s,dir}=await setup(t);s.setKey('test-only-key');

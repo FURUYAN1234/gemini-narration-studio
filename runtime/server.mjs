@@ -118,7 +118,12 @@ export async function startServer({session,port=6181,startupMode='resume',sample
     await atomicWrite(pointer,JSON.stringify({id}));session=next;production=nextProduction;video=nextVideo;projectId=id;bankError=null;sampleProgress=null;narrationError=null;narrationStage=null;narrationCanceled=false;
     imageProposal=null;fullAudioCache=null;token=randomBytes(32).toString('hex');instanceId=randomBytes(16).toString('hex');unsavedDraft=null;resumed=!fresh;adoptionError=null;promo=await openPromo();recordingResult=null;editState=null;allowMcp(false);await recoverAdoption();
   };
-  const titleReadingPreparationRequired=()=>{const prepared=production.status().brief.titleReading;if(!prepared||prepared.caption!==session.status().title)return false;const row=session.status().rows.find(r=>r.id===production.status().bookends?.titleRowId);return !(row?.caption===prepared.caption&&isHiraganaReading(row.speech));};
+  const titleReadingPreparationRequired=()=>{
+    const current=session.status(),{brief,bookends}=production.status(),prepared=brief.titleReading;
+    const row=current.rows.find(r=>r.id===bookends?.titleRowId);
+    if(brief.openingTitleRequired&&current.rows.length&&(!row?.caption?.trim()||!isHiraganaReading(row.speech)))return true;
+    return !!(prepared?.caption===current.title&&!(row?.caption===prepared.caption&&isHiraganaReading(row.speech)));
+  };
   const assertReadyReadings=ids=>{if((ids===undefined||ids.includes(production.status().bookends?.titleRowId))&&titleReadingPreparationRequired())throw new Error('TITLE_READING_REQUIRED');for(const row of session.status().rows.filter(r=>ids===undefined||ids.includes(r.id))){if(row.id===production.status().bookends?.titleRowId){if(!isHiraganaReading(row.speech))throw new Error('HIRAGANA_READING_REQUIRED');}else normalizeScriptReadings(row.caption,[row]);}};
   const assertAdopted=()=>{if(production.status().authoring?.pendingAdoption)throw new Error('ADOPTION_CONFLICT');const brief=production.status().brief,body=session.status().rows.filter(r=>r.id!==production.status().bookends?.titleRowId).map(r=>r.caption).join('\n');if(brief.scriptEdited===true&&parseScriptParts(brief.script).join('\n')!==body)throw new Error('SCRIPT_ADOPTION_REQUIRED');};
   const startPreviewVideo=async()=>{

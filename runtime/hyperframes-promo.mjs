@@ -47,7 +47,7 @@ function mediaMarkup(row, index, fps) {
 }
 
 export function promoHtml(data) {
-  const {rows, fps, bookends, durationInFrames, promoAudio, promoNarration, promoNarrationSeconds} = data;
+  const {rows, fps, bookends, durationInFrames, promoAudio, promoNarration, promoNarrationSeconds, promoOpening} = data;
   const duration = seconds(durationInFrames, fps);
   const scenes = rows.map((row, index) => {
     const attrs = clock('scene-' + index, seconds(row.from, fps), seconds(row.frames, fps), 0);
@@ -68,16 +68,19 @@ export function promoHtml(data) {
       '<p>' + bookends.tools.map(escape).join(' · ') + '</p>'
     + (bookends.watermarkEnabled ? '<small>' + escape(bookends.endLabel) + '<br>' + escape(bookends.endUrl) +
        '<br>@' + escape(bookends.creationYear) + '/' + escape(bookends.owner) + '</small>' : '') + '</div></section>';
-  const audio = (id, source, length, track, volume) => '<audio ' + clock(id, 0, length, track) +
+  const opening = promoOpening ? '<section class="clip end" ' + clock('opening', 0, seconds(promoOpening.frames, fps), 0)
+    + '><div class="end-inner">' + textBlock('h1', 'fitted-text', data.title, {width:1470,height:220,maxSize:78,lineHeight:1.28}) + '</div></section>' : '';
+  const audio = (id, source, length, track, volume, from=0) => '<audio ' + clock(id, from, length, track) +
     ' src="' + escape(source) + '" data-volume="' + volume + '"></audio>';
   const timings = JSON.stringify(rows.map(row => [seconds(row.from, fps), seconds(row.frames, fps), row.stepStarts]));
   return '<!doctype html><html lang="ja"><head><meta charset="utf-8">' +
     '<meta http-equiv="Content-Security-Policy" content="default-src &apos;self&apos;; img-src &apos;self&apos; data:; script-src &apos;self&apos; &apos;unsafe-inline&apos;; style-src &apos;unsafe-inline&apos;; connect-src &apos;none&apos;; object-src &apos;none&apos;; base-uri &apos;none&apos;">' +
     '<title>' + escape(data.title) + '</title><style>' + style + '</style><script src="./gsap.min.js"></script></head><body>' +
     '<main data-composition-id="studio-promo" data-start="0" data-duration="' + duration +
-    '" data-width="1920" data-height="1080" data-fps="' + fps + '">' + scenes + end +
-    (promoAudio ? audio('music', promoAudio, duration, 2, promoNarration ? .42 : 1) : '') +
-    (promoNarration ? audio('narration', promoNarration, promoNarrationSeconds, 3, .93) : '') +
+    '" data-width="1920" data-height="1080" data-fps="' + fps + '">' + opening + scenes + end +
+    (promoAudio ? audio('music', promoAudio, duration, 2, promoNarration || promoOpening ? .42 : 1) : '') +
+    (promoOpening ? audio('opening-voice', promoOpening.src, promoOpening.seconds, 3, .93) : '') +
+    (promoNarration ? audio('narration', promoNarration, promoNarrationSeconds, 3, .93, seconds(promoOpening?.frames??0, fps)) : '') +
     '</main><script>' +
     'const tl = gsap.timeline({paused: true});\n' +
     timings + '.forEach(([from, length, steps], i) => {\n' +

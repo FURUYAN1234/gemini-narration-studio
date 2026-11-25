@@ -24,6 +24,9 @@ test('auto uses available HyperFrames, distinguishes cut effects, and respects a
   assert.deepEqual((await draft()).cuts.map(cut => cut.effect), ['reveal', 'steps', 'focus', 'comparison']);
   assert.equal((await request({cuts: [basic], renderer: 'remotion'}, true)).renderer, 'remotion');
   assert.equal((await request({cuts: [basic]}, false)).renderer, 'remotion');
+  const narration = image.replace(/\.png$/, '.wav');
+  const narrated = {...production,status:()=>({assets:[{file:image},{file:narration}]})};
+  await assert.rejects(preparePromo(dir,{title:'動作確認',cuts:[basic],narration},narrated,null,true),/PROMO_TITLE_CALL_REQUIRED/);
   assert.equal((await request({cuts: [{...steps, effect: 'reveal'}]}, true)).renderer, 'hyperframes');
   assert.equal((await draft()).cuts[0].effect, 'reveal');
   await request({cuts: [{image, title:'秒単位に丸めないカット', frames:102}]},true);

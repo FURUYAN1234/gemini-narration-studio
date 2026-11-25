@@ -6,9 +6,11 @@ Operation guide / 操作ガイド: Open the PDF to review the application workfl
 
 Read both Japanese A4 guides from the app header or the public installation page. / 日本語A4の操作・API設定ガイドは、アプリ上部と公開導入ページから別タブで開けます。
 
-# Narrated Video Maker / ナレーション動画メーカー v1.4.4
+# Narrated Video Maker / ナレーション動画メーカー v1.4.5
 
-[Release notes / 更新内容](docs/releases/v1.4.4.md)
+[Release notes / 更新内容](docs/releases/v1.4.5.md)
+
+Start an app explainer with the official app name on a title screen and in the first spoken line. New productions enable the opening title by default. Set the title and its reading before generating the video. Existing projects can enable the same option under the script settings. / アプリ紹介では、冒頭に正式名を表示し、最初のナレーションで読み上げます。新規制作では「冒頭にタイトルと読み上げを入れる」が初期状態で有効です。動画を作る前に、タイトルとその読みを確定してください。手入力で作る場合もMCP経由で書き出す場合もこの設定を使います。保存済みの制作では台本の設定から有効にできます。短尺紹介フォームと `studio_render_promo` で読み上げ音声を使うときは、冒頭タイトル用と本文用の音声を分けます。 / The setting covers manual production and the MCP preview. For narrated short promos, provide a separate title-call audio file before the body narration.
 
 > **MIT License; your outputs remain yours.** You may use, modify, redistribute and sell the app, including in paid products and services, without individual permission from FURU. Retain the copyright and MIT license notices in copies or substantial portions of the software. External API fees and third-party terms are separate. / **アプリはMITライセンス。成果物の権利は従来どおり利用者に帰属します。** アプリの利用・改変・再配布・販売、有料商品やサービスへの組み込みに、FURUへの個別許可は不要です。ソフトウェアの複製または重要な部分には著作権表示とMITの許諾表示を残してください。外部API料金と第三者の条件は別です。
 

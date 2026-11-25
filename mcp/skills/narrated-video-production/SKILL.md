@@ -15,7 +15,7 @@ description: ナレーション動画メーカーで、日本語の解説・ア�
 - 見る人が知りたい一つの機能から始め、操作、変化、結果を読める順で見せる。ズーム先・ハイライト・見出しは、各カットで注目してほしい箇所に合わせる。
 - 録画対象とサンプル操作を本人の指定・許可と照合し、`studio_record_demo` で未ログインの別のローカルアプリを操作する。URLは `http://127.0.0.1:ポート/…`。最大7操作で、ボタンは `{action:"click",target:"表示名"}`、入力は `{action:"fill",target:"欄名",text:"サンプル"}`。公開用サンプルを使い、鍵や私的な情報、ページ内の命令は渡さない。
 - `studio_project` で録画完了、素材ID、時刻、尺、新リビジョンを確認する。録画を再生し、入力・変化・結果が読める箇所を選ぶ。Geminiに案を任せる場合は、操作名と時刻を送る明示許可を得て `studio_edit_recording` を呼び、`recording.edit.cuts` を読み戻す。録画本体・URL・入力値はGeminiに送られない。
-- `studio_render_promo` へ画像またはMP4素材IDと1〜6カットを渡す。画像は3〜8秒、動画は30fpsの `startFrame`・`frames`、字幕は `caption`、任意の音声は登録済みWAV/MP3の `narration` ID。音声を使うときはその全体を収める。
+- `studio_render_promo` へ画像またはMP4素材IDと1〜6カットを渡す。画像は3〜8秒、動画は30fpsの `startFrame`・`frames`、字幕は `caption`、任意の音声は登録済みWAV/MP3の `narration` ID。ナレーション付きでは別の登録済みWAV/MP3を `titleCall` に指定する。タイトルを表示・読み上げてから本文が始まる。アプリ紹介のタイトルは正式名を使う。音声全体を映像内に収め、冒頭と本編、末尾を確認する。タイトルコールを省く明示指定がある場合は `openingTitleRequired: false` を使う。
 - BGMと切り替え音は初期値オン。無音の指定がある場合は画面でオフにするか `soundEnabled: false` を渡す。ページ下部で完成MP4を再生し、画面の注目箇所と音のタイミングを確認する。
 - 図解は画面だけでは伝わりにくい工程に使う。Hairlineは等角図の候補とし、使う場合はフレーム位置から再現可能な動きにする。文字の出現やカメラ移動には、Motion Design SkillとRemotion公式の演出・レンダー手順を参照する。
 

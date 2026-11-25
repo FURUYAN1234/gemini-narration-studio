@@ -65,7 +65,9 @@ export function initPromoTools({$,element,api,guarded,render,readState,errors}){
     const state=readState(),items=assets(),key=items.map(a=>a.file).join(',');
     if(choicesKey!==key){
       list('promo-images',items.filter(a=>/\.(png|jpe?g|webp|mp4)$/.test(a.file)),'素材を選択');
-      list('promo-narration',items.filter(a=>a.origin!=='generated-music'&&/\.(wav|mp3)$/.test(a.file)),'音声なし');
+      const voiceAssets=items.filter(a=>a.origin!=='generated-music'&&/\.(wav|mp3)$/.test(a.file));
+      list('promo-narration',voiceAssets,'音声なし');
+      list('promo-title-call',voiceAssets,'音声を選択');
       list('recording-source',items.filter(a=>a.recording),'録画を選択');
       choicesKey=key;
     }
@@ -134,7 +136,7 @@ export function initPromoTools({$,element,api,guarded,render,readState,errors}){
   $('promo-start').addEventListener('click',guarded(async()=>{
     const title=$('promo-title').value.trim();
     if(!title||!cuts.length||cuts.some(cut=>!cut.title.trim()))throw new Error('動画タイトル、カット素材、各カットの見出しを入力してください。');
-    await api('promo',{...identity(),title,cuts,renderer:$('promo-renderer').value,narration:$('promo-narration').value,soundEnabled:$('promo-sound').checked,watermarkEnabled:$('promo-watermark').checked});
+    await api('promo',{...identity(),title,cuts,renderer:$('promo-renderer').value,narration:$('promo-narration').value,titleCall:$('promo-title-call').value,openingTitleRequired:$('promo-opening-required').checked,soundEnabled:$('promo-sound').checked,watermarkEnabled:$('promo-watermark').checked});
     await refresh();
   },'promo-status'));
   return update;
