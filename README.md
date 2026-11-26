@@ -6,7 +6,7 @@ Operation guide / 操作ガイド: Open the PDF to review the application workfl
 
 Read both Japanese A4 guides from the app header or the public installation page. / 日本語A4の操作・API設定ガイドは、アプリ上部と公開導入ページから別タブで開けます。
 
-# Narrated Video Maker / ナレーション動画メーカー v1.4.5
+# Narrated Video Maker / ナレーション動画メーカー v1.4.6
 
 [Release notes / 更新内容](docs/releases/v1.4.6.md)
 
@@ -31,9 +31,9 @@ Turn reference materials and scripts into 16:9 videos with Japanese narration, c
 
 Use **使い方マニュアル（PDF）** in the app header to read the bundled guide in a separate tab and save it from the PDF viewer. / アプリ上部の **使い方マニュアル（PDF）** から別タブで読めます。保存はPDFビューアーから行えます。ネット接続やAPIキーは不要です。
 
-[![Watch the v1.4.5 app review / v1.4.5のレビュー動画を見る](docs/screenshots/workflow-current.jpg)](https://youtu.be/IGsc8DQagEg)
+[![Watch the full v1.4.6 walkthrough / v1.4.6の全体紹介動画を見る](docs/screenshots/walkthrough-v1.4.6.jpg)](https://youtu.be/URZ5rFbBwEI)
 
-**App review / レビュー動画（2分02秒）**. Watch the title call, manual script entry, voice selection, caption review, and MP4 export. / 冒頭のタイトルコールから、台本の手入力、声選び、字幕と読みの確認、MP4の書き出しまでを実画面で紹介します。
+**Full app walkthrough / 全体紹介動画（1分58秒）**. Follow the title call, materials and script, scenario-based direction, voice and reading review, music, and MP4 export in the live interface. Gemini 3.8 Flash TTS (Schedar) reads the title and all six body cuts. Google Lyria 3.5 supplies the music. / 素材と台本の準備、シナリオに合わせた演出、声と読みの確認、BGM、MP4の保存までを実画面で紹介します。冒頭タイトルと本文6カットの声は Gemini 3.8 Flash TTS（Schedar）、BGMは Google Lyria 3.5 で生成しました。
 
 [Read the article and play the embedded video / 記事内で動画を再生する（note）](https://note.com/happy_duck780/n/n97d49c1c98b1)
 
