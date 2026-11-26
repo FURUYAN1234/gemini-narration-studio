@@ -211,3 +211,9 @@ The separate “制作画面を一時退避” control pauses the idle productio
 Initial empty API setup hides the emergency control and its reserved space; active requests and an opened/local workspace retain the normal stop control. / 初期のAPI未設定・空の制作では表示せず、キー設定後・既存のローカル制作・処理中に表示します。
 
 An empty setup disables workflow pause as well. Once the production has content, “制作画面を一時退避” retains the local view; active work uses emergency cancellation. / 空の初期設定では一時退避も無効です。内容のある制作では「制作画面を一時退避」で入力を保持し、処理中は緊急停止へ切り替わります。
+
+## CLIP Drop / 習作・ベータ版
+
+クリスタの .clip を SVG・PSD・PNG に変換するWindows用の習作です。 / An experimental Windows converter for Clip Studio Paint files.
+
+- [GitHub](https://github.com/FURUYAN1234/clip-drop) · [note](https://note.com/happy_duck780/n/n8a38199a75db)
