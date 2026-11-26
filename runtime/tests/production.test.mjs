@@ -215,3 +215,59 @@ test('HTTP preview caches across restart, plays without key, blocks unconsented 
 test('material upload requires CSRF, validates bytes, and does not enter AI-only material use automatically',async t=>{const {s,dir}=await setup(t);const service=await startServer({session:s,port:0,sampleDir:path.join(dir,'samples'),bundledSampleDir:path.join(dir,'empty-bundle')});t.after(()=>service.close());const url=service.url+'/api/material?name=notes.txt';assert.equal((await fetch(url,{method:'POST',body:'test'})).status,403);const {token}=await (await fetch(service.url+'/api/bootstrap')).json();assert.equal((await fetch(url,{method:'POST',headers:{'X-Narration-Token':token},body:'素材説明'})).status,200);const status=await (await fetch(service.url+'/api/status')).json();assert.equal(status.production.assets.length,1);const file=status.production.assets[0].file;assert.equal(await (await fetch(service.url+'/materials/'+file)).text(),'素材説明');assert.equal((await fetch(service.url+'/materials/job.json')).status,404);});
 test('whole voice library prepares each missing voice once and repeated preparation makes no requests',async t=>{let calls=0;const {s,dir}=await setup(t,{provider:async()=>{calls++;return wav();}});s.setKey('test-only-key');const before=await readFile(path.join(dir,'job.json'),'utf8');const service=await startServer({session:s,port:0,sampleDir:path.join(dir,'samples'),bundledSampleDir:path.join(dir,'empty-bundle')});t.after(()=>service.close());const {token}=await (await fetch(service.url+'/api/bootstrap')).json();const post=input=>fetch(service.url+'/api/prepare-samples',{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':token},body:JSON.stringify(input)});assert.equal((await post({consent:false})).status,409);assert.equal(calls,0);assert.equal((await post({consent:true})).status,202);let status;for(let i=0;i<500;i++){status=await (await fetch(service.url+'/api/status')).json();if(!status.busy)break;await new Promise(r=>setTimeout(r,5));}assert.equal(status.busy,false);assert.equal(new Set(status.samples.map(s=>s.settings.voice)).size,VOICES.length);assert.equal(status.sampleProgress.completed,status.sampleProgress.total);assert.equal(calls,status.sampleProgress.total);assert.deepEqual(await (await post({})).json(),{started:false});assert.equal(calls,status.sampleProgress.total);assert.equal(await readFile(path.join(dir,'job.json'),'utf8'),before);});
 test('whole voice library stops on first failure and preserves successful samples without auto retry',async t=>{let calls=0;const {s,dir}=await setup(t,{provider:async()=>{if(++calls===2)throw new Error('PROVIDER_RATE_LIMIT: HTTP 429');return wav();}});s.setKey('test-only-key');const service=await startServer({session:s,port:0,sampleDir:path.join(dir,'samples'),bundledSampleDir:path.join(dir,'empty-bundle')});t.after(()=>service.close());const {token}=await (await fetch(service.url+'/api/bootstrap')).json();await fetch(service.url+'/api/prepare-samples',{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':token},body:JSON.stringify({consent:true})});let status;for(let i=0;i<500;i++){status=await (await fetch(service.url+'/api/status')).json();if(!status.busy)break;await new Promise(r=>setTimeout(r,5));}assert.equal(status.busy,false);assert.equal(calls,2);assert.equal(status.sampleProgress.completed,1);assert.equal(status.error,'PROVIDER_RATE_LIMIT: HTTP 429');assert.ok(status.samples.some(s=>s.settings.voice===SAMPLE_SETTINGS[0].voice));});
+
+test('scenario direction saves separate presentation choices for different scripts and rejects stale input',async t=>{
+ const plans=new Map([
+  ['山の朝。\n水面の光。',{template:'minimal',motion:null,layouts:['visual','focus'],voiceChoice:{voice:'Kore',voiceStyle:'おだやかに話す',voiceReason:'静かな風景'}}],
+  ['ファイルを選びます。\n結果を見比べます。',{template:'steps',motion:{version:1,style:'editorial',intensity:'standard',transitions:['split']},layouts:['steps','split'],voiceChoice:{voice:'Charon',voiceStyle:'手順を区切る',voiceReason:'操作を案内する'}}],
+ ]);
+ let calls=0;
+ const {s,dir}=await setup(t,{scenarioProvider:async ({script,voiceMode})=>{
+  calls++;
+  const {voiceChoice,...plan}=plans.get(script);
+  return voiceMode==='auto'?{...plan,voiceChoice}:plan;
+ }});
+ await s.setTitle('入力した動画タイトル');
+ s.setKey('test-only-key');
+ const service=await startServer({session:s,port:0,sampleDir:path.join(dir,'samples'),bundledSampleDir:path.join(dir,'empty')});
+ t.after(()=>service.close());
+ const {token,instanceId}=await(await fetch(service.url+'/api/bootstrap')).json();
+ const read=async()=>await(await fetch(service.url+'/api/status')).json();
+ const post=(route,data)=>fetch(service.url+'/api/'+route,{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':token},body:JSON.stringify(data)});
+ const revisions=state=>({revision:state.revision,productionRevision:state.productionRevision,projectId:state.projectId,instanceId});
+ const save=async(script,voiceMode)=>{
+  const before=await read(),response=await post('production',{script,voiceMode,scriptMode:'existing',assetMode:'provided',instructions:'',autoDirection:true,...revisions(before)});
+  assert.equal(response.status,200);
+  return response.json();
+ };
+ const quiet=[...plans.keys()][0],tech=[...plans.keys()][1];
+ let state=await save(quiet,'auto');
+ assert.notEqual((await post('scenario-direction',{...revisions(state),consent:false})).status,200);
+ assert.equal(calls,0);
+ const requested=await post('scenario-direction',{...revisions(state),consent:true});
+ assert.equal(requested.status,200,await requested.clone().text());
+ state=await requested.json();
+ assert.equal(state.production.brief.script,quiet);
+ assert.equal(state.production.brief.direction.title,'入力した動画タイトル');
+ assert.equal(state.production.brief.direction.template,'minimal');
+ assert.equal(state.production.brief.voiceChoice.voice,'Kore');
+ const adoption=await post('adopt-script',{...revisions(state),script:quiet});
+ assert.equal(adoption.status,200,await adoption.clone().text());
+ state=await adoption.json();
+ assert.deepEqual(state.rows.map(row=>row.caption),quiet.split('\n'));
+ assert.deepEqual(state.rows.map(row=>state.production.visuals[row.id].layout),['visual','focus']);
+ const old=state;
+ state=await save(tech,'manual');
+ assert.equal(state.production.brief.direction,undefined);
+ assert.notEqual((await post('scenario-direction',{...revisions(old),consent:true})).status,200);
+ assert.equal(calls,1);
+ const manual=await post('scenario-direction',{...revisions(state),consent:true});
+ assert.equal(manual.status,200);
+ state=await manual.json();
+ assert.equal(state.production.brief.direction.template,'steps');
+ assert.equal(state.production.brief.voiceChoice,undefined);
+ assert.equal(state.settings.voice,old.settings.voice);
+ const persisted=await ProductionInputs.open(dir);
+ assert.deepEqual(persisted.status().brief.direction.layouts,['steps','split']);
+ assert.equal(calls,2);
+});

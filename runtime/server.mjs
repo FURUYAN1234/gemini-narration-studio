@@ -11,7 +11,7 @@ import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {NarrationSession,SAMPLE_SETTINGS,VOICE_GENDERS,previewFingerprint} from './core.mjs';
 import {themeTokens,THEME_NAMES} from './themes.mjs';
-import {ProductionInputs,MAX_ASSET_BYTES,isHiraganaReading,normalizeReview,normalizeBrief,normalizeDraftRecord,bindVoiceChoice,validateAsset,safeText,normalizeBookends,normalizeScriptReadings,isScriptReadingReady,isCutVideo} from './production.mjs';
+import {ProductionInputs,MAX_ASSET_BYTES,isHiraganaReading,normalizeReview,normalizeBrief,normalizeDraftRecord,bindVoiceChoice,voiceScriptHash,validateAsset,safeText,normalizeBookends,normalizeScriptReadings,isScriptReadingReady,isCutVideo} from './production.mjs';
 import {assertScriptOperation,parseScriptParts,FRESH_BRIEF,FRESH_PRESENTATION} from './script-flow.mjs';
 import {VoiceSamples} from './samples.mjs';
 import {StudioVideo,findRendererRoot,mediaRange} from './video.mjs';
@@ -559,6 +559,20 @@ export async function startServer({session,port=6181,startupMode='resume',sample
       }
       if(route==='/api/save-draft-result'){if(!unsavedDraft)throw new Error('DRAFT_RESULT_REQUIRED');if(input.revision!==session.revision()||input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');await production.saveAuthoring({...production.status().authoring,version:1,lastAttempt:unsavedDraft.attempt},unsavedDraft.brief);unsavedDraft=null;return json(res,200,status());}
       if(route==='/api/apply-draft-readings'){const attempt=production.status().authoring?.lastAttempt;if(attempt?.operation!=='prepare-readings'||!attempt.result)throw new Error('DRAFT_RESULT_REQUIRED');if(input.revision!==session.revision()||input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');await session.applyPreparedReadings(attempt.result.readings,{expectedRevision:input.revision,preserveIds:production.status().bookends?[production.status().bookends.titleRowId]:[]});await production.saveAuthoring({...production.status().authoring,version:1,lastAttempt:{...attempt,state:'complete',error:undefined}});return json(res,200,status());}
+      if(route==='/api/scenario-direction'){
+        if(input.consent!==true)throw new Error('GENERATION_CONSENT_REQUIRED');
+        if(input.revision!==session.revision()||input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');
+        const brief=production.status().brief;
+        if(brief.scriptMode!=='existing'||brief.autoDirection!==true)throw new Error('SCRIPT_OPERATION_NOT_ALLOWED');
+        if(!parseScriptParts(brief.script).length)throw new Error('SCRIPT_REQUIRED');
+        inputBusy=true;
+        try{
+          const {direction,voiceChoice}=await session.planScenarioDirection({script:brief.script,voiceMode:brief.voiceMode||'auto'});
+          await production.saveBrief({...brief,direction,directionScriptHash:voiceScriptHash(brief.script),
+            voiceChoice:voiceChoice?bindVoiceChoice(voiceChoice,brief.script):brief.voiceChoice});
+          return json(res,200,status());
+        }finally{inputBusy=false;}
+      }
       if(route==='/api/voice-plan'){
         if(input.consent!==true)throw new Error('GENERATION_CONSENT_REQUIRED');
         if(input.revision!==session.revision()||input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');
@@ -578,7 +592,19 @@ export async function startServer({session,port=6181,startupMode='resume',sample
         if(previous.scriptMode!=='existing'&&previous.script===input.script&&previous.assetMode!=='provided'&&(previous.storyboard?.scenes.some(s=>!s.imageFile&&!s.videoClip)||production.status().authoring?.lastAttempt?.error?.stage==='images'))throw new Error('IMAGE_PREPARATION_REQUIRED');
         const rows=session.planScriptAdoption(input.script,{readings:input.readings,preserveIds}),pending={id:randomUUID(),baseRowsHash:session.rowsHash(),desiredRowsHash:createHash('sha256').update(JSON.stringify(rows)).digest('hex'),rows};
         const brief=normalizeBrief({...previous,script:input.script,readings:input.readings,storyboard:previous.script===input.script?previous.storyboard:undefined,scriptEdited:true});
-        inputBusy=true;try{await validateStoryboardMedia(brief.storyboard);await production.saveAuthoring({...production.status().authoring,version:1,pendingAdoption:pending},brief);await session.applyScriptAdoption(rows,pending.baseRowsHash);const {pendingAdoption,...authoring}=production.status().authoring;await production.saveAuthoring({...authoring,adoptedScriptHash:createHash('sha256').update(parseScriptParts(input.script).join('\n')).digest('hex')});if(brief.storyboard){const adoptedRows=session.status().rows.filter(r=>!preserveIds.includes(r.id));await production.applyStoryboard(brief.storyboard,adoptedRows);imageProposal=currentImageProposal();if(imageProposal){imageProposal.scenes=imageProposal.scenes.filter(s=>!adoptedRows.some(r=>r.id===s.id));if(!imageProposal.scenes.length)imageProposal=null;}await production.saveImageProposal(imageProposal||undefined);}return json(res,200,status());}finally{inputBusy=false;}
+        inputBusy=true;try{await validateStoryboardMedia(brief.storyboard);await production.saveAuthoring({...production.status().authoring,version:1,pendingAdoption:pending},brief);await session.applyScriptAdoption(rows,pending.baseRowsHash);const {pendingAdoption,...authoring}=production.status().authoring;await production.saveAuthoring({...authoring,adoptedScriptHash:createHash('sha256').update(parseScriptParts(input.script).join('\n')).digest('hex')});const adoptedRows=session.status().rows.filter(r=>!preserveIds.includes(r.id));if(brief.storyboard){await production.applyStoryboard(brief.storyboard,adoptedRows);imageProposal=currentImageProposal();if(imageProposal){imageProposal.scenes=imageProposal.scenes.filter(s=>!adoptedRows.some(r=>r.id===s.id));if(!imageProposal.scenes.length)imageProposal=null;}await production.saveImageProposal(imageProposal||undefined);}
+          const layouts=brief.autoDirection===true?brief.direction?.layouts:undefined;
+          if(layouts?.length===adoptedRows.length){
+            const rows=session.status().rows, previousVisuals=production.status().visuals||{};
+            const visuals=Object.fromEntries(rows.filter(row=>previousVisuals[row.id]).map(row=>[row.id,previousVisuals[row.id]]));
+            adoptedRows.forEach((row,index)=>{
+              const layout=layouts[index];
+              if(layout)visuals[row.id]={...(visuals[row.id]||{title:row.scene||'',points:[]}),layout};
+            });
+            await production.saveVisuals(visuals,rows);
+          }
+          return json(res,200,status());
+        }finally{inputBusy=false;}
       }
       if(route==='/api/design-draft'){
         if(input.consent!==true)throw new Error('GENERATION_CONSENT_REQUIRED');

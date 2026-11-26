@@ -10,6 +10,23 @@ export function normalizeMotion(input){
  for(const [key,catalogue] of [['transitions',TRANSITION_FAMILIES],['transitionTones',TRANSITION_TONES]])if(Object.hasOwn(input,key)&&(!Array.isArray(input[key])||!input[key].length||input[key].length>30||input[key].some(t=>!catalogue.includes(t))))throw new Error('INVALID_MOTION');
  return {version:1,style:input.style,intensity:input.intensity,...(input.transitions?{transitions:[...input.transitions]}:{}),...(input.transitionTones?{transitionTones:[...input.transitionTones]}:{})};
 }
+// Short promos have no planning API. Both renderers use the supplied
+// scene annotations and captions to pick a treatment locally.
+const promoTreatments=Object.freeze({
+  showcase:{id:'showcase',paper:'#111923',glow:'#253959',accent:'#a6bbff',surface:'#eaf2fb',beat:.5,shift:124,zoom:1.06,reveal:.32},
+  procedure:{id:'procedure',paper:'#091820',glow:'#103e45',accent:'#79ecdb',surface:'#e0f3ef',beat:.46,shift:38,zoom:1,reveal:.24},
+  comparison:{id:'comparison',paper:'#221917',glow:'#493024',accent:'#ffc67b',surface:'#fbefdf',beat:.58,shift:76,zoom:1,reveal:.37},
+  quiet:{id:'quiet',paper:'#221d2a',glow:'#42334c',accent:'#e9cafa',surface:'#f3ebf4',beat:.76,shift:0,zoom:1.025,reveal:.56},
+});
+export function promoSceneDirection({effect,title='',caption='',video}={}){
+  const text=title+' '+caption;
+  if(effect==='comparison')return promoTreatments.comparison;
+  if(effect==='focus'||effect==='steps')return promoTreatments.procedure;
+  if(/比較|比べ|違い|\b(?:comparison|compare|versus)\b/iu.test(text))return promoTreatments.comparison;
+  if(/静か|穏やか|風景|余韻|ゆっくり|\b(?:quiet|calm|scenic|reflective)\b/iu.test(text))return promoTreatments.quiet;
+  if(video||/操作|手順|手続き|クリック|ドロップ|\b(?:steps?|tutorial|click|setup)\b/iu.test(text))return promoTreatments.procedure;
+  return promoTreatments.showcase;
+}
 // One choice per boundary, shared by the outgoing and incoming cuts. AI may
 // propose families; older projects use a deterministic, nonrepeating deck.
 export function transitionPlan({rows,motion}){

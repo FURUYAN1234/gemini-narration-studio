@@ -110,7 +110,7 @@ export async function preparePromo(dir,input,production,rendererRoot,hyperframes
   if(input.watermarkEnabled!==undefined&&typeof input.watermarkEnabled!=='boolean')throw new Error('INVALID_WATERMARK_PREFERENCE');
   if(input.soundEnabled!==undefined&&typeof input.soundEnabled!=='boolean')throw new Error('INVALID_PROMO_SOUND');
   const watermarkEnabled=input.watermarkEnabled??(production.status().watermarkEnabled!==false);
-  const draft={templateVersion:renderer==='hyperframes'?5:narration||cuts.some(cut=>promoVideo.test(cut.image))?3:2,title,cuts,watermarkEnabled,soundEnabled:input.soundEnabled??true,...(renderer==='hyperframes'?{renderer}:{}),...(narration?{narration}:{}),...(narrationSeconds?{narrationSeconds}:{}),...(opening?{opening}:{})};
+  const draft={templateVersion:6,title,cuts,watermarkEnabled,soundEnabled:input.soundEnabled??true,...(renderer==='hyperframes'?{renderer}:{}),...(narration?{narration}:{}),...(narrationSeconds?{narrationSeconds}:{}),...(opening?{opening}:{})};
   const revision=createHash('sha256').update(JSON.stringify(draft)).digest('hex');
   await atomicWrite(path.join(dir,'promo.json'),JSON.stringify({...draft,revision}));
   return {title,revision,renderer};

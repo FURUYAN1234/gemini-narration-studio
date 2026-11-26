@@ -80,7 +80,7 @@ export function normalizeVoiceChoice(input){
  if(!/^[A-Za-z]+$/.test(voice)||!voiceReason||!voiceStyle)throw new Error('INVALID_VOICE_PROPOSAL');
  return {voice,voiceReason,voiceStyle};
 }
-const voiceScriptHash=script=>createHash('sha256').update(script.split(/\r?\n+/).map(r=>r.trim()).filter(Boolean).join('\n')).digest('hex');
+export const voiceScriptHash=script=>createHash('sha256').update(script.split(/\r?\n+/).map(r=>r.trim()).filter(Boolean).join('\n')).digest('hex');
 export function bindVoiceChoice(choice,script){return {...normalizeVoiceChoice(choice),scriptHash:voiceScriptHash(script)};}
 export function normalizeDraftRecord(input){
  if(!input||typeof input!=='object')throw new Error('INVALID_DRAFT_RESULT');
@@ -126,7 +126,11 @@ export function normalizeBrief(input){
   if(!['existing','ai','mixed'].includes(input?.scriptMode)||!['provided','ai','mixed'].includes(input?.assetMode))throw new Error('INVALID_PRODUCTION_MODE');
   if(input.autoDirection!==undefined&&typeof input.autoDirection!=='boolean')throw new Error('INVALID_AUTOMATIC_DIRECTION');
   const brief={scriptMode:input.scriptMode,assetMode:input.assetMode,instructions:safeText(input.instructions),script:safeText(input.script)};
-  if(input.autoDirection!==undefined)brief.autoDirection=input.autoDirection;if(input.direction!==undefined)brief.direction=normalizeAutomaticDirection(input.direction);
+  if(input.autoDirection!==undefined)brief.autoDirection=input.autoDirection;
+  if(input.direction!==undefined&&(!input.directionScriptHash||input.directionScriptHash===voiceScriptHash(brief.script))){
+    brief.direction=normalizeAutomaticDirection(input.direction);
+    if(input.directionScriptHash)brief.directionScriptHash=input.directionScriptHash;
+  }
   for(const [field,code]of [['themeAuto','INVALID_THEME_PREFERENCE'],['scriptEdited','INVALID_SCRIPT_EDIT_PREFERENCE'],['openingTitleRequired','INVALID_OPENING_TITLE_PREFERENCE']])if(input[field]!==undefined){if(typeof input[field]!=='boolean')throw new Error(code);brief[field]=input[field];}
   if(brief.themeAuto&&brief.scriptMode==='ai')brief.instructions='';
   if(input.titleReading!==undefined)brief.titleReading=normalizeDraftTitleReading(input.titleReading);

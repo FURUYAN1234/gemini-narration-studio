@@ -62,3 +62,24 @@ test('the renderer can decode local video frames without opening page network ac
   assert.doesNotMatch(result, /<script>unexpected/);
   assert.match(result, /<\/section><video[^>]+data-start="3"[^>]+data-media-start="0.5" muted/);
 });
+
+test('short promos vary palette, timing and soundtrack with the same number of cuts', async () => {
+  const {promoSceneDirection}=await import('../motion.mjs');
+  const {promoSound}=await import('../promo-sound.mjs');
+  const base={id:'cut-0',image:'shots/a.png',from:0,frames:90};
+  const quiet={...base,title:'静かな朝',caption:'ゆっくりと光が差します。'};
+  const tutorial={...base,title:'操作手順',caption:'画面のボタンをクリックします。'};
+  const compare={...base,title:'違いを比べる',caption:'変換した二つの原稿を比較。'};
+  assert.deepEqual([quiet,tutorial,compare].map(row=>promoSceneDirection(row).id),['quiet','procedure','comparison']);
+  assert.equal(promoSceneDirection({...compare,effect:'steps'}).id,'procedure');
+  const visual=row=>promoHtml({title:'紹介',fps:30,durationInFrames:210,rows:[row],
+    bookends:{from:90,frames:120,tools:['HyperFrames']}});
+  assert.match(visual(quiet),/--scene-surface:#f3ebf4/);
+  assert.match(visual(tutorial),/--scene-surface:#e0f3ef/);
+  assert.match(visual(compare),/--scene-surface:#fbefdf/);
+  const pcm=row=>promoSound([row],7,30);
+  const audio=pcm(quiet);
+  assert.deepEqual(pcm(quiet),audio);
+  assert.notDeepEqual(audio,pcm(tutorial));
+  assert.notDeepEqual(pcm(tutorial),pcm(compare));
+});

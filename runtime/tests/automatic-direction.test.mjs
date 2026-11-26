@@ -54,3 +54,31 @@ test('accepting a regenerated script replaces its cuts once and preserves exact 
  await session.appendScript(script,{replace:true,expectedRevision:revision,readings});assert.equal(session.status().rows.length,2);assert.deepEqual(session.status().rows[0].audio,original.audio);assert.equal(session.status().rows[1].reviewed,false);assert.equal(session.status().rows[1].audio,null);
  await session.appendScript(script,{replace:true,expectedRevision:session.revision(),readings});assert.equal(session.status().rows.length,2);assert.deepEqual(session.status().rows[0].audio,original.audio);
 });
+
+test('a supplied script can drive visuals and voice without replacing its script or title', async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'existing-scenario-'));
+  t.after(() => rm(dir, {recursive: true, force: true}));
+  const script = '原稿をドロップします。\n変換結果を比べます。';
+  const voiceChoice = {
+    voice: 'Charon',
+    voiceReason: '操作を案内する落ち着いた声',
+    voiceStyle: '略語を明瞭に読み、切替の前で間を取る。',
+  };
+  const session = await NarrationSession.open({
+    outputDir: dir,
+    scenarioProvider: async ({script: submitted}) => {
+      assert.equal(submitted, script);
+      return {template: 'steps', motion: direction.motion, layouts: ['visual','split'], voiceChoice};
+    },
+  });
+  await session.appendRow({id:'scene',caption:'原稿をドロップします。',speech:'げんこうをどろっぷします。'});
+  await session.setTitle('CLIP Drop');
+  session.setKey('test-only-key');
+  const original = session.status();
+  const plan = await session.planScenarioDirection({script, voiceMode:'auto'});
+  assert.deepEqual(plan.direction, {...direction, title:'CLIP Drop', layouts:['visual','split']});
+  assert.deepEqual(plan.voiceChoice, voiceChoice);
+  assert.deepEqual(session.status().rows, original.rows);
+  assert.deepEqual(session.status().settings, original.settings);
+  assert.equal(session.status().title, original.title);
+});

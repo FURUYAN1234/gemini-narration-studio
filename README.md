@@ -8,7 +8,7 @@ Read both Japanese A4 guides from the app header or the public installation page
 
 # Narrated Video Maker / ナレーション動画メーカー v1.4.5
 
-[Release notes / 更新内容](docs/releases/v1.4.5.md)
+[Release notes / 更新内容](docs/releases/v1.4.6.md)
 
 Start an app explainer with the official app name on a title screen and in the first spoken line. New productions enable the opening title by default. Set the title and its reading before generating the video. Existing projects can enable the same option under the script settings. / アプリ紹介では、冒頭に正式名を表示し、最初のナレーションで読み上げます。新規制作では「冒頭にタイトルと読み上げを入れる」が初期状態で有効です。動画を作る前に、タイトルとその読みを確定してください。手入力で作る場合もMCP経由で書き出す場合もこの設定を使います。保存済みの制作では台本の設定から有効にできます。短尺紹介フォームと `studio_render_promo` で読み上げ音声を使うときは、冒頭タイトル用と本文用の音声を分けます。 / The setting covers manual production and the MCP preview. For narrated short promos, provide a separate title-call audio file before the body narration.
 
@@ -68,7 +68,7 @@ The public website is a download and installation guide. Video processing runs o
 
 - Operation recordings, MP4 and WebM are available as footage in the main narration workflow. After preparing the script and choosing a voice, select the clip in each cut in Step 3. The narration and captions use the normal rendering path. / 操作録画・MP4・WebMは通常のナレーション制作にも使えます。素材と台本を準備して声を選び、③で使う動画をカットごとに選択します。ナレーションや字幕は通常の工程で付けられます。
 - When AI plans from imported MP4 or WebM references, it can select a time range for a cut. Review the range in Step 3. The export plays that excerpt with narration and captions while muting the source audio. / 取り込んだMP4・WebMを資料に台本を作ると、AIがカットに合う再生区間を提案できます。③で範囲を確認します。書き出しでは選んだ区間にナレーションと字幕を重ね、素材の音声はミュートします。
-- Automatic direction selects an overall palette and can vary layouts and transitions by cut. The narration voice and delivery are also proposed from the script. With a hand-written script, choose a voice in Step 2 or ask Gemini for a proposal. / 自動演出では、全体の配色を選び、カットに応じて配置や切り替えを変えます。ナレーターと話し方も台本から提案します。手入力の台本では、②で声を指定するか、Geminiに提案を頼めます。
+- Automatic direction selects an overall palette and can vary layouts and transitions by cut. The narration voice and delivery are also proposed from the script. For a prepared script, request a new plan in Step 1 while keeping the existing text and title. Review the results in Steps 2 and 3. The app keeps a manually selected voice. / 用意した台本でも、①で台本とタイトルを保ったまま、背景・カットの配置・切り替え・声の提案を頼めます。②と③で確認してから使います。手動で指定した声を引き継ぎます。
 
 - The Windows batch launcher prepares the pinned recording browser on first launch. Record a separate signed-out `http://127.0.0.1:port/` demo using sample data. / Windowsバッチが初回に録画用Chromiumを準備します。「操作を録画する」で未ログインの別のローカルアプリのURLとサンプル操作を指定します。
 - Edit up to six clips or screenshots. Set the order, start, duration, heading and caption, and add optional WAV/MP3 narration. Gemini can propose cuts with your consent to share only operation names and timings. / 画像と動画を最大6カットに並べ、開始位置・長さ・見出し・字幕と任意のナレーションを指定できます。操作名と時刻の送信を選べば、Geminiがカット案を作れます。

@@ -4,7 +4,7 @@ import {copyFile, mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {hyperframesInstallation} from './hyperframes-runtime.mjs';
-import {fitText} from './motion.mjs';
+import {fitText,promoSceneDirection} from './motion.mjs';
 
 const font = fileURLToPath(new URL('./vendor/NotoSansJP.ttf', import.meta.url));
 const entities = {'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'};
@@ -57,7 +57,8 @@ export function promoHtml(data) {
       ? '<div class="target animated" style="left:' + (76+row.focus.x*12.16) + 'px;top:' + (164+row.focus.y*6.84) +
         'px;width:' + row.focus.width*12.16 + 'px;height:' + row.focus.height*6.84 + 'px"></div>'
       : '';
-    return '<section class="clip scene" ' + attrs + '><div class="identity">' + escape(data.title) +
+    const direction=promoSceneDirection(row);
+    return '<section class="clip scene" style="--scene-surface:'+direction.surface+';--scene-accent:'+direction.glow+'" ' + attrs + '><div class="identity">' + escape(data.title) +
       '</div><div class="stage">' + (row.video?'':mediaMarkup(row, index, fps)) +
       '</div>' + box + '<div class="copy">' + heading +
       effectMarkup(row) + '</div>' + caption +
@@ -72,7 +73,10 @@ export function promoHtml(data) {
     + '><div class="end-inner">' + textBlock('h1', 'fitted-text', data.title, {width:1470,height:220,maxSize:78,lineHeight:1.28}) + '</div></section>' : '';
   const audio = (id, source, length, track, volume, from=0) => '<audio ' + clock(id, from, length, track) +
     ' src="' + escape(source) + '" data-volume="' + volume + '"></audio>';
-  const timings = JSON.stringify(rows.map(row => [seconds(row.from, fps), seconds(row.frames, fps), row.stepStarts]));
+  const timings = JSON.stringify(rows.map(row => {
+    const direction=promoSceneDirection(row);
+    return [seconds(row.from,fps),seconds(row.frames,fps),row.stepStarts,direction.reveal,direction.shift];
+  }));
   return '<!doctype html><html lang="ja"><head><meta charset="utf-8">' +
     '<meta http-equiv="Content-Security-Policy" content="default-src &apos;self&apos;; img-src &apos;self&apos; data:; script-src &apos;self&apos; &apos;unsafe-inline&apos;; style-src &apos;unsafe-inline&apos;; connect-src &apos;none&apos;; object-src &apos;none&apos;; base-uri &apos;none&apos;">' +
     '<title>' + escape(data.title) + '</title><style>' + style + '</style><script src="./gsap.min.js"></script></head><body>' +
@@ -83,10 +87,10 @@ export function promoHtml(data) {
     (promoNarration ? audio('narration', promoNarration, promoNarrationSeconds, 3, .93, seconds(promoOpening?.frames??0, fps)) : '') +
     '</main><script>' +
     'const tl = gsap.timeline({paused: true});\n' +
-    timings + '.forEach(([from, length, steps], i) => {\n' +
+    timings + '.forEach(([from, length, steps, revealSeconds, shift], i) => {\n' +
     '  const s = "#scene-" + i;\n' +
-    '  const reveal = Math.min(.32, length / 4);\n' +
-    '  tl.fromTo(s + " .stage", {opacity:.3, y:20}, {opacity:1,y:0,duration:reveal,ease:"power2.out",immediateRender:false}, from);\n' +
+    '  const reveal = Math.min(revealSeconds, length / 4);\n' +
+    '  tl.fromTo(s + " .stage", {opacity:shift ? .48 : .2, y:shift/5}, {opacity:1,y:0,duration:reveal,ease:"power2.out",immediateRender:false}, from);\n' +
     '  const within = Math.min(.22, length/7);\n' +
     '  tl.to(s + (steps ? " .animated:not(li)" : " .animated"), {opacity:1,y:0,duration:reveal,stagger:Math.min(.25,length/12),ease:"power2.out"}, from + within);\n' +
     '  if (steps) document.querySelectorAll(s+" .steps li").forEach((item,j) => {\n' +
@@ -105,7 +109,7 @@ const style = '\
 *{box-sizing:border-box}html,body,main{width:1920px;height:1080px;margin:0;overflow:hidden}\
 main{position:relative;background:#eaf2fb;color:#11263e;font-family:StudioJP,sans-serif}\
 .clip{position:absolute;inset:0;overflow:hidden}\
-.scene{background:linear-gradient(135deg,#f9fbff,#d4e4f7);padding:58px 76px}\
+.scene{background:linear-gradient(135deg,#f9fbff,var(--scene-surface,#eaf2fb));padding:58px 76px}\
 .identity{height:66px;font-size:31px;line-height:1.3;color:#274a6d;font-weight:700;max-width:1740px}\
 .stage{position:absolute;left:76px;top:164px;width:1216px;height:684px;border-radius:26px;background:#162e49;overflow:hidden;outline:2px solid #b8cfe8;box-shadow:0 22px 48px #172d492b}\
 .media{display:block;width:100%;height:100%;object-fit:contain}\
@@ -124,7 +128,7 @@ h1{font-size:52px;line-height:1.28;margin:0;color:#142e4b;overflow-wrap:anywhere
 .comparison dt{color:#31577f;font-size:24px}.comparison dd{font-weight:700;margin:6px 0 0}\
 .caption{position:absolute;left:76px;right:76px;bottom:43px;margin:0;height:143px;display:grid;align-content:center;padding:9px 43px;background:#102840;color:#fff;border-radius:18px;font-size:35px;line-height:1.18;overflow-wrap:anywhere}\
 .meter{position:absolute;bottom:27px;left:76px;right:76px;height:4px;background:#b8cfe8;border-radius:2px}\
-.meter i{display:block;width:100%;height:100%;transform:scaleX(0);transform-origin:left;background:#416b9b}\
+.meter i{display:block;width:100%;height:100%;transform:scaleX(0);transform-origin:left;background:var(--scene-accent,#416b9b)}\
 .end{background:linear-gradient(135deg,#112940,#26496e);color:#dceafb;display:grid;place-items:center;text-align:center}\
 .end-inner{width:1550px}.end h1{color:#fff;margin:0 0 39px;font-size:65px;text-wrap:balance}.end p{font-size:31px;line-height:1.42}.end small{display:block;margin-top:44px;font-size:25px;line-height:1.5}';
 

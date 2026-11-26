@@ -27,8 +27,12 @@ export const VIDEO_TEMPLATES=[
 export const AUTOMATIC_DIRECTION_SCHEMA={type:'object',additionalProperties:false,required:['title','template','motion'],properties:{title:{type:'string',maxLength:200},template:{type:'string',enum:VIDEO_TEMPLATES.map(t=>t.id)},motion:{anyOf:[MOTION_SCHEMA,{type:'null'}]}}};
 export const AUTOMATIC_DESIGN_INSTRUCTION='題材の雰囲気、実写・画面録画・図解の比重、字幕と素材の読みやすさから、配色とレイアウトを合わせて選びます。作品紹介なら額縁や暗い背景、手順なら順序を追える構成、比較なら見比べやすい紙面など、目的とカタログの特徴を照合してください。cleanは一般的な左右分割が最適なときに選びます。台本内で動作・比較・手順・締めの役割が変わる箇所は、場面の内容に合う切り替えで区別します。落ち着いた題材では静止の時間を残してください。カタログ：'+JSON.stringify(VIDEO_TEMPLATES.map(({id,name,description,design:{layout,background,heading,accent,decoration}})=>({id,name,description,layout,background,heading,accent,decoration})));
 export function normalizeAutomaticDirection(input){
- if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!['title','template','motion'].includes(k))||!VIDEO_TEMPLATES.some(t=>t.id===input.template)||!Object.hasOwn(input,'motion'))throw new Error('INVALID_AUTOMATIC_DIRECTION');
- const title=safeText(input.title,200);if(!title||/[<>]/.test(title))throw new Error('INVALID_AUTOMATIC_DIRECTION');return {title,template:input.template,motion:input.motion===null?null:normalizeMotion(input.motion)};
+ if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!['title','template','motion','layouts'].includes(k))||!VIDEO_TEMPLATES.some(t=>t.id===input.template)||!Object.hasOwn(input,'motion'))throw new Error('INVALID_AUTOMATIC_DIRECTION');
+ const {layouts}=input;
+ if(layouts!==undefined&&(!Array.isArray(layouts)||!layouts.length||layouts.length>300||layouts.some(layout=>layout!==null&&!DESIGN_LAYOUTS.includes(layout))))throw new Error('INVALID_AUTOMATIC_DIRECTION');
+ const title=safeText(input.title,200);
+ if(!title||/[<>]/.test(title))throw new Error('INVALID_AUTOMATIC_DIRECTION');
+ return {title,template:input.template,motion:input.motion===null?null:normalizeMotion(input.motion),...(layouts?{layouts:[...layouts]}:{})};
 }
 const luminance=color=>{const rgb=[1,3,5].map(i=>parseInt(color.slice(i,i+2),16)/255).map(n=>n<=.04045?n/12.92:((n+.055)/1.055)**2.4);return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];};
 export function contrast(a,b){const first=luminance(a),second=luminance(b);return (Math.max(first,second)+.05)/(Math.min(first,second)+.05);}

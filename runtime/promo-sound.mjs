@@ -1,5 +1,6 @@
+import {promoSceneDirection} from './motion.mjs';
+
 const SAMPLE_RATE = 48000;
-const BEAT = 0.5;
 const TAU = 2 * Math.PI;
 const CHORDS = [[57, 64, 67, 71], [53, 60, 64, 67], [60, 67, 71, 74], [55, 62, 65, 69]];
 const ARPEGGIO = [1, 2, 3, 2, 1, 2, 3, 1];
@@ -25,19 +26,24 @@ export function promoSound(rows, durationSeconds, fps) {
   };
   const lastCut = rows.at(-1);
   const endCard = (lastCut.from + lastCut.frames) / fps;
-  for (let step = 0; step * BEAT / 2 < endCard; step++) {
-    const time = step * BEAT / 2;
+  const directions=rows.map(promoSceneDirection);
+  const bodyFrames=rows.reduce((sum,row)=>sum+row.frames,0);
+  const beat=rows.reduce((sum,row,index)=>sum+row.frames*directions[index].beat,0)/bodyFrames;
+  for (let step = 0; step * beat / 2 < endCard; step++) {
+    const time = step * beat / 2;
     const chord = CHORDS[Math.floor(step / 16) % CHORDS.length];
-    note(time, chord[ARPEGGIO[step % ARPEGGIO.length]] + 12, step % 2 ? 0.38 : -0.38, 0.085, 5.1);
+    note(time, chord[ARPEGGIO[step % ARPEGGIO.length]] + 12, step % 2 ? 0.38 : -0.38, beat > .63 ? .055 : .085, 5.1);
     if (step % 4 === 0) note(time, chord[0] - 12, 0, 0.13, 3.6);
-    if (step % 2 === 0) add(time, 0.23, 0, t => 0.085 * Math.min(1, t / 0.007) *
+    if (beat <= .63 && step % 2 === 0) add(time, 0.23, 0, t => 0.085 * Math.min(1, t / 0.007) *
       Math.exp(-t * 19) * Math.sin(TAU * (53 * t + 2.9 * (1 - Math.exp(-20 * t)))));
   }
   for (const [index, row] of rows.entries()) {
     const start = row.from / fps;
-    add(start, 0.48, 0, t => 0.24 * Math.sin(Math.PI * t / 0.48) *
+    const treatment=directions[index];
+    if(treatment.id==='quiet')continue;
+    add(start, 0.48, 0, t => (treatment.id==='procedure'?.13:.24) * Math.sin(Math.PI * t / 0.48) *
       (Math.sin(TAU * (170 * t + 350 * t * t)) + 0.19 * Math.sin(TAU * 1140 * t)));
-    note(start + 0.14, 76 + index % 3 * 2, 0.42, 0.1, 8);
+    note(start + 0.14, treatment.id==='comparison'?73:treatment.id==='procedure'?76:79, 0.42, 0.1, 8);
   }
   for (const [index, midi] of [57, 64, 69, 72].entries()) note(endCard + index * 0.11, midi, (index - 1.5) * 0.23, 0.14, 1.6);
   for (const [index, midi] of [57, 64, 72].entries()) {
