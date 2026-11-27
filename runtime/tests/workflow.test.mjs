@@ -4,7 +4,7 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
-import {ProductionInputs,STUDIO_WATERMARK,normalizeDraftScriptReadings,normalizeScriptReadings} from '../production.mjs';
+import {ProductionInputs,normalizeDraftScriptReadings,normalizeScriptReadings} from '../production.mjs';
 import {NarrationSession} from '../core.mjs';
 import {startServer} from '../server.mjs';
 
@@ -49,7 +49,7 @@ test('draft kana normalization is phonetic only; kanji, numerals and sentence mi
 test('title reading defects preserve the first script while candidate-bound title import cannot approve or synthesize them',async t=>{
  let calls=0;const studio=await draftStudio(t,async()=>{calls++;return {title:'情報の届け方',titleSpeech:'情報のとどけかた。',rows:[{caption:'伝えます。',speech:'つたえます。'}]};});
  const result=await(await studio.post('draft',studio.input)).json();assert.equal(result.script,'伝えます。');assert.equal(result.saved,true);assert.ok(result.warnings.some(w=>w.stage==='title-reading'));assert.equal(calls,1);
- await studio.post('title',{title:result.titleReading.caption});let state=await studio.status();const fields={...STUDIO_WATERMARK,title:result.titleReading.caption,speech:result.titleReading.speech,endSeconds:4,revision:state.revision,productionRevision:state.productionRevision};
+ await studio.post('title',{title:result.titleReading.caption});let state=await studio.status();const fields={endLabel:'',endUrl:'',owner:'',title:result.titleReading.caption,speech:result.titleReading.speech,endSeconds:4,revision:state.revision,productionRevision:state.productionRevision};
  const forged=await studio.post('bookends',{...fields,speech:'別の読み。',readingCandidate:true});assert.equal(forged.status,409);
  const added=await studio.post('bookends',{...fields,readingCandidate:true});assert.equal(added.status,200);state=await studio.status();assert.equal(state.titleReadingPreparationRequired,true);assert.equal(state.rows[0].reviewed,false);assert.equal(state.rows[0].readingPreparationRequired,true);
  const approval=await studio.post('approve',{id:state.rows[0].id,revision:state.revision});assert.equal(approval.status,409);assert.equal((await approval.json()).error,'HIRAGANA_READING_REQUIRED');

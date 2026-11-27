@@ -30,17 +30,17 @@ const motion={version:1,style:'cinematic',intensity:'standard'};
 test('transition surfaces preserve AI choices and use the actual palette or next image instead of one accent',async()=>{
  const {transitionPlan,transitionSurface,TRANSITION_TONES}=await import('../motion.mjs');
  const palette={background:'#14161e',accent:'#a9c6ff',heading:'#ffffff'},rows=[{id:'a',image:'cuts/a.jpg'},{id:'b',image:'cuts/b.jpg'},{id:'c',image:'cuts/c.jpg'},{id:'d'}];
- const plan=transitionPlan({rows,motion});assert.deepEqual(plan.slice(0,2).map(t=>t.tone),['image','background']);
+ const plan=transitionPlan({rows,motion:{...motion,transitions:['wipe','fade'],transitionTones:['image','background']}});assert.deepEqual(plan.slice(0,2).map(t=>t.tone),['image','background']);
  assert.deepEqual(transitionSurface(plan[0],{palette,image:rows[1].image}),{color:palette.background,image:'cuts/b.jpg'});
  assert.deepEqual(transitionSurface(plan[1],{palette,image:rows[2].image}),{color:palette.background});
  const ai={...motion,transitions:['wipe','iris','diagonal'],transitionTones:['heading','accent','image']};
  assert.deepEqual(normalizeMotion(ai),ai);assert.deepEqual(normalizePresentation({theme:'moon',motion:ai}).motion,ai);
  const chosen=transitionPlan({rows,motion:ai});assert.deepEqual(chosen.map(t=>t.tone),['heading','accent','background']);
  assert.equal(transitionSurface(chosen[0],{palette}).color,palette.heading);
- const textOnly=transitionPlan({rows:Array.from({length:8},()=>({})),motion});assert.ok(new Set(textOnly.map(t=>transitionSurface(t,{palette}).color)).size>=2);
- const repeated=transitionPlan({rows,motion:{...motion,transitionTones:['accent','accent','accent']}});assert.notEqual(repeated[0].tone,repeated[1].tone);
+ const textOnly=transitionPlan({rows:Array.from({length:8},()=>({})),motion});assert.ok(textOnly.every(t=>t.family==='cut'&&t.tone==='background'));
+ const repeated=transitionPlan({rows,motion:{...motion,transitions:['wipe','wipe'],transitionTones:['accent','accent']}});assert.notEqual(repeated[0].family,repeated[1].family);assert.equal(repeated[0].tone,repeated[1].tone);
  assert.deepEqual(transitionSurface({tone:'image'},{palette}),{color:palette.background});
- for(const transitionTones of [[],['red'],['url(https://example.com)'],Array(31).fill('image'),'image',[1]])assert.throws(()=>normalizeMotion({...motion,transitionTones}),/INVALID_MOTION/);
+ for(const transitionTones of [[],['red'],['url(https://example.com)'],Array(300).fill('image'),'image',[1]])assert.throws(()=>normalizeMotion({...motion,transitionTones}),/INVALID_MOTION/);
  assert.deepEqual(TRANSITION_TONES,['image','background','accent','heading']);
  for(const image of ['https://example.com/a.jpg','../private.jpg','cuts/../../secret','data:image/png;base64,x'])assert.throws(()=>transitionSurface({tone:'image'},{palette,image}),/INVALID_TRANSITION/);
  assert.throws(()=>transitionSurface({tone:'code'},{palette}),/INVALID_TRANSITION/);
@@ -48,28 +48,24 @@ test('transition surfaces preserve AI choices and use the actual palette or next
  assert.equal(transitionSurface({tone:'accent'},{palette:{background:'#fdf6e3',accent:'#cb4b16',heading:'#657b83'}}).color,'#cb4b16');
 });
 test('transition catalogue and AI choices stay bounded, compatible and deterministic',async()=>{
- const {TRANSITION_FAMILIES,transitionPlan,transitionLayers,transitionFrame}=await import('../motion.mjs');
- assert.equal(TRANSITION_FAMILIES.length,13);
+ const {TRANSITION_FAMILIES,TRANSITION_VARIANTS,transitionPlan,transitionLayers,transitionFrame}=await import('../motion.mjs');
+ assert.equal(TRANSITION_FAMILIES.length,14);
  const planned={...motion,transitions:['iris','diagonal','blinds']};
  assert.deepEqual(normalizePresentation({theme:'moon',motion:planned}).motion,planned);
  const rows=Array.from({length:50},(_,i)=>({id:'cut-'+i,frames:240,points:i%3===0?['A','B']:[]}));
  const plan=transitionPlan({rows,motion:planned});assert.deepEqual(plan,transitionPlan({rows,motion:planned}));
  assert.deepEqual(plan.slice(0,3).map(t=>t.family),planned.transitions);
- const seen=new Set();
- for(const style of ['cinematic','kinetic','editorial']){
-  const choices=transitionPlan({rows,motion:{...motion,style}});
-  for(let i=0;i<choices.length;i++){const t=choices[i];seen.add(t.family+':'+t.variant);if(i)assert.notEqual(t.family,choices[i-1].family);}
- }
- assert.equal(seen.size,35);
+ assert.ok(plan.slice(3).every(choice=>choice.family==='cut'));
  const repeated=transitionPlan({rows,motion:{...motion,transitions:['wipe','wipe','wipe']}});
  assert.notEqual(repeated[0].family,repeated[1].family);
- for(const transitions of [[],['invented'],['https://example.com'],Array(31).fill('fade'),'iris',[1]])assert.throws(()=>normalizeMotion({...motion,transitions}),/INVALID_MOTION/);
+ for(const transitions of [[],['invented'],['https://example.com'],Array(300).fill('fade'),'iris',[1]])assert.throws(()=>normalizeMotion({...motion,transitions}),/INVALID_MOTION/);
  assert.throws(()=>normalizeMotion({...motion,transitions:['iris'],code:'x'}),/INVALID_MOTION/);
- for(const t of [...seen].map(key=>{const [family,variant]=key.split(':');return {family,variant:Number(variant)};})){
+ for(const t of TRANSITION_FAMILIES.filter(family=>family!=='cut').flatMap(family=>Array.from({length:TRANSITION_VARIANTS[family]},(_,variant)=>({family,variant})))){
   assert.deepEqual(transitionLayers(t,0,'#123456'),[]);
   assert.deepEqual(transitionLayers(t,1,'#123456'),[{inset:0,background:'#123456'}]);
   for(const coverage of [.1,.5,.9]){const layers=transitionLayers(t,coverage,'#123456');assert.ok(layers.length>0&&layers.length<=24);assert.doesNotMatch(JSON.stringify(layers),/NaN|Infinity|undefined/);}
  }
+ for(const coverage of [0,.5,1])assert.deepEqual(transitionLayers({family:'cut',variant:0},coverage,'#123456'),[]);
  for(const frames of [1,2,8,30,240])for(const frame of [-1,0,frames/2,frames-1,frames+20]){
   const state=transitionFrame({frame,frames,fps:30,motion});assert.ok(state.incoming>=0&&state.incoming<=1);assert.ok(state.outgoing>=0&&state.outgoing<=1);
   if(frames<8)assert.deepEqual(state,{incoming:0,outgoing:0});
@@ -139,10 +135,10 @@ test('legacy presentation is byte-shape compatible; motion survives template and
  assert.throws(()=>normalizePresentation({...p,motion:{...motion,script:'x'}}),/INVALID_MOTION/);
 });
 test('direction responds to content and sequence, never names or example phrases',()=>{
- assert.equal(sceneDirection({row:{image:'cut.png',points:[]},index:0,count:4,motion}).layout,'hero');
+ assert.equal(sceneDirection({row:{image:'cut.png',points:[]},index:0,count:4,motion}).layout,'image');
  assert.equal(sceneDirection({row:{points:['A','B','C']},index:1,count:4,motion}).layout,'sequence');
  assert.equal(sceneDirection({row:{image:'cut.png'},index:2,count:4,motion}).layout,'image');
- assert.equal(sceneDirection({row:{},index:3,count:4,motion}).layout,'closing');
+ assert.equal(sceneDirection({row:{},index:3,count:4,motion}).layout,'statement');
  assert.equal(sceneDirection({row:{},index:1,count:4,motion}).layout,'statement');
 });
 test('motion is deterministic, finite on short cuts, and keeps a sustained legible hold',()=>{

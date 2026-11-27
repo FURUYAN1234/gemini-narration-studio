@@ -207,6 +207,10 @@ test('manual input hides AI controls and adoption never generates or approves re
  const ui=await setup({rows:[],autoConfirm:false});await ui.edit(ui.get('script-mode'),'existing');await ui.edit(ui.get('script-input'),'新しい手入力の台本。');
  assert.equal(ui.get('ai-script-controls').hidden,true);await ui.get('plan-sources').emit('click');
  assert.equal(ui.location.hash,'#connection');assert.equal(ui.requests.some(r=>['draft','source-plan','approve','generate'].includes(r.route)),false);assert.equal(ui.requests.filter(r=>r.route==='adopt-script').length,1);
+ const plan=ui.requests.filter(r=>r.route==='scenario-direction');
+ assert.equal(plan.length,1);assert.equal(plan[0].input.consent,true);
+ assert.equal(ui.state().presentation.template,'steps');
+ assert.match(ui.get('script-status').textContent,/AIが演出を提案/);
 });
 
 test('a validated generated candidate survives a later stale save without another provider call or losing the prior saved brief',async()=>{
@@ -748,6 +752,11 @@ async function setup({beforeBootstrap,adoptionWait,adoptionError,titleReading,im
     if (options.headers?.['X-Narration-Token'] !== token) return reply({error: 'CSRF_TOKEN_REQUIRED'}, false);
     if(route==='regenerate-image'){const row=state.rows.find(r=>r.id===input.id),file='b'.repeat(64)+'.png';state.production.assets.push({file,name:'新しい候補.png',origin:'generated-image'});state.imageProposal={id:'regenerated',scenes:[{id:row.id,caption:row.caption,imageFile:file,imagePrompt:'',reason:'fixture candidate'}]};return reply(state);}
     else if(route==='approve-images'){const choices=state.imageProposal.scenes.filter(s=>!input.id||s.id===input.id);for(const scene of choices)state.rows.find(r=>r.id===scene.id).cutImage={file:scene.imageFile};state.imageProposal=null;return reply(state);}
+    if(route==='scenario-direction'){
+      if(input.consent!==true||input.revision!==state.revision||input.productionRevision!==state.productionRevision)return reply({error:'STALE_REVISION'},false);
+      state.production.brief.direction={title:state.title,template:'steps',motion:null,layouts:parseScriptParts(state.production.brief.script).map(()=> 'steps')};
+      return reply(state);
+    }
     if(route==='material'){
       const bytes=await options.body.arrayBuffer(),file=Buffer.from(await crypto.subtle.digest('SHA-256',bytes)).toString('hex')+'.png';
       state.production.assets.push({name:options.body.name,file,size:bytes.byteLength});state.productionRevision='inputs-material';
@@ -940,7 +949,7 @@ test('individual correction applies only that cut and preserves other pending in
 
 test('bookend edits survive polling, block final approval and save without generation',async()=>{
  const ui=await setup();await ui.edit(ui.get('opening-title'),'制作の紹介');await ui.edit(ui.get('opening-speech'),'せいさくのしょうかい');await ui.poll();assert.equal(ui.get('opening-title').value,'制作の紹介');assert.equal(ui.get('confirm-full').disabled,true);
- await ui.get('save-bookends').emit('click');const call=ui.requests.find(r=>r.route==='bookends');assert.equal(call.input.owner,'FURU');assert.equal(call.input.endUrl,'https://note.com/happy_duck780');assert.equal(call.input.endSeconds,4);assert.equal(call.input.speech,'せいさくのしょうかい');assert.equal(ui.requests.some(r=>['generate','generate-music','finalize'].includes(r.route)),false);
+ await ui.get('save-bookends').emit('click');const call=ui.requests.find(r=>r.route==='bookends');assert.equal(call.input.owner,'');assert.equal(call.input.endLabel,'');assert.equal(call.input.endUrl,'');assert.equal(call.input.endSeconds,4);assert.equal(call.input.speech,'せいさくのしょうかい');assert.equal(ui.requests.some(r=>['generate','generate-music','finalize'].includes(r.route)),false);
 });
 
 for(const buttonId of ['new-project','new-project-bottom'])test(buttonId+' starts an empty production at the page top and keeps the connection',async()=>{

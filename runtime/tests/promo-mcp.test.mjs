@@ -23,16 +23,19 @@ test('MCP grant is browser-scoped and only permits current, imported promo asset
     assert.deepEqual(model.bookends.tools.slice(1,3),['Remotion','FFmpeg']);
     assert.equal(model.durationInFrames,240);
     const draft=JSON.parse(await readFile(path.join(sourceDir,'promo.json'),'utf8'));
-    assert.equal(Boolean(model.promoAudio),draft.soundEnabled);
-    if(model.promoAudio){
-      const audio=await readFile(path.join(sourceDir,'test-public',model.promoAudio));
-      assert.equal(audio.toString('ascii',0,4),'RIFF');
-      assert.equal(audio.readUInt32LE(40),8*48000*4);
-      assert.ok(audio.subarray(44,48044).some(byte=>byte!==0));
-    }
+    assert.equal(Boolean(model.music),draft.soundEnabled);
+    if(model.music)assert.deepEqual(await readFile(path.join(sourceDir,'test-public',model.music.src)),score);
     await writeFile(output,Buffer.from('0000ftypdemo0000'));
   };
-  const studio=await startServer({session,port:0,videoRendererRoot:root,downloadsDir:path.join(root,'downloads'),videoRunner:runner});
+  const score=Buffer.from('mock score for a validated test duration');
+  let scoreCalls=0;
+  const musicFactory=async ({timeline})=>{
+    scoreCalls++;
+    assert.equal(timeline.durationInFrames,240);
+    assert.equal(timeline.rows[0].caption,'実画面 ');
+    return {bytes:score,durationSeconds:8};
+  };
+  const studio=await startServer({session,port:0,videoRendererRoot:root,downloadsDir:path.join(root,'downloads'),videoRunner:runner,musicFactory});
   t.after(()=>studio.close());
   const get=async route=>(await fetch(studio.url+route)).json();
   const {token}=await get('/api/bootstrap');
@@ -50,6 +53,11 @@ test('MCP grant is browser-scoped and only permits current, imported promo asset
   const current=await (await post('/api/mcp-action',{action:'project'})).json();
   const {projectId,revision,productionRevision}=current;
   const input={action:'promo',projectId,revision,productionRevision,title:'紹介動画',watermarkEnabled:false,cuts:[{image:current.assets[0].file,title:'実画面'}]};
+  assert.equal((await post('/api/mcp-action',input)).status,409);
+  input.direction={title:'紹介動画',template:'clean',motion:null,layouts:['visual']};
+  assert.notEqual((await post('/api/mcp-action',input)).status,202);
+  assert.equal(scoreCalls,0);
+  input.planConsent=true;
   assert.equal((await post('/api/mcp-action',{...input,revision:'0'.repeat(64)})).status,409);
   assert.notEqual((await post('/api/mcp-action',{...input,cuts:[{image:'../hidden.png',title:'不正'}]})).status,202);
   assert.equal((await post('/api/mcp-action',input)).status,202);
@@ -63,6 +71,7 @@ test('MCP grant is browser-scoped and only permits current, imported promo asset
   const silent=await get('/api/status');
   assert.equal(silent.promo.stage,'complete');
   assert.equal(renderCalls,2);
+  assert.equal(scoreCalls,1);
   assert.equal((await post('/api/mcp-access',{enabled:false,projectId},studio.url)).status,200);
   assert.equal((await post('/api/mcp-action',{action:'project'})).status,403);
   assert.equal((await get('/api/status')).promo.result.sha256,silent.promo.result.sha256);

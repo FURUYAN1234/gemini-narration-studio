@@ -68,17 +68,17 @@ The public website is a download and installation guide. Video processing runs o
 
 - Operation recordings, MP4 and WebM are available as footage in the main narration workflow. After preparing the script and choosing a voice, select the clip in each cut in Step 3. The narration and captions use the normal rendering path. / 操作録画・MP4・WebMは通常のナレーション制作にも使えます。素材と台本を準備して声を選び、③で使う動画をカットごとに選択します。ナレーションや字幕は通常の工程で付けられます。
 - When AI plans from imported MP4 or WebM references, it can select a time range for a cut. Review the range in Step 3. The export plays that excerpt with narration and captions while muting the source audio. / 取り込んだMP4・WebMを資料に台本を作ると、AIがカットに合う再生区間を提案できます。③で範囲を確認します。書き出しでは選んだ区間にナレーションと字幕を重ね、素材の音声はミュートします。
-- Automatic direction selects an overall palette and can vary layouts and transitions by cut. The narration voice and delivery are also proposed from the script. For a prepared script, request a new plan in Step 1 while keeping the existing text and title. Review the results in Steps 2 and 3. The app keeps a manually selected voice. / 用意した台本でも、①で台本とタイトルを保ったまま、背景・カットの配置・切り替え・声の提案を頼めます。②と③で確認してから使います。手動で指定した声を引き継ぎます。
+- With automatic direction on, the app asks Gemini for one plan when you move on from a script without a current proposal. Review the background, cut layouts, transitions and voice in Steps 2 and 3. A manually selected voice is preserved. If two consecutive boundaries use the same effect, the app selects an alternative suited to the next scene. / 自動演出がオンのとき、今の台本に提案がなければ声選びへ進む際にGeminiを1回利用します。背景・カットの配置・切り替え・声は②と③で確認できます。手動指定の声は引き継ぎます。同じ切り替え効果が連続するときは、次の場面に合う別の効果を選びます。
 
 - The Windows batch launcher prepares the pinned recording browser on first launch. Record a separate signed-out `http://127.0.0.1:port/` demo using sample data. / Windowsバッチが初回に録画用Chromiumを準備します。「操作を録画する」で未ログインの別のローカルアプリのURLとサンプル操作を指定します。
 - Edit up to six clips or screenshots. Set the order, start, duration, heading and caption, and add optional WAV/MP3 narration. Gemini can propose cuts with your consent to share only operation names and timings. / 画像と動画を最大6カットに並べ、開始位置・長さ・見出し・字幕と任意のナレーションを指定できます。操作名と時刻の送信を選べば、Geminiがカット案を作れます。
 
-- Open the studio with `start_narration_studio.bat`, import PNG/JPEG/WebP screenshots, then open the product-demo panel. The MP4 includes optional locally generated music and transition sounds. Play and save it at the bottom of the page. / バッチ起動後に実画面の画像を取り込み、紹介動画フォームでMP4を書き出せます。BGMと切り替え音はPCで作成し、オフにもできます。完成動画の再生と保存はページ下部です。
+- Open the studio with `start_narration_studio.bat`, import screenshots or recordings, then open the short promo panel. Gemini receives the title and cut text to plan the visuals. BGM is enabled by default and adds one Lyria request with the cut timing. Transition sounds are optional. Play and save the MP4 at the bottom of the page. / バッチ起動後に画像や操作録画を取り込み、短尺紹介フォームを開きます。Geminiにタイトル・見出し・字幕を渡して演出を提案します。BGMは初期状態でオンで、カットの尺を添えてLyriaで1回作曲します。切り替え音は任意です。完成MP4はページ下部で再生・保存できます。
 - The studio toolbar provides the downloadable production skill and the MCP setup guide. The local MCP bridge can record and edit a demo and render it as MP4 in the approved project. / 画面上部に制作スキルとMCP導入ガイドがあります。許可したMCP接続で制作スキルから録画・編集・MP4書き出しを進められます。
 - Run `start_narration_studio.bat --install-hyperframes --setup-only` once to add HyperFrames to this Windows user account. “Auto” in the product-demo panel then selects HyperFrames. The MCP can supply a focus rectangle, steps or two comparison entries. Local recordings can supply their own steps. / `start_narration_studio.bat --install-hyperframes --setup-only` を実行すると、このWindowsユーザーにHyperFramesが入ります。以後、紹介動画の「自動」で使われます。操作録画に手順があれば表示でき、MCPからは強調範囲・手順・比較2項目も渡せます。
 - Built-in automatic recording requires a local web app. For Windows desktop demos, import a screen recording and use MCP to specify clips and captions and export an MP4. Codex Computer Use can operate the desktop app while a separate tool records the screen. / 内蔵の自動録画はローカルWebアプリ専用です。Windowsアプリの画面録画を取り込めば、MCPでカット範囲・字幕を指定し、MP4を書き出せます。AIによるWindowsアプリの操作にはCodexのComputer Useを使い、映像は別の画面録画ツールで収録します。
 - Remove the current BGM from the materials list to make the next video without it. The source audio is kept locally, and you can turn automatic BGM generation back on from the same section. / 「素材・台本」で使用中のBGMを素材一覧から外すと、次の動画をBGMなしで作成できます。元の音声ファイルはPCに残り、同じ欄からBGMの自動生成を再開できます。
-- The tool credits remain on the final card when the optional legacy watermark is turned off. The watermark defaults to on. / 末尾は制作環境を表示します。従来の透かしは初期値オンで、オフにすると透かしだけ消えます。
+- The final card lists the tools used. Add an optional project name, author or public URL in the title settings. The watermark switch controls whether those details appear. / 末尾には使用した制作環境を表示します。作品名・作者名・公開URLはタイトル欄で任意に設定でき、ウォーターマークの切り替えで表示を選べます。
 
 1. Open the latest Release above. Under Assets, choose **Source code (zip)**. / 上の最新版ダウンロードを開き、Assets欄の **Source code (zip)** をクリックします。
 2. In Windows Downloads, right-click the ZIP and choose **Extract All**. Do not run files inside the ZIP. / WindowsのダウンロードでZIPを右クリックし、**すべて展開**を選びます。ZIP内のまま起動しないでください。
@@ -146,6 +146,19 @@ Use **制作をクリアして新しく始める** only after saving what you ne
 ## API fees and third-party software / API料金と第三者ソフトウェア
 
 AI drafting, missing-image creation, narration and BGM creation can incur separate provider fees. File replacement, local editing, bundled sample playback and rendering with prepared assets do not generate new provider content. Failed requests are not automatically retried. / AI台本作成、不足画像の作成、ナレーション、BGMの作成では外部API料金がかかる場合があります。画像の手動差し替え、ローカル編集、同梱サンプル再生、準備済み素材の動画描画は新規の生成APIを使いません。失敗時の自動再試行はありません。
+
+**Gemini API Standard rates / Gemini API標準料金（2026-11-27確認、USD）**
+
+| Use / 用途 | Model / モデル | Input / 入力 | Output / 出力 |
+|---|---|---:|---:|
+| Script and direction / 台本・演出 | Gemini 3.5 Flash → 3.6 Flash | $0.75 / 1M tokens | $3.75 / 1M tokens |
+| Narration / ナレーション | Gemini 3.8 Flash TTS | $0.50 / 1M text tokens | $9.00 / 1M audio tokens |
+| Narration / ナレーション | Gemini 3.8 Flash-Lite TTS | $0.50 / 1M text tokens | $6.00 / 1M audio tokens |
+| Images / 画像 | Gemini 3.1 Flash Image | $0.50 / 1M tokens | $60.00 / 1M image tokens (1K image ≈ $0.067) |
+| Music / 作曲 | Lyria 3.5 | — | $0.08 / song |
+| Optional audio review / 任意の音声検査 | Gemini 3.8 Flash | $0.75 / 1M tokens | $3.75 / 1M tokens |
+
+The shown Flash, Flash TTS and Flash-Lite TTS rates apply through December 31, 2026. The rates listed for these models double on January 1, 2027. / 表中の Flash・Flash TTS・Flash-Lite TTS の記載単価は2026年12月31日までで、2027年1月1日からその2倍になります。[Google AI Studio pricing / 公式料金表](https://aistudio.google.com/docs/pricing) · [Gemini 3.5 Flash routing / 3.5 Flashの転送先](https://aistudio.google.com/docs/models/gemini-3.5-flash)
 
 The local video renderer uses Remotion 4.0.534. Its license depends on your organization and use; review [Remotion licensing](https://www.remotion.dev/docs/license) and [third-party notices](THIRD_PARTY_NOTICES.md). / PC上の動画描画にはRemotion 4.0.534を使います。組織や利用方法によりライセンス条件が異なるため、[Remotionの条件](https://www.remotion.dev/docs/license)と[第三者の表記](THIRD_PARTY_NOTICES.md)を確認してください。
 

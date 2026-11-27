@@ -19,7 +19,7 @@
 <ul>
 <li><code>studio_project</code> で制作・素材・録画・書き出し状況を確認します。</li>
 <li><code>studio_record_demo</code> で、このPCで動くブラウザー版アプリ（<code>http://127.0.0.1:ポート/</code>）を自動操作して録画します。操作名と時刻をGeminiへ送ることに同意した場合、<code>studio_edit_recording</code> でカット案を作れます。</li>
-<li><code>studio_render_promo</code> で画像・録画にカット範囲と字幕を指定して紹介MP4を作ります。本文音声を <code>narration</code> に指定するときは、タイトルを読んだ別音声を <code>titleCall</code> に指定します。タイトル表示とその音声の後に本文が始まります。意図して省く場合は <code>openingTitleRequired: false</code> を指定します。BGMと切り替え音を使わない場合は <code>soundEnabled: false</code> を指定します。完成動画は制作画面の下部で再生できます。</li>
+<li><code>studio_render_promo</code> で画像・録画にカット範囲と字幕を指定して紹介MP4を作ります。本文音声を <code>narration</code> に指定するときは、タイトルを読んだ別音声を <code>titleCall</code> に指定します。タイトル表示とその音声の後に本文が始まります。意図して省く場合は <code>openingTitleRequired: false</code> を指定します。演出案がなければ <code>planConsent: true</code> で見出しと字幕をGeminiへ送り、提案を1回取得します。BGMは初期状態で有効で、Lyriaへの作曲リクエストが1回加わります。BGMを使わないときは <code>soundEnabled: false</code> を指定します。<code>effectsEnabled: true</code> で切り替え音を追加できます。完成動画は制作画面の下部で再生できます。</li>
 <li><code>studio_render_preview</code> で作成済みの音声と素材から確認用のナレーション動画を作ります。</li>
 </ul>
 <h2>紹介動画のHyperFrames書き出し</h2>

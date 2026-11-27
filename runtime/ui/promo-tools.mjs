@@ -1,6 +1,6 @@
 export function initPromoTools({$,element,api,guarded,render,readState,errors}){
   const cuts=[];
-  let choicesKey,promoShown,recordingShown,lastRecorded;
+  let choicesKey,promoShown,recordingShown,lastRecorded,preparing=false;
   const isVideo=file=>file.endsWith('.mp4');
   const assets=()=>readState()?.production?.assets||[];
   const identity=()=>{const {projectId,productionRevision}=readState();return {projectId,productionRevision};};
@@ -72,7 +72,7 @@ export function initPromoTools({$,element,api,guarded,render,readState,errors}){
       choicesKey=key;
     }
     const intro=state.promo||{},recording=state.recording||{},edit=recording.edit;
-    const busy=intro.running||state.busy||state.video?.running;
+    const busy=preparing||intro.running||state.busy||state.video?.running;
     const renderer=$('promo-renderer');
     renderer.disabled=!!busy;
     $('promo-hyperframes-option').disabled=!intro.hyperframesVersion;
@@ -93,8 +93,8 @@ export function initPromoTools({$,element,api,guarded,render,readState,errors}){
       else player.removeAttribute('src');
     }
     $('promo-add').disabled=!$('promo-images').value||cuts.length>=6;
-    $('promo-start').disabled=busy||!intro.available||!cuts.length;
-    $('promo-stop').hidden=!intro.running;
+    $('promo-start').disabled=busy||!intro.available||!cuts.length||!readState().keyConfigured;
+    $('promo-stop').hidden=!(preparing||intro.running);
     $('recording-start').disabled=busy||recording.setup!=='ready';
     $('recording-stop').hidden=!recording.running&&!edit?.running;
     $('recording-setup').hidden=recording.setup!=='unavailable';
@@ -103,7 +103,7 @@ export function initPromoTools({$,element,api,guarded,render,readState,errors}){
     $('recording-apply').hidden=!selected||edit?.file!==selected||!edit?.cuts;
     $('recording-edit-status').textContent=edit?.running?'Geminiでカット案を作成中…':selected&&edit?.file===selected&&edit.error?(errors[edit.error]||'AIでカット案を作成できませんでした。 ('+edit.error+')'):!$('recording-apply').hidden?edit.cuts.length+'カットの案ができました。反映後に開始位置や字幕を調整できます。':'';
     const engine=intro.renderer==='hyperframes'?'HyperFrames':intro.renderer==='remotion'?'Remotion':'';
-    $('promo-status').textContent=intro.running?'紹介動画を書き出し中 · '+Math.round((intro.progress||0)*100)+'%'+(engine?' · '+engine:''):intro.error?(errors[intro.error]||'紹介動画を書き出せませんでした。')+' ('+intro.error+')':intro.result?'書き出しが完了しました。'+(engine?' '+engine:''):'';
+    $('promo-status').textContent=preparing?'カットに合う演出と、設定した場合はBGMを準備しています…':intro.running?'紹介動画を書き出し中 · '+Math.round((intro.progress||0)*100)+'%'+(engine?' · '+engine:''):intro.error?(errors[intro.error]||'紹介動画を書き出せませんでした。')+' ('+intro.error+')':intro.result?'書き出しが完了しました。'+(engine?' '+engine:''):'';
     $('promo-result-link').hidden=$('promo-result').hidden=!intro.result;
     if(intro.result?.file!==promoShown){
       promoShown=intro.result?.file;
@@ -136,8 +136,11 @@ export function initPromoTools({$,element,api,guarded,render,readState,errors}){
   $('promo-start').addEventListener('click',guarded(async()=>{
     const title=$('promo-title').value.trim();
     if(!title||!cuts.length||cuts.some(cut=>!cut.title.trim()))throw new Error('動画タイトル、カット素材、各カットの見出しを入力してください。');
-    await api('promo',{...identity(),title,cuts,renderer:$('promo-renderer').value,narration:$('promo-narration').value,titleCall:$('promo-title-call').value,openingTitleRequired:$('promo-opening-required').checked,soundEnabled:$('promo-sound').checked,watermarkEnabled:$('promo-watermark').checked});
-    await refresh();
+    preparing=true;update();
+    try{
+      await api('promo',{...identity(),title,cuts,renderer:$('promo-renderer').value,narration:$('promo-narration').value,titleCall:$('promo-title-call').value,openingTitleRequired:$('promo-opening-required').checked,soundEnabled:$('promo-sound').checked,effectsEnabled:$('promo-effects').checked,planConsent:true,watermarkEnabled:$('promo-watermark').checked});
+      await refresh();
+    }finally{preparing=false;update();}
   },'promo-status'));
   return update;
 }

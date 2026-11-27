@@ -225,9 +225,10 @@ function updateExtras(){
  const action=scriptActionState({mode:$('script-mode').value,script:$('script-input').value,instructions:$('production-instructions').value,hasReferences:hasSources(),themeAuto:aiThemeEnabled(),keyConfigured:state.keyConfigured,busy:state.busy||localBusy,finalized:isFinalized(),inputErrors:{script:scriptUrls().length?'REFERENCE_IN_SCRIPT':null}});
  $('ai-source-controls').hidden=!action.showAiControls;$('script-instruction-label').textContent=$('script-mode').value==='mixed'?'直したい点・AIへの指示':'テーマ・AIへの指示';$('ai-script-controls').hidden=!action.showAiControls;$('ai-script-controls').disabled=busy;$('theme-auto-control').hidden=!action.showThemeAuto;$('theme-auto').disabled=busy||!action.showThemeAuto;$('auto-direction-label').textContent=$('script-mode').value==='existing'?'今の台本に合わせて演出を提案':'タイトル・見た目・動きをAIにまかせる';$('script-instructions-field').hidden=aiThemeEnabled();$('production-instructions').disabled=busy||!action.showAiControls||aiThemeEnabled();
  $('script-send-state').textContent=action.reason==='EMPTY_INSTRUCTIONS'?($('script-mode').value==='mixed'?'本文と直したい点を入力してください。':'資料・テーマを入力するか、テーマをAIに任せるを選んでください。'):action.reason==='REFERENCE_IN_SCRIPT'?'URLだけの場合は、参考URL欄へ入力してください。台本欄は本文の入力・編集用です。':action.reason==='SCRIPT_REQUIRED'?'整える台本を結果欄に入力してください。':action.reason==='API_KEY_REQUIRED'?'画面上部でGemini APIキーを登録すると送信できます。':action.reason==='BUSY'?'処理が終わるまでお待ちください。':action.showAiControls?'このボタンで指定した内容をGoogleへ送り、台本案を1回作成します。':'手入力の編集・採用ではAIへ送信しません。';
- $('plan-sources').textContent='台本と準備素材を読み込んで声選びへ（APIなし）';$('plan-sources').disabled=!action.canAdopt;$('append-script').hidden=true;
+ const needsDirection=automaticDirectionEnabled()&&!activeDirectionProposal();
+ $('plan-sources').textContent=needsDirection?'台本に合う演出を提案して声選びへ（API 1回）':'台本と準備素材を読み込んで声選びへ（APIなし）';$('plan-sources').disabled=!action.canAdopt||(needsDirection&&!state.keyConfigured);$('append-script').hidden=true;
  const realScript=!!scriptParts().length;$('generate-script').hidden=!action.showAiControls||realScript;$('regenerate-script').hidden=!action.showAiControls||!realScript;for(const id of ['generate-script','regenerate-script'])$(id).disabled=!action.canGenerate;
- $('planning-request-info').textContent=realScript?'編集した本文をカットへ反映し、声選びへ進みます。APIは使いません。読みが未準備なら③で用意します。':'AIで台本を作るか、結果欄へ手入力・貼り付けしてください。';
+ $('planning-request-info').textContent=realScript?(needsDirection?(!state.keyConfigured?'Gemini APIキーを登録すると、台本から演出と声を提案して進めます。':'現在の台本をGoogleへ送り、演出と声を提案してから採用します。読みが未準備なら③で用意します。'):'編集した本文をカットへ反映し、声選びへ進みます。読みが未準備なら③で用意します。'):'AIで台本を作るか、結果欄へ手入力・貼り付けしてください。';
  const missingReading=state.rows.some(r=>r.readingPreparationRequired||!r.speech?.trim()||r.readingState==='pending');$('prepare-readings').hidden=!missingReading;$('prepare-readings').disabled=busy||isDirty()||!state.keyConfigured||!missingReading;$('prepare-readings').textContent='未準備・要修正の読みをAIで準備（API 1回）';$('reading-prep-status').textContent=state.titleReadingPreparationRequired&&!titleReadingReadyToSave()?'タイトルの読み候補は要修正です。「冒頭タイトルの読み」で修正できます。台本を作り直す必要はありません。':missingReading?'台本は保持しています。要修正・未準備の読みだけ手入力で直すか、明示操作でAIに用意してもらえます。':'タイトルと本文の読みは準備済みです。下で確認して「全文の読みを確定」を押してください。追加の読み生成は不要です。';
  const readingAttempt=state.production?.authoring?.lastAttempt,bodyRows=state.rows.filter(r=>r.id!==state.production?.bookends?.titleRowId),savedReadings=readingAttempt?.result?.readings;
  $('apply-readings-result').hidden=readingAttempt?.operation!=='prepare-readings'||!Array.isArray(savedReadings)||savedReadings.length!==bodyRows.length||savedReadings.some((r,i)=>r.caption!==bodyRows[i].caption)||savedReadings.every((r,i)=>r.speech===bodyRows[i].speech);$('apply-readings-result').disabled=busy||isDirty();
@@ -527,7 +528,7 @@ for(const button of document.querySelectorAll('[data-revise-step]'))button.addEv
  $('explain-scenes').addEventListener('change',guarded(async()=>{const explainScenes=$('explain-scenes').checked?'auto':'off';await pending(async()=>render(await api('presentation',{revision:state.revision,presentation:{...state.presentation,explainScenes}}),true));message('図解の表示を保存しました。音声や画像の再生成はありません。');}));
  $('apply-motion').addEventListener('click',guarded(async()=>{await pending(async()=>{const next=await api('presentation',{revision:state.revision,presentation:{...state.presentation,motion:selectedMotion()}});dirtyFields.delete('motion');render(next);});message('演出を保存しました。台本・画像・音声の再生成はありません。');}));
  $('play-motion').addEventListener('click',()=>{const preview=$('motion-preview');if(preview.classList.contains('motion-playing')){preview.classList.remove('motion-playing');$('play-motion').textContent='動きの見本を再生';return;}preview.classList.add('motion-playing');$('play-motion').textContent='見本を停止';});
- $('motion-preview').addEventListener('animationend',event=>{if(event.animationName==='motion-orbit'){ $('motion-preview').classList.remove('motion-playing');$('play-motion').textContent='動きの見本を再生';}});
+ $('motion-preview').addEventListener('animationend',event=>{if(event.animationName==='motion-art'){ $('motion-preview').classList.remove('motion-playing');$('play-motion').textContent='動きの見本を再生';}});
  $('draft-design').addEventListener('click',guarded(async()=>{designGenerating=true;try{await pending(async()=>{const next=await api('design-draft',{revision:state.revision,instructions:$('design-instructions').value,consent:$('design-consent').checked});dirtyFields.delete('design');designPreviewOnly=false;render(next);});message('AIが今回用に作ったデザインを保存しました。見本を確認できます。');}finally{designGenerating=false;updateControls();}}));
 $('api-required-dismiss').addEventListener('click',guarded(()=>{$('api-key').focus();}));
 try{const boot=await api('bootstrap');token=boot.token;instanceId=boot.instanceId;themes=await api('themes');designs=await api('designs');buildDesignGallery();render(await api('status'),true);message(isFinalized()?'この動画は最終確定済みです。完成動画を再生・保存できます。':!state.keyConfigured?'画面上部でGemini APIキーを登録してください。':state.rows.length&&state.rows.every(r=>r.reviewed&&r.audioCurrent)?'各カットの画像と音声を確認してください。':state.rows.length?'台本と本番の声を確認して、音声・動画をまとめて作成してください。':'デザイン、素材、台本を用意してください。');setInterval(async()=>{try{const next=await api('status');if(next.projectId!==state.projectId){projectChanged=true;message('別のタブまたはバッチで制作が切り替わりました。この画面の入力は保持しています。再読み込みすると現在の制作を開きます。',true);return;}if(next.instanceId!==instanceId){const fresh=await api('bootstrap');token=fresh.token;instanceId=fresh.instanceId;message('サーバーに再接続しました。未保存の編集は保持しています。'+(next.keyConfigured?'':'APIキーを画面上部で登録してください。')+'');}render(next);}catch{message('ローカルの接続が切れました。Codexにこの画面の再開を依頼してください。',true);}},2000);}catch{message('設定画面を読み込めません。ローカルサーバーの状態を確認してください。',true);}
@@ -606,7 +607,7 @@ async function adoptPreparedTitle(){
  const b=state.production?.bookends,row=state.rows.find(r=>r.id===b?.titleRowId);
  if(row?.caption===prepared.caption&&(!row.readingPreparationRequired||row.speech===prepared.speech))return;
  if(state.title!==prepared.caption)render(await api('title',{title:prepared.caption}),true);
- render(await api('bookends',{title:prepared.caption,speech:prepared.speech,readingCandidate:true,endLabel:b?.endLabel||'ネームから全自動の自律式統合AI漫画システム',endUrl:b?.endUrl||'https://note.com/happy_duck780',owner:b?.owner||'FURU',endSeconds:b?.endSeconds||4,revision:state.revision,productionRevision:state.productionRevision}),true);
+ render(await api('bookends',{title:prepared.caption,speech:prepared.speech,readingCandidate:true,endLabel:b?.endLabel??'',endUrl:b?.endUrl??'',owner:b?.owner??'',endSeconds:b?.endSeconds||4,revision:state.revision,productionRevision:state.productionRevision}),true);
  return b?.titleRowId?undefined:state.production?.bookends?.titleRowId;
 }
 async function saveVoice(){if(isFinalized())return;if(voiceSelectionPending())throw new Error('先に台本から声を選ぶか、声を手動で指定してください。');const proposal=$('voice-mode').value==='auto'?currentVoiceProposal():null;const next=await api('settings',proposal?automaticVoiceSettings(proposal):selectedSettings());dirtyFields.delete('settings');render(next,true);}
@@ -620,10 +621,20 @@ async function advanceScript(){
  planningAdvancing=true;actionMessage('script-status','台本と素材を取り込み、声選びの画面を開いています…');
  try{await pending(async()=>{
   let partial=false;try{await savePlanning();}catch(error){if(!['INVALID_REFERENCES','INVALID_REFERENCE_URL','INVALID_PRODUCTION_TEXT'].includes(error.message))throw error;partial=true;}
-  const proposal=activeDirectionProposal();
+  let proposal=activeDirectionProposal();
+  let plannedHere=false;
+  if(automaticDirectionEnabled()&&!proposal){
+   if(partial)throw new Error('INVALID_REFERENCES');
+   const planned=await api('scenario-direction',{consent:true,revision:state.revision,productionRevision:state.productionRevision});
+   directionPending=false;
+   render(planned,true);
+   proposal=activeDirectionProposal();
+   if(!proposal)throw new Error('INVALID_AUTOMATIC_DIRECTION');
+   plannedHere=true;
+  }
   if(automaticDirectionEnabled()&&proposal){const {motion}=proposal;selectDirectionProposal();await savePlanning(motion);}
   const next=await api('adopt-script',{script:$('script-input').value,...(hasScriptReadings()?{readings:scriptReadings}:{}),projectId:state.projectId,instanceId,revision:state.revision,productionRevision:state.productionRevision});if(!partial)dirtyFields.delete('production');render(next);
-  actionMessage('script-status',partial?'台本だけを採用しました。参考資料の入力は未保存のまま保持しています。':'台本と準備素材を読み込みました。声を選んだ後、③で絵・字幕・読みを一緒に確認できます。APIは使っていません。');window.location.hash='#connection';$('connection').scrollIntoView?.({block:'start'});
+  actionMessage('script-status',partial?'台本を採用しました。参考資料の入力は未保存のまま保持しています。':(plannedHere?'今の台本に合わせてAIが演出を提案しました。':'台本と準備素材を読み込みました。')+' 声を選んだ後、③で絵・字幕・読みを確認できます。');window.location.hash='#connection';$('connection').scrollIntoView?.({block:'start'});
  });}finally{planningAdvancing=false;updateControls();}
 }
 $('append-script').addEventListener('click',guarded(advanceScript,'script-status'));
@@ -672,21 +683,22 @@ $('material-drop').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' 
 function updateBookendsControls(){
  const b=state.production?.bookends,signature=state.projectId+state.revision+JSON.stringify([b,state.production?.brief.titleReading,preparedTitleReading(),state.title]),busy=state.busy||localBusy||isFinalized();
 
- for(const id of ['opening-title','opening-speech','save-bookends'])$(id).disabled=!!busy;
+ for(const id of ['opening-title','opening-speech','end-label','end-url','end-owner','save-bookends'])$(id).disabled=!!busy;
  if(!dirtyFields.has('bookends')&&$('bookends-tools').dataset.signature!==signature){
   $('bookends-tools').dataset.signature=signature;const row=state.rows.find(r=>r.id===b?.titleRowId);
   const prepared=preparedTitleReading();$('opening-title').value=row?.caption||prepared?.caption||state.title.replace(/(?:（修正版）)+$/u,'');$('opening-speech').value=row?.speech||(prepared?.caption===$('opening-title').value?prepared.speech:'');
+  $('end-label').value=b?.endLabel??'';$('end-url').value=b?.endUrl??'';$('end-owner').value=b?.owner??'';
  }
- $('save-bookends').hidden=!dirtyFields.has('bookends');$('bookends-status').textContent='タイトルと本文の読みを一緒に確認します。変更した場合だけ保存してください。末尾のウォーターマークは下のチェックボックスで切り替えられます。';
+ $('save-bookends').hidden=!dirtyFields.has('bookends');$('bookends-status').textContent='タイトルと本文の読みを一緒に確認します。変更した場合だけ保存してください。作者クレジットの表示は下のチェックボックスで切り替えられます。';
 }
-for(const id of ['opening-title','opening-speech'])$(id).addEventListener('input',()=>{dirtyFields.add('bookends');updateControls();});
+for(const id of ['opening-title','opening-speech','end-label','end-url','end-owner'])$(id).addEventListener('input',()=>{dirtyFields.add('bookends');updateControls();});
 async function saveTitleReading(){
- const input={title:$('opening-title').value,speech:$('opening-speech').value,endLabel:state.production?.bookends?.endLabel||'ネームから全自動の自律式統合AI漫画システム',endUrl:state.production?.bookends?.endUrl||'https://note.com/happy_duck780',owner:state.production?.bookends?.owner||'FURU',endSeconds:state.production?.bookends?.endSeconds||4,revision:state.revision,productionRevision:state.productionRevision};
+ const input={title:$('opening-title').value,speech:$('opening-speech').value,endLabel:$('end-label').value,endUrl:$('end-url').value,owner:$('end-owner').value,endSeconds:state.production?.bookends?.endSeconds||4,revision:state.revision,productionRevision:state.productionRevision};
  const previousTitle=state.production?.bookends?.titleRowId,next=await api('bookends',input);dirtyFields.delete('bookends');render(next,true);
  if(state.title!==input.title)render(await api('title',{title:input.title}),true);
  return previousTitle?undefined:state.production?.bookends?.titleRowId;
 }
-$('save-bookends').addEventListener('click',guarded(async()=>{await pending(saveTitleReading);message('タイトルを保存しました。全文の読みを確認して確定してください。');}));
+$('save-bookends').addEventListener('click',guarded(async()=>{await pending(saveTitleReading);message('タイトルとクレジットを保存しました。全文の読みを確認して確定してください。');}));
 function updateTimingControls(){
  const busy=state.busy||localBusy||isFinalized();
  $('watermark-enabled').checked=state.production?.watermarkEnabled!==false;$('watermark-enabled').disabled=!!(busy||state.video?.running);

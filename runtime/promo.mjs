@@ -1,11 +1,14 @@
 import path from 'node:path';
 import {mkdir,writeFile,readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
-import {STUDIO_WATERMARK,safeText} from './production.mjs';
+import {safeText} from './production.mjs';
 import {atomicWrite} from './atomic-write.mjs';
 import {videoCredits} from './video-credits.mjs';
+import {normalizeAutomaticDirection,presentationDesign} from './designs.mjs';
+import {transitionPlan} from './motion.mjs';
 import {promoSound} from './promo-sound.mjs';
 import {mediaDuration} from './demo-recording.mjs';
+import {MUSIC_MODEL} from './music.mjs';
 
 export const promoVideo=/^[a-f0-9]{64}\.mp4$/;
 export const promoVisual=/^[a-f0-9]{64}\.(png|jpe?g|webp|mp4)$/;
@@ -36,7 +39,7 @@ function promoEffect(cut, renderer){
   return renderer==='hyperframes'?{effect}:{};
 }
 
-export async function preparePromo(dir,input,production,rendererRoot,hyperframesReady=false) {
+export async function preparePromo(dir,input,production,rendererRoot,hyperframesReady=false,{planDirection,generateMusic,inspectMusic}={}) {
   const title=safeText(input.title,90).trim();
   if(!title||!Array.isArray(input.cuts)||input.cuts.length<1||input.cuts.length>6)throw new Error('INVALID_PROMO');
   const choice=input.renderer===undefined?'auto':input.renderer;
@@ -109,8 +112,36 @@ export async function preparePromo(dir,input,production,rendererRoot,hyperframes
   }
   if(input.watermarkEnabled!==undefined&&typeof input.watermarkEnabled!=='boolean')throw new Error('INVALID_WATERMARK_PREFERENCE');
   if(input.soundEnabled!==undefined&&typeof input.soundEnabled!=='boolean')throw new Error('INVALID_PROMO_SOUND');
-  const watermarkEnabled=input.watermarkEnabled??(production.status().watermarkEnabled!==false);
-  const draft={templateVersion:6,title,cuts,watermarkEnabled,soundEnabled:input.soundEnabled??true,...(renderer==='hyperframes'?{renderer}:{}),...(narration?{narration}:{}),...(narrationSeconds?{narrationSeconds}:{}),...(opening?{opening}:{})};
+  if(input.effectsEnabled!==undefined&&typeof input.effectsEnabled!=='boolean')throw new Error('INVALID_PROMO_SOUND');
+  if(input.direction===undefined&&(input.planConsent!==true||!planDirection))throw new Error('PROMO_DIRECTION_REQUIRED');
+  const script=cuts.map(({title,caption})=>(title+' '+caption).replace(/\s+/g,' ').trim()).join('\n');
+  const proposed=input.direction??await planDirection(script);
+  if(!proposed||!Array.isArray(proposed.layouts)||proposed.layouts.length!==cuts.length)throw new Error('INVALID_AUTOMATIC_DIRECTION');
+  const direction=normalizeAutomaticDirection({...proposed,title});
+  let music;
+  const soundEnabled=input.soundEnabled??true;
+  if(soundEnabled){
+    if(input.planConsent!==true||!generateMusic)throw new Error('PROMO_MUSIC_CONSENT_REQUIRED');
+    let from=opening?.frames??0;
+    const rows=cuts.map(cut=>{
+      const frames=(cut.frames??cut.seconds*30)+(cut.holdFrames??0);
+      const row={from,frames,caption:cut.title+' '+cut.caption};
+      from+=frames;
+      return row;
+    });
+    const result=await generateMusic({title,timeline:{fps:30,durationInFrames:from+120,rows}});
+    const file=createHash('sha256').update(result.bytes).digest('hex')+'.mp3';
+    const target=path.join(dir,file);
+    await atomicWrite(target,result.bytes);
+    const durationSeconds=await (inspectMusic??(target=>mediaDuration(rendererRoot,target)))(target,result);
+    if(!Number.isFinite(durationSeconds)||durationSeconds<1||durationSeconds>1200)throw new Error('INVALID_MUSIC');
+    music={file,durationSeconds};
+  }
+  const project=production.status();
+  const watermarkEnabled=input.watermarkEnabled??(project.watermarkEnabled!==false);
+  const saved=project.bookends;
+  const authorCredits=saved&&{endLabel:saved.endLabel,endUrl:saved.endUrl,owner:saved.owner,creationYear:saved.creationYear};
+  const draft={templateVersion:7,title,cuts,direction,watermarkEnabled,...(authorCredits?{authorCredits}:{}),soundEnabled,effectsEnabled:input.effectsEnabled===true,...(music?{music}:{}),...(renderer==='hyperframes'?{renderer}:{}),...(narration?{narration}:{}),...(narrationSeconds?{narrationSeconds}:{}),...(opening?{opening}:{})};
   const revision=createHash('sha256').update(JSON.stringify(draft)).digest('hex');
   await atomicWrite(path.join(dir,'promo.json'),JSON.stringify({...draft,revision}));
   return {title,revision,renderer};
@@ -119,6 +150,8 @@ export async function preparePromo(dir,input,production,rendererRoot,hyperframes
 export async function promoPresentation(dir,publicDir) {
   const input=JSON.parse(await readFile(path.join(dir,'promo.json'),'utf8'));
   const fps=30,gapFrames=0;
+  const direction=input.direction?normalizeAutomaticDirection(input.direction):null;
+  const design=direction?presentationDesign({theme:'moon',mode:'template',template:direction.template}):undefined;
   let from=input.opening?.frames??0;
   const rows=[];
   await mkdir(path.join(publicDir,'shots'),{recursive:true});
@@ -129,17 +162,31 @@ export async function promoPresentation(dir,publicDir) {
     if(createHash('sha256').update(bytes).digest('hex')!==image.split('.')[0])throw new Error('PROMO_ASSET_CHANGED');
     await writeFile(path.join(publicDir,'shots',image),bytes);
     const sourceFrames=cut.frames??Math.floor(seconds*fps),frames=sourceFrames+(cut.holdFrames??0);
-    rows.push({id:'cut-'+index,title,caption,from,frames,...(promoVideo.test(image)?{video:'shots/'+image,videoStart:cut.startFrame??0,...(cut.holdFrames?{videoFrames:sourceFrames}: {})}:{image:'shots/'+image}),...promoEffect(cut,input.renderer||'remotion'),stepStarts:cut.stepStarts});
+    rows.push({id:'cut-'+index,title,caption,from,frames,...(promoVideo.test(image)?{video:'shots/'+image,videoStart:cut.startFrame??0,...(cut.holdFrames?{videoFrames:sourceFrames}: {})}:{image:'shots/'+image}),...promoEffect(cut,input.renderer||'remotion'),stepStarts:cut.stepStarts,...(design?{promoDesign:design,designLayout:direction.layouts[index],promoStyle:direction.motion?.style}: {})});
     from+=frames;
+  }
+  if(direction?.motion){
+    const transitions=transitionPlan({rows:rows.map(row=>({...row,layout:row.designLayout})),motion:direction.motion});
+    transitions.forEach((item,i)=>{rows[i+1].promoTransition=item;});
   }
   const frames=4*fps;
   const durationInFrames=from+frames;
   let promoAudio;
-  if(input.soundEnabled!==false){
-    promoAudio='promo-sound.wav';
+  if(input.effectsEnabled===true){
+    promoAudio='promo-effects.wav';
     await writeFile(path.join(publicDir,promoAudio),promoSound(rows,durationInFrames/fps,fps));
   }
-  const bookends={...STUDIO_WATERMARK,creationYear:Number(new Intl.DateTimeFormat('en',{year:'numeric',timeZone:'Asia/Tokyo'}).format(new Date())),watermarkEnabled:input.watermarkEnabled,from,frames,tools:videoCredits({promo:true,promoAudio:!!promoAudio,renderer:input.renderer})};
+  let music;
+  if(input.music){
+    const {file,durationSeconds}=input.music;
+    if(!/^[a-f0-9]{64}\.mp3$/.test(file)||!Number.isFinite(durationSeconds)||durationSeconds<1||durationSeconds>1200)throw new Error('INVALID_MUSIC');
+    const bytes=await readFile(path.join(dir,file));
+    if(createHash('sha256').update(bytes).digest('hex')!==file.split('.')[0])throw new Error('PROMO_ASSET_CHANGED');
+    const src='shots/'+file;
+    await writeFile(path.join(publicDir,src),bytes);
+    music={src,durationSeconds,level:input.narration||input.opening?.file?.length?0.20:0.40,model:MUSIC_MODEL};
+  }
+  const bookends={endLabel:'',endUrl:'',owner:'',creationYear:Number(new Intl.DateTimeFormat('en',{year:'numeric',timeZone:'Asia/Tokyo'}).format(new Date())),...input.authorCredits,watermarkEnabled:input.watermarkEnabled,from,frames,tools:videoCredits({promo:true,promoAudio:!!promoAudio,renderer:input.renderer,music})};
   let promoNarration,promoNarrationSeconds;
   if(input.narration){
     if(!promoVoice.test(input.narration))throw new Error('INVALID_PROMO_NARRATION');
@@ -159,5 +206,5 @@ export async function promoPresentation(dir,publicDir) {
     await writeFile(path.join(publicDir,src),bytes);
     promoOpening={id:'promo-opening',caption:input.title,src,from:0,frames,seconds};
   }
-  return {title:input.title,promo:true,...(promoOpening?{promoOpening}:{}),renderer:input.renderer||'remotion',...(promoAudio?{promoAudio}:{}),...(promoNarration?{promoNarration,promoNarrationSeconds}:{}),rows,fps,gapFrames,bookends,durationInFrames};
+  return {title:input.title,promo:true,...(promoOpening?{promoOpening}:{}),renderer:input.renderer||'remotion',...(design?{design}:{}),...(music?{music}:{}),...(promoAudio?{promoAudio}:{}),...(promoNarration?{promoNarration,promoNarrationSeconds}:{}),rows,fps,gapFrames,bookends,durationInFrames};
 }

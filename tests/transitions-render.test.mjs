@@ -22,7 +22,7 @@ function pixels(png){
 test('all 35 real Chromium masks differ, retain subtitles, and keep the image aligned without mirrored clocks or repeated tiles',async t=>{
  if(process.platform!=='win32'){t.skip('Windows bundled renderer');return;}
  const root=process.cwd(),work=await mkdtemp(path.join(tmpdir(),'studio-transition-'));t.after(()=>rm(work,{recursive:true,force:true}));
- const choices=Object.entries(TRANSITION_VARIANTS).flatMap(([family,n])=>Array.from({length:n},(_,variant)=>({family,variant})));
+ const choices=Object.entries(TRANSITION_VARIANTS).filter(([family])=>family!=='cut').flatMap(([family,n])=>Array.from({length:n},(_,variant)=>({family,variant})));
  const entry=path.join(work,'main.tsx'),component=path.join(root,'runtime/motion-presentation.tsx').replaceAll('\\','/'),publicDir=path.join(work,'public');await mkdir(path.join(publicDir,'cuts'),{recursive:true});
  // Explicit test fixture, not provider output: four asymmetric color quadrants
  // expose mirrored clocks and incorrectly repeated/cropped images in tile masks.

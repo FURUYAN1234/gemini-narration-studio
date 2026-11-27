@@ -1,46 +1,29 @@
 import React from 'react';
-import {AbsoluteFill,Easing,Img,OffthreadVideo,interpolate,staticFile,useCurrentFrame} from 'remotion';
+import {AbsoluteFill,Freeze,Img,OffthreadVideo,staticFile,useCurrentFrame} from 'remotion';
 import type {PresentationData,Slide} from './presentation';
-import {promoSceneDirection} from './motion.mjs';
+import {fitText,promoSceneDirection,transitionSurface,videoBackground} from './motion.mjs';
+import {TransitionMask} from './motion-presentation';
 
-const clamp={extrapolateLeft:'clamp',extrapolateRight:'clamp'} as const;
-
-
-export function PromoSlide({row,data,index}:{row:Slide;data:PresentationData;index:number}){
+export function PromoSlide({row,data}:{row:Slide;data:PresentationData}){
   const frame=useCurrentFrame();
-  const palette=promoSceneDirection(row);
-  const imageLeft=index%2===1;
-  const direction=imageLeft?-1:1;
-  const entrance=Math.min(Math.round(palette.reveal*60),Math.max(5,Math.floor(row.frames*.35)));
-  const closing=Math.min(11,Math.max(3,Math.floor(row.frames*.18)));
-  const enter=interpolate(frame,[0,Math.ceil(entrance*23/30)],[0,1],{...clamp,easing:Easing.out(Easing.cubic)});
-  const reveal=interpolate(frame,[Math.floor(entrance/10),Math.ceil(entrance*28/30)],[100,0],{...clamp,easing:Easing.inOut(Easing.cubic)});
-  const copy=interpolate(frame,[Math.floor(entrance*.3),entrance],[0,1],{...clamp,easing:Easing.out(Easing.cubic)});
-  const exit=interpolate(frame,[row.frames-closing,row.frames],[0,1],{...clamp,easing:Easing.in(Easing.cubic)});
-  const zoom=interpolate(frame,[0,row.frames],[1,palette.zoom],clamp);
-  const trace=interpolate(frame,[13,44],[0,1],clamp);
-  const compact=(row.title?.length??0)>24||(row.caption?.length??0)>70;
-  const titleLength=Array.from(row.title||'').length;
-  const titleSize=compact?42:titleLength<=12?Math.min(64,Math.floor(495/Math.max(titleLength,1))):64;
-  const W=1160;
-  return <AbsoluteFill style={{background:palette.paper,color:'#f6fbff',fontFamily:'Noto Sans JP, sans-serif',overflow:'hidden'}}>
-    <div style={{position:'absolute',inset:0,background:`radial-gradient(ellipse at ${imageLeft?'29%':'72%'} 44%, ${palette.glow}, transparent 74%)`}}/>
-    <div style={{position:'absolute',inset:'72px 88px auto',display:'flex',justifyContent:'space-between',gap:48,alignItems:'center',color:palette.accent,fontSize:26,fontWeight:720}}>
-      <span>{data.title}</span>
-      <div style={{display:'flex',gap:8}}>{data.rows.map((cut,i)=><div key={cut.id} style={{width:48,height:5,background:'#ffffff35',borderRadius:6,overflow:'hidden'}}><div style={{height:'100%',width:`${i<index?100:i===index?frame/row.frames*100:0}%`,background:palette.accent}}/></div>)}</div>
+  const direction=promoSceneDirection(row);
+  const {stage,copy,stacked}=direction;
+  const heading=fitText(row.title||'',{width:copy.w,height:copy.h,maxSize:stacked?55:48,balance:true});
+  const caption=fitText(row.caption,{width:1768,height:114,maxSize:32,lineHeight:1.35});
+  const coverage=Math.max(0,1-frame/Math.max(1,Math.min(row.frames/4,direction.reveal*data.fps)));
+  const mediaStyle={width:'100%',height:'100%',objectFit:'contain'} as const;
+  const media=row.video
+    ? <OffthreadVideo muted trimBefore={row.videoStart??0} src={staticFile(row.video)} style={mediaStyle}/>
+    : row.image&&<Img src={staticFile(row.image)} style={mediaStyle}/>;
+  return <AbsoluteFill style={{...videoBackground(data.design||direction),color:direction.foreground,fontFamily:'Noto Sans JP, sans-serif',overflow:'hidden'}}>
+    <div style={{position:'absolute',top:51,left:76,right:76,color:direction.accent,fontSize:25,fontWeight:700}}>{data.title}</div>
+    <div style={{position:'absolute',top:stage.y,left:stage.x,width:stage.w,height:stage.h,overflow:'hidden',borderRadius:22}}>
+      {row.videoFrames&&frame>=row.videoFrames?<Freeze frame={row.videoFrames-1}>{media}</Freeze>:media}
     </div>
-    <div style={{position:'absolute',top:183,left:imageLeft?88:672,width:W,height:750,transform:`translateX(${direction*(((1-enter)-exit*.38)*palette.shift)}px) rotate(${direction*((1-enter)-exit*.33)*palette.shift/32}deg)`,opacity:1-exit,borderRadius:30,overflow:'hidden',boxShadow:`0 32px 90px #0009, 0 0 72px ${palette.glow}`}}>
-      <div style={{position:'absolute',inset:0,clipPath:palette.id==='quiet'?undefined:imageLeft?`inset(0 0 0 ${reveal}%)`:`inset(0 ${reveal}% 0 0)`,opacity:palette.id==='quiet'?.38+.62*enter:1,background:'#0b141c',display:'grid',placeItems:'center'}}>
-        {row.video?<OffthreadVideo muted trimBefore={row.videoStart??0} src={staticFile(row.video)} style={{width:'100%',height:'100%',objectFit:'contain'}}/>:
-          <Img src={staticFile(row.image!)} style={{width:'100%',height:'100%',objectFit:'contain',transform:`scale(${zoom})`,transformOrigin:imageLeft?'35% 42%':'65% 42%'}}/>}
-      </div>
-      <div style={{position:'absolute',inset:0,border:'2px solid #ffffff38',borderRadius:30,opacity:enter}}/>
-      <div style={{position:'absolute',top:0,left:imageLeft?'auto':18,right:imageLeft?18:'auto',width:(W-36)*trace,height:4,background:palette.accent,borderRadius:4}}/>
+    <div style={{position:'absolute',top:copy.y,left:copy.x,width:copy.w,height:copy.h,display:'flex',flexDirection:'column',justifyContent:'center'}}>
+      <div lang="ja" style={{fontSize:heading.size,fontWeight:850,lineHeight:1.24,whiteSpace:'pre-line',color:direction.heading}}>{heading.lines.join('\n')}</div>
     </div>
-    <div style={{position:'absolute',top:compact?222:295,left:imageLeft?1296:88,width:510,opacity:copy*(1-exit),transform:`translateY(${((1-copy)-exit*.36)*palette.shift*.35}px)`}}>
-      <div style={{width:86*copy,height:6,borderRadius:4,background:palette.accent,marginBottom:36}}/>
-      <div lang="ja" style={{fontSize:titleSize,fontWeight:850,lineHeight:1.24,lineBreak:'strict',textWrap:'balance',overflowWrap:'anywhere'}}>{row.title}</div>
-      {row.caption&&<div style={{fontSize:compact?24:30,lineHeight:1.6,color:'#dde7ee',marginTop:24,overflowWrap:'anywhere'}}>{row.caption}</div>}
-    </div>
+    {row.caption&&<div style={{position:'absolute',left:76,right:76,bottom:36,minHeight:99,display:'grid',alignContent:'center',fontSize:caption.size,lineHeight:1.35,color:direction.foreground,whiteSpace:'pre-line'}}>{caption.lines.join('\n')}</div>}
+    {row.promoTransition&&direction.reveal>0&&<TransitionMask choice={row.promoTransition} coverage={coverage} {...transitionSurface(row.promoTransition,{palette:direction,image:row.image})}/>}
   </AbsoluteFill>;
 }

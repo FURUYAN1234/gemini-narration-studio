@@ -2,10 +2,6 @@ import {promoSceneDirection} from './motion.mjs';
 
 const SAMPLE_RATE = 48000;
 const TAU = 2 * Math.PI;
-const CHORDS = [[57, 64, 67, 71], [53, 60, 64, 67], [60, 67, 71, 74], [55, 62, 65, 69]];
-const ARPEGGIO = [1, 2, 3, 2, 1, 2, 3, 1];
-const frequency = midi => 440 * 2 ** ((midi - 69) / 12);
-
 export function promoSound(rows, durationSeconds, fps) {
   const frames = Math.round(durationSeconds * SAMPLE_RATE);
   const left = new Float32Array(frames);
@@ -19,37 +15,13 @@ export function promoSound(rows, durationSeconds, fps) {
       right[i] += value * Math.sqrt((1 + pan) / 2);
     }
   }
-  const note = (start, midi, pan, gain, decay) => {
-    const omega = TAU * frequency(midi);
-    add(start, 1.5, pan, t => gain * Math.min(1, t / 0.014) * Math.exp(-t * decay) *
-      (Math.sin(omega * t) + 0.24 * Math.sin(2 * omega * t) + 0.08 * Math.sin(3 * omega * t)));
-  };
-  const lastCut = rows.at(-1);
-  const endCard = (lastCut.from + lastCut.frames) / fps;
-  const directions=rows.map(promoSceneDirection);
-  const bodyFrames=rows.reduce((sum,row)=>sum+row.frames,0);
-  const beat=rows.reduce((sum,row,index)=>sum+row.frames*directions[index].beat,0)/bodyFrames;
-  for (let step = 0; step * beat / 2 < endCard; step++) {
-    const time = step * beat / 2;
-    const chord = CHORDS[Math.floor(step / 16) % CHORDS.length];
-    note(time, chord[ARPEGGIO[step % ARPEGGIO.length]] + 12, step % 2 ? 0.38 : -0.38, beat > .63 ? .055 : .085, 5.1);
-    if (step % 4 === 0) note(time, chord[0] - 12, 0, 0.13, 3.6);
-    if (beat <= .63 && step % 2 === 0) add(time, 0.23, 0, t => 0.085 * Math.min(1, t / 0.007) *
-      Math.exp(-t * 19) * Math.sin(TAU * (53 * t + 2.9 * (1 - Math.exp(-20 * t)))));
-  }
-  for (const [index, row] of rows.entries()) {
-    const start = row.from / fps;
-    const treatment=directions[index];
-    if(treatment.id==='quiet')continue;
-    add(start, 0.48, 0, t => (treatment.id==='procedure'?.13:.24) * Math.sin(Math.PI * t / 0.48) *
-      (Math.sin(TAU * (170 * t + 350 * t * t)) + 0.19 * Math.sin(TAU * 1140 * t)));
-    note(start + 0.14, treatment.id==='comparison'?73:treatment.id==='procedure'?76:79, 0.42, 0.1, 8);
-  }
-  for (const [index, midi] of [57, 64, 69, 72].entries()) note(endCard + index * 0.11, midi, (index - 1.5) * 0.23, 0.14, 1.6);
-  for (const [index, midi] of [57, 64, 72].entries()) {
-    const omega = TAU * frequency(midi);
-    add(endCard, durationSeconds - endCard, (index - 1) * 0.4,
-      t => 0.036 * Math.min(1, t / 0.36) * Math.exp(-t * 0.5) * Math.sin(omega * t));
+  for(const [index,row] of rows.entries()){
+    const start=row.from/fps,end=(row.from+row.frames)/fps;
+    const direction=promoSceneDirection(row);
+    if(index>0&&row.promoTransition&&row.promoTransition.family!=='cut'&&direction.id!=='quiet'){
+      const span=Math.min(.28,(end-start)*.24);
+      add(start,span,0,t=>.12*Math.sin(Math.PI*t/span)*Math.sin(TAU*((direction.id==='procedure'?390:530)*t+210*t*t)));
+    }
   }
 
   const wav = Buffer.alloc(44 + frames * 4);

@@ -18,32 +18,8 @@ export const CutTransition=({row,data,palette,children}:{row:Slide;data:Presenta
  const frame=Math.min(useCurrentFrame(),row.frames-1);
  if(!data.motion)return <>{children}</>;
  const rows=data.rows.filter(r=>r.id!==data.bookends?.titleRowId),index=rows.findIndex(r=>r.id===row.id),plan=transitionPlan({rows,motion:data.motion}),state=transitionFrame({frame,frames:row.frames,fps:data.fps,motion:data.motion});
- const incoming=index>0?plan[index-1]:data.bookends?{family:'fade',variant:0,tone:'background'}:null,outgoing=plan[index];
- return <>{children}{incoming&&<TransitionMask choice={incoming} coverage={state.incoming} {...transitionSurface(incoming,{palette,image:row.image})}/>} {outgoing&&<TransitionMask choice={outgoing} coverage={state.outgoing} {...transitionSurface(outgoing,{palette,image:rows[index+1]?.image})}/>}</>;
-};
-
-// Every visual is driven by the render frame. No CSS animation or wall clock.
-export const MotionBackdrop=({d,m,frame,fps,index}:{d:Design;m:Motion;frame:number;fps:number;index:number})=>{
- const t=frame/fps,strength={subtle:.35,standard:.7,bold:1}[m.intensity],shift=t*9*strength;
- return <AbsoluteFill style={{overflow:'hidden',background:d.background}}>
-  {m.style==='cinematic'?<>
-   <div style={{position:'absolute',width:1450,height:1450,top:-670+Math.sin(t*.22)*75*strength,left:450+shift,background:`radial-gradient(ellipse,${d.accent}30,${d.accent}08 42%,transparent 69%)`,transform:`rotate(${t*2}deg)`}}/>
-   <svg width="1920" height="1080" viewBox="0 0 1920 1080" style={{position:'absolute',opacity:.42}}>
-    {[0,1,2].map(i=><ellipse key={i} cx={1460+shift} cy={460+index*30} rx={490+i*115} ry={310+i*78} fill="none" stroke={d.accent} strokeWidth={i===1?1.5:.7} transform={`rotate(${-32+Math.sin(t*.2)*8*strength} 1460 460)`}/>)}
-    <circle cx={1440+Math.cos(t*.36)*535} cy={450+Math.sin(t*.36)*345} r="5" fill={d.accent}/>
-   </svg>
-  </>:m.style==='kinetic'?<>
-   <div style={{position:'absolute',width:1500,height:300,left:650-shift*2,top:180,background:d.accent,opacity:.12,transform:`rotate(-24deg) translateX(${Math.sin(t*.25)*75*strength}px)`}}/>
-   <div style={{position:'absolute',width:950,height:950,border:`65px solid ${d.accent}`,opacity:.13,borderRadius:'50%',right:-460,top:-220,transform:`scale(${1+Math.sin(t*.4)*.04*strength})`}}/>
-   <div style={{position:'absolute',height:6,width:480,left:95+shift,top:92,background:d.accent}}/>
-  </>:<>
-   <div style={{position:'absolute',inset:0,opacity:.065,backgroundImage:`linear-gradient(${d.foreground} 1px,transparent 1px),linear-gradient(90deg,${d.foreground} 1px,transparent 1px)`,backgroundSize:'96px 96px',backgroundPosition:`${shift/2}px ${shift/3}px`}}/>
-   <svg width="1920" height="1080" viewBox="0 0 1920 1080" style={{position:'absolute',opacity:.3}}>
-    <path d="M 1200 -60 L 1200 170 Q 1200 220 1250 220 L 1740 220 Q 1800 220 1800 280 L 1800 900" fill="none" stroke={d.accent} strokeWidth="3" strokeDasharray="1700" strokeDashoffset={1700*(1-ease(t/2))}/>
-    {[0,1,2,3].map(i=><circle key={i} cx={1220+i*160} cy="220" r={5+Math.sin(t+i)*1.5*strength} fill={d.accent}/>)}
-   </svg>
-  </>}
- </AbsoluteFill>;
+ const incoming=index>0?plan[index-1]:undefined,outgoing=plan[index];
+ return <>{children}{incoming&&incoming.family!=='cut'&&<TransitionMask choice={incoming} coverage={state.incoming} {...transitionSurface(incoming,{palette,image:row.image})}/>} {outgoing&&outgoing.family!=='cut'&&<TransitionMask choice={outgoing} coverage={state.outgoing} {...transitionSurface(outgoing,{palette,image:rows[index+1]?.image})}/>}</>;
 };
 
 const Headline=({text,box,frame,fps,frames,color,size=112,center=false,kinetic=false}:{text:string;box:Box;frame:number;fps:number;frames:number;color:string;size?:number;center?:boolean;kinetic?:boolean})=>{
@@ -99,28 +75,24 @@ const Points=({row,box,d,frame,fps,style}:{row:Slide;box:Box;d:Design;frame:numb
  })}</div>;
 };
 
-export const MotionSlide=({row,data,index,design,theme,motion:m}:{row:Slide;data:PresentationData;index:number;design?:Design;theme:Theme;motion:Motion})=>{
- const frame=Math.min(useCurrentFrame(),row.frames-1),fps=data.fps,state=motionFrame({frame,frames:row.frames,fps,motion:m}),direction=sceneDirection({row,index,count:data.rows.length,motion:m});
+export const MotionSlide=({row,data,design,theme,motion:m}:{row:Slide;data:PresentationData;design?:Design;theme:Theme;motion:Motion})=>{
+ const frame=Math.min(useCurrentFrame(),row.frames-1),fps=data.fps,state=motionFrame({frame,frames:row.frames,fps,motion:m}),direction=sceneDirection({row,motion:m,design});
  const d:Design=design||{...theme,layout:'visual',decoration:'none',titleSize:64,imageSide:'right',imageRatio:.46,radius:16};
- const title=row.title||row.scene||data.title,points=row.points||[],hasImage=!!row.image,closing=direction.layout==='closing',sequence=direction.layout==='sequence'&&m.style==='editorial',left=direction.side==='left',kinetic=m.style==='kinetic';
+ const title=row.title||row.scene||data.title,points=row.points||[],hasImage=!!row.image,sequence=direction.layout==='sequence'&&m.style==='editorial',left=direction.side==='left',kinetic=m.style==='kinetic';
  const stage=ease((frame-Math.min(fps*.8,row.frames*.12))/Math.max(1,Math.min(fps*.8,row.frames*.14)));
- const imageBox:Box=closing?{x:1130,y:260,w:650,h:500}:sequence?{x:1140,y:235,w:660,h:610}:left?{x:100,y:210,w:795,h:650}:{x:1000,y:180,w:820,h:675};
- const textX=hasImage&&!closing&&left?970:110,textW=hasImage?closing?1000:800:1700;
- const targetHead:Box=sequence?{x:110,y:165,w:hasImage?990:1640,h:180}:closing?{x:110,y:230,w:hasImage?1000:1650,h:320}:{x:textX,y:hasImage?235:245,w:textW,h:points.length?300:450};
+ const imageBox:Box=sequence?{x:1140,y:235,w:660,h:610}:left?{x:100,y:210,w:795,h:650}:{x:1000,y:180,w:820,h:675};
+ const textX=hasImage&&left?970:110,textW=hasImage?800:1700;
+ const targetHead:Box=sequence?{x:110,y:165,w:hasImage?990:1640,h:180}:{x:textX,y:hasImage?235:245,w:textW,h:points.length?300:450};
  const headBox:Box=kinetic?{x:110+(targetHead.x-110)*stage,y:290+(targetHead.y-290)*stage,w:1700+(targetHead.w-1700)*stage,h:430+(targetHead.h-430)*stage}:targetHead;
  const caption=captionAtFrame(row,frame),captionFit=fitSubtitleText(caption,{width:1630});
- return <AbsoluteFill style={{fontFamily:'NarrationJapanese',overflow:'hidden',color:d.heading}}>
-  <MotionBackdrop d={d} m={m} frame={frame} fps={fps} index={index}/>
-  <div style={{position:'absolute',left:110,top:100,width:80+180*state.reveal,height:4,background:d.accent}}/>
+ return <AbsoluteFill style={{background:d.background,fontFamily:'NarrationJapanese',overflow:'hidden',color:d.heading}}>
   <div style={{position:'absolute',left:110,top:125,fontSize:22,letterSpacing:3,color:d.accent,opacity:state.reveal,maxWidth:1500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{row.scene||data.title}</div>
   {row.image&&(row.imageFocus?<FocusArtwork key={row.image} image={row.image} focus={row.imageFocus} box={imageBox} d={d} frame={frame} frames={row.frames} reveal={kinetic?stage:state.reveal}/>:<Artwork image={row.image} box={imageBox} m={m} state={{...state,reveal:kinetic?stage:state.reveal}} side={direction.side} frame={frame} fps={fps}/>)}
   <Headline text={title} box={headBox} frame={frame} fps={fps} frames={row.frames} color={d.heading} size={sequence?78:kinetic?174-56*stage:112} kinetic={kinetic}/>
-  {points.length>0&&<div style={{opacity:stage}}><Points row={row} box={sequence?{x:110,y:390,w:hasImage?940:1700,h:440}:closing?{x:110,y:590,w:hasImage?1000:1650,h:260}:{x:textX,y:590,w:textW,h:265}} d={d} frame={frame} fps={fps} style={m.style}/></div>}
-  {points.length===0&&<div style={{position:'absolute',left:headBox.x,top:Math.min(820,headBox.y+headBox.h+25),width:Math.min(headBox.w,520)*state.reveal,height:2,background:d.accent,opacity:.65}}/>}
+  {points.length>0&&<div style={{opacity:stage}}><Points row={row} box={sequence?{x:110,y:390,w:hasImage?940:1700,h:440}:{x:textX,y:590,w:textW,h:265}} d={d} frame={frame} fps={fps} style={m.style}/></div>}
   <div style={{position:'absolute',bottom:0,left:0,right:0,height:185,background:d.background,borderTop:`1px solid ${d.accent}55`,padding:'24px 110px 26px',display:'flex',alignItems:'center',justifyContent:'center'}}>
    <div data-motion-text="caption" style={{color:d.foreground,fontSize:captionFit.size,lineHeight:1.35,textAlign:'center'}}>{captionFit.lines.map((line:string,i:number)=><div key={i} style={{whiteSpace:'pre'}}>{line.replace(/\r?\n$/,'')}</div>)}</div>
   </div>
-  <div style={{position:'absolute',bottom:0,left:0,height:4,width:`${clamp((row.from+frame)/data.durationInFrames)*100}%`,background:d.accent}}/>
   <Audio src={staticFile(row.src)}/>
  </AbsoluteFill>;
 };

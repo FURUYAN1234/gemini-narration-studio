@@ -90,7 +90,7 @@ try{
   await renderMedia({serveUrl,composition,browserExecutable,cancelSignal:cancellation.cancelSignal,codec:'h264',audioCodec:'aac',crf:19,pixelFormat:'yuv420p',outputLocation:output,concurrency:1,timeoutInMilliseconds:120000,logLevel:'error',onProgress:p=>{const percent=Math.floor(p.progress*100);if(percent!==last){last=percent;report({stage:'rendering',progress:p.progress,renderedFrames:p.renderedFrames,encodedFrames:p.encodedFrames,totalFrames:composition.durationInFrames});}}});checkCanceled();
   }
   report({stage:'verifying',progress:0});
-  const requireAudio=!promo||!!data.promoAudio||!!data.promoNarration;
+  const requireAudio=!promo||!!(data.music||data.promoAudio||data.promoNarration||data.promoOpening);
   const run=promisify(execFile);checkCanceled();await fullDecodeVideo(ffmpeg,output,{signal:controller.signal,requireAudio});
   const {stdout}=await run(ffprobe,['-v','error','-show_streams','-show_format','-of','json',output],{windowsHide:true,maxBuffer:1024*1024,signal:controller.signal});checkCanceled();const metadata=JSON.parse(stdout),video=metadata.streams.find(s=>s.codec_type==='video'),audio=metadata.streams.find(s=>s.codec_type==='audio');
   if(!video||Boolean(audio)!==requireAudio||video.width!==composition.width||video.height!==composition.height||Math.abs(Number(metadata.format.duration)-composition.durationInFrames/composition.fps)>0.25)throw new Error('VIDEO_MEDIA_QA_FAILED');

@@ -6,11 +6,11 @@ import {AbsoluteFill,Audio,Composition,Freeze,Img,OffthreadVideo,Sequence,interp
 import {loadLocalFont} from './font-loader.mjs';
 import {captionAtFrame,fitSubtitleText} from './subtitles.mjs';
 import {musicVolume,musicClips,musicClipGain} from './music.mjs';
-import {MotionSlide,MotionBackdrop,FocusArtwork,CutTransition} from './motion-presentation';
-import {EXPANDED_LAYOUTS,templateGeometry,fitText,motionFrame,focusFrame,ease,pointSchedule} from './motion.mjs';
+import {MotionSlide,FocusArtwork,CutTransition} from './motion-presentation';
+import {EXPANDED_LAYOUTS,templateGeometry,fitText,motionFrame,focusFrame,ease,pointSchedule,videoBackground} from './motion.mjs';
 
 // Layouts adapt reveal.js themes (MIT; see vendor/reveal-LICENSE.txt).
-export type Slide={video?:string;videoStart?:number;videoFrames?:number;explanation?:Explanation;id:string;scene?:string;caption:string;src:string;from:number;frames:number;title?:string;points?:string[];image?:string;imageFocus?:{x:number;y:number;zoom:number;label:string};layout?:'title'|'split'|'steps';designLayout?:Design['layout'];subtitles?:{text:string;from:number;to:number}[]};
+export type Slide={video?:string;videoStart?:number;videoFrames?:number;explanation?:Explanation;id:string;scene?:string;caption:string;src:string;from:number;frames:number;title?:string;points?:string[];image?:string;imageFocus?:{x:number;y:number;zoom:number;label:string};layout?:'title'|'split'|'steps';designLayout?:Design['layout'];promoDesign?:Design;promoStyle?:'cinematic'|'kinetic'|'editorial';promoTransition?:{family:string;variant:number;tone:string};subtitles?:{text:string;from:number;to:number}[]};
 export type Design={name:string;layout:'split'|'visual'|'steps'|'editorial'|'focus'|'poster'|'gallery'|'rail'|'stack';background:string;foreground:string;heading:string;accent:string;decoration:string;titleSize:number;imageSide:string;imageRatio:number;radius:number};
 export type PresentationData={promo?:boolean;promoAudio?:string;promoNarration?:string;promoOpening?:(Slide&{seconds:number});bookends?:{titleRowId?:string;endLabel:string;endUrl:string;owner:string;creationYear:number;from:number;frames:number;watermarkEnabled?:boolean;tools?:string[]};gapFrames?:number;music?:{src:string;durationSeconds:number;level:number};title:string;fps:number;durationInFrames:number;rows:Slide[];design?:Design;motion?:{version:1;style:'cinematic'|'kinetic'|'editorial';intensity:'subtle'|'standard'|'bold';transitions?:string[];transitionTones?:string[]}|null};
 export type Theme={name:string;background:string;foreground:string;heading:string;accent:string};
@@ -41,7 +41,6 @@ const SlideView=({row,data,theme,index}:{row:Slide;data:PresentationData;theme:T
   const frame=useCurrentFrame(),opacity=interpolate(frame,[0,12],[0,1],{extrapolateRight:'clamp'}),layout=row.layout||(index===0?'title':row.image||row.video?'split':'steps');
   const points=row.points||[];
   return <AbsoluteFill style={{background:theme.background,color:theme.heading,fontFamily:font,padding:'65px 85px',overflow:'hidden'}}>
-    <div style={{position:'absolute',right:-120,top:-200,width:700,height:700,borderRadius:'50%',border:`1px solid ${theme.accent}`,opacity:.22}}/>
     <div style={{display:'flex',justifyContent:'space-between',fontSize:22,color:theme.accent,letterSpacing:3}}><span>{row.scene||data.title}</span><span>{String(index+1).padStart(2,'0')} / {data.rows.length}</span></div>
     <div style={{marginTop:layout==='title'?140:68,opacity,transform:`translateY(${(1-opacity)*18}px)`}}>
       <div style={{height:5,width:80,background:theme.accent,marginBottom:32}}/>
@@ -54,7 +53,7 @@ const SlideView=({row,data,theme,index}:{row:Slide;data:PresentationData;theme:T
   </AbsoluteFill>;
 };
 const DesignedSlide=({row,data,index,design:d}:{row:Slide;data:PresentationData;index:number;design:Design})=>{
- const frame=useCurrentFrame(),opacity=interpolate(frame,[0,12],[0,1],{extrapolateRight:'clamp'}),title=row.title||row.scene||data.title,points=row.points||[];
+ const frame=useCurrentFrame(),title=row.title||row.scene||data.title,points=row.points||[];
   const motion=data.motion,activeFrame=Math.min(frame,row.frames-1);
   const timing=motion?motionFrame({frame:activeFrame,frames:row.frames,fps:data.fps,motion}):null;
   const entrance=timing?1-timing.reveal:0,strength=timing?.strength||0;
@@ -64,16 +63,16 @@ const DesignedSlide=({row,data,index,design:d}:{row:Slide;data:PresentationData;
   const image=row.image||row.video?<div style={{width:'100%',height:'100%',overflow:'hidden',borderRadius:d.radius}}><CutMedia row={row} style={{width:'100%',height:'100%',objectFit:'contain',transform:artworkMotion}}/></div>:null;
   const heading=<FittedHeading text={title} width={!image?1750:d.layout==='visual'?665:['steps','focus'].includes(d.layout)?1750:1750*(1-d.imageRatio)-60} height={['steps','focus'].includes(d.layout)?210:300} size={d.titleSize}/>;
  const notes=<div style={{fontSize:32,lineHeight:1.8,color:d.foreground}}>{points.map((point,i)=><p key={i}>{point}</p>)}</div>;
- const grid=d.decoration==='grid'?{backgroundImage:`linear-gradient(${d.accent}22 1px,transparent 1px),linear-gradient(90deg,${d.accent}22 1px,transparent 1px)`,backgroundSize:'60px 60px'}:{};
-  return <AbsoluteFill data-template-layout={d.layout} style={{background:d.background,color:d.heading,fontFamily:font}}>
-   {motion&&<MotionBackdrop d={d} m={motion} frame={activeFrame} fps={data.fps} index={index}/>}
-   {d.decoration==='grid'&&<AbsoluteFill style={grid}/>}
-  {d.decoration==='band'&&<div style={{position:'absolute',top:0,right:0,width:40,height:'100%',background:d.accent}}/>}
+  return <AbsoluteFill data-template-layout={d.layout} style={{...videoBackground(d),color:d.heading,fontFamily:font}}>
   {d.decoration==='frame'&&<div style={{position:'absolute',inset:30,border:`2px solid ${d.accent}`,borderRadius:d.radius}}/>}
   <div style={{position:'absolute',top:58,left:85,right:85,display:'flex',justifyContent:'space-between',fontSize:22,letterSpacing:2,color:d.accent}}><span>{row.scene||data.title}</span><span>{String(index+1).padStart(2,'0')}カット / {data.rows.length}</span></div>
-   <div style={{position:'absolute',top:170,left:85,right:85,height:655,opacity:timing?.reveal??opacity,transform}}>
+   <div style={{position:'absolute',top:170,left:85,right:85,height:655,opacity:timing?.reveal??1,transform}}>
     {d.layout==='visual'?<div style={{display:'flex',gap:50,height:'100%',alignItems:'center'}}><div style={{width:image?'38%':'100%'}}>{heading}{notes}</div>{image&&<div style={{flex:1,height:'100%',padding:18,border:`2px solid ${d.accent}`,borderRadius:d.radius}}>{image}</div>}</div>
-   :d.layout==='steps'?<>{heading}<div style={{display:'flex',gap:28,marginTop:45}}>{(points.length?points:[row.scene||title]).map((point,i)=><div key={i} style={{flex:1,padding:32,border:`2px solid ${d.accent}`,borderRadius:d.radius,color:d.foreground,fontSize:32,lineHeight:1.6}}><span style={{color:d.accent,fontSize:24}}>STEP {i+1}</span><p>{point}</p></div>)}</div>{image&&<div style={{height:260,marginTop:25}}>{image}</div>}</>
+   :d.layout==='steps'?<div style={{display:'grid',gridTemplateColumns:image?(points.length?'minmax(0,1fr) minmax(0,2fr)':'minmax(0,1fr) minmax(0,2.4fr)'):'1fr',gap:42,height:'100%',alignItems:'center'}}>
+    <div><FittedHeading text={title} width={image?475:1750} height={image?220:280} size={d.titleSize}/>
+      {points.length>0&&<ol style={{display:'grid',gridTemplateColumns:image?'1fr':`repeat(${Math.min(points.length,3)},minmax(0,1fr))`,gap:14,paddingLeft:44,marginTop:25,color:d.foreground,fontSize:30,lineHeight:1.48}}>{points.map((point,i)=><li key={i}>{point}</li>)}</ol>}
+    </div>{image&&<div style={{height:625}}>{image}</div>}
+   </div>
    :d.layout==='focus'?<div style={{height:'100%',textAlign:'center'}}>{heading}<div style={{height:390,maxWidth:1050,margin:'35px auto 0'}}>{image||notes}</div>{image&&<div style={{display:'flex',justifyContent:'center',gap:45,fontSize:30,color:d.foreground}}>{points.map((point,i)=><span key={i}>{point}</span>)}</div>}</div>
     :<div style={{display:'flex',flexDirection:d.imageSide==='left'?'row-reverse':'row',gap:60,height:'100%'}}><div style={{flex:1,minWidth:0,paddingTop:d.layout==='editorial'?35:0,borderTop:d.decoration==='line'?`5px solid ${d.accent}`:undefined}}>{heading}{notes}</div>{image&&<div style={{width:d.imageRatio*100+'%',height:'100%',paddingLeft:d.layout==='editorial'?30:0,borderLeft:d.layout==='editorial'?`2px solid ${d.accent}`:undefined}}>{image}</div>}</div>}
   </div>
@@ -84,14 +83,14 @@ const DesignedSlide=({row,data,index,design:d}:{row:Slide;data:PresentationData;
 // New structures use the same bounded geometry with motion on or off.
 const ExpandedSlide=({row,data,index,design:d}:{row:Slide;data:PresentationData;index:number;design:Design})=>{
  const frame=Math.min(useCurrentFrame(),row.frames-1),points=row.points||[],g=templateGeometry(d.layout,{hasImage:!!(row.image||row.video),pointCount:points.length});
- const moving=!!data.motion,state=moving?motionFrame({frame,frames:row.frames,fps:data.fps,motion:data.motion}):null,reveal=state?.reveal??ease(frame/Math.max(1,Math.min(12,row.frames*.15)));
+ const moving=!!data.motion,state=moving?motionFrame({frame,frames:row.frames,fps:data.fps,motion:data.motion}):null,reveal=state?.reveal??1;
  const box=(b:{x:number;y:number;w:number;h:number}):React.CSSProperties=>({position:'absolute',left:b.x,top:b.y,width:b.w,height:b.h,boxSizing:'border-box'});
  const text=(value:string,b:{x:number;y:number;w:number;h:number},size:number,role:string,color:string)=>{
   const fit=fitText(value,{width:b.w,height:b.h,maxSize:size,lineHeight:1.25,balance:role==='heading'});
   return <div data-template-text={role} style={{...box(b),fontSize:fit.size,lineHeight:1.25,color,fontWeight:role==='heading'?800:500}}>{fit.lines.map((line:string,i:number)=><div key={i} style={{whiteSpace:'pre'}}>{line.replace(/\r?\n$/,'')}</div>)}</div>;
  };
  const times=pointSchedule(row,points.length,data.fps),active=Math.max(0,times.findLastIndex(time=>frame>=time)),caption=captionAtFrame(row,frame);
- return <AbsoluteFill data-video-layout={d.layout} style={{background:d.background,fontFamily:font,color:d.foreground,overflow:'hidden'}}>
+ return <AbsoluteFill data-video-layout={d.layout} style={{...videoBackground(d),fontFamily:font,color:d.foreground,overflow:'hidden'}}>
   <div style={{position:'absolute',left:110,right:110,top:90,borderBottom:`2px solid ${d.accent}`,paddingBottom:18,fontSize:22,color:d.accent,display:'flex',justifyContent:'space-between'}}><span>{row.scene||data.title}</span><span>{String(index+1).padStart(2,'0')} / {data.rows.length}</span></div>
   <div style={{opacity:reveal,transform:`translateY(${(1-reveal)*(data.motion?.style==='kinetic'?35:16)}px)`}}>{text(row.title||row.scene||data.title,g.heading,d.layout==='poster'?d.titleSize*1.7:d.titleSize,'heading',d.heading)}</div>
   {g.image&&row.video&&<div style={{...box(g.image),overflow:'hidden',opacity:reveal,border:`1px solid ${d.accent}66`,borderRadius:d.radius,padding:18}}><CutMedia row={row} style={{width:'100%',height:'100%',objectFit:'contain'}}/></div>}
@@ -110,16 +109,16 @@ const ExpandedSlide=({row,data,index,design:d}:{row:Slide;data:PresentationData;
   <Audio src={staticFile(row.src)}/>
  </AbsoluteFill>;
 };
-const BackgroundMusic=({data}:{data:PresentationData})=>{if(data.promo)return <>{data.promoAudio&&<Audio src={staticFile(data.promoAudio)} volume={data.promoNarration||data.promoOpening?0.24:1}/>} {data.promoNarration&&<Sequence from={data.promoOpening?.frames??0}><Audio src={staticFile(data.promoNarration)}/></Sequence>}</>;if(!data.music)return null;const music=data.music;return <>{musicClips(data.durationInFrames,Math.floor(music.durationSeconds*data.fps),data.fps).map(clip=><Sequence key={clip.from} from={clip.from} durationInFrames={clip.frames}><Audio src={staticFile(music.src)} volume={frame=>musicVolume(clip.from+frame,data,music.level)*musicClipGain(frame,clip)}/></Sequence>)}</>;};
+const BackgroundMusic=({data}:{data:PresentationData})=>{if(data.promo)return <><MusicTrack data={data}/>{data.promoAudio&&<Audio src={staticFile(data.promoAudio)} volume={data.promoNarration||data.promoOpening?0.24:1}/>} {data.promoNarration&&<Sequence from={data.promoOpening?.frames??0}><Audio src={staticFile(data.promoNarration)}/></Sequence>}</>;return <MusicTrack data={data}/>;};
+const MusicTrack=({data}:{data:PresentationData})=>{if(!data.music)return null;const music=data.music;return <>{musicClips(data.durationInFrames,Math.floor(music.durationSeconds*data.fps),data.fps).map(clip=><Sequence key={clip.from} from={clip.from} durationInFrames={clip.frames}><Audio src={staticFile(music.src)} volume={frame=>musicVolume(clip.from+frame,data,music.level)*musicClipGain(frame,clip)}/></Sequence>)}</>;};
 const Bookend=({data,theme,row}:{data:PresentationData;theme:Theme;row?:Slide})=>{
  const frame=useCurrentFrame(),ending=!row,b=data.bookends!,frames=ending?b.frames:row!.frames+(data.gapFrames??7);
  const fade=interpolate(frame,[0,18,Math.max(19,frames-18),frames],[0,1,1,0],{extrapolateLeft:'clamp',extrapolateRight:'clamp'});
- const accent=data.design?.accent||theme.accent,background=data.design?.background||theme.background,foreground=data.design?.foreground||theme.foreground;
- return <AbsoluteFill style={{background,color:foreground,fontFamily:font,overflow:'hidden'}}>
-  <div style={{position:'absolute',width:1100,height:1100,borderRadius:'50%',border:`1px solid ${accent}`,opacity:.10,top:-600,right:-280,transform:`translateX(${frame*.2}px)`}}/>
-  {ending?<><div style={{position:'absolute',left:152,top:230,right:152,opacity:fade}}><div style={{width:72,height:4,background:accent,marginBottom:24}}/><div style={{fontSize:42,fontWeight:700,marginBottom:30}}>動画制作環境</div>{b.tools?.map(name=><div key={name} style={{fontSize:36,lineHeight:1.6}}>{name}</div>)}</div>{b.watermarkEnabled!==false&&<div style={{position:'absolute',right:86,bottom:140,textAlign:'right',opacity:fade*.85,fontSize:26,lineHeight:1.8,maxWidth:1500,overflowWrap:'anywhere'}}><div>{b.endLabel}</div><div style={{fontSize:24}}>{b.endUrl}</div></div>}</>:
+ const palette=data.design||theme,{accent,foreground}=palette;
+ return <AbsoluteFill style={{...videoBackground(palette),color:foreground,fontFamily:font,overflow:'hidden'}}>
+  {ending?<><div style={{position:'absolute',left:152,top:230,right:152,opacity:fade}}><div style={{width:72,height:4,background:accent,marginBottom:24}}/><div style={{fontSize:42,fontWeight:700,marginBottom:30}}>動画制作環境</div>{b.tools?.map(name=><div key={name} style={{fontSize:36,lineHeight:1.6}}>{name}</div>)}</div>{b.watermarkEnabled!==false&&(b.endLabel||b.endUrl)&&<div style={{position:'absolute',right:86,bottom:140,textAlign:'right',opacity:fade*.85,fontSize:26,lineHeight:1.8,maxWidth:1500,overflowWrap:'anywhere'}}><div>{b.endLabel}</div><div style={{fontSize:24}}>{b.endUrl}</div></div>}</>:
   <AbsoluteFill style={{justifyContent:'center',padding:'100px 150px',opacity:fade,transform:`translateY(${interpolate(frame,[0,24],[22,0],{extrapolateRight:'clamp'})}px)`}}><div style={{width:110,height:5,background:accent,marginBottom:42}}/><FittedHeading text={row!.caption} width={1620} height={650} size={92} lineHeight={1.55}/></AbsoluteFill>}
-  {ending&&b.watermarkEnabled!==false&&<div style={{position:'absolute',right:86,bottom:80,maxWidth:550,textAlign:'right',overflowWrap:'anywhere',opacity:fade*.75,fontSize:25,letterSpacing:2}}>@{b.creationYear}/{b.owner}</div>}
+  {ending&&b.watermarkEnabled!==false&&b.owner&&<div style={{position:'absolute',right:86,bottom:80,maxWidth:550,textAlign:'right',overflowWrap:'anywhere',opacity:fade*.75,fontSize:25,letterSpacing:2}}>@{b.creationYear}/{b.owner}</div>}
   {row&&<Audio src={staticFile(row.src)}/>}
  </AbsoluteFill>;
 };
@@ -127,8 +126,8 @@ const BodySlide=({row,data,theme,index}:{row:Slide;data:PresentationData;theme:T
  const design=data.design&&row.designLayout?{...data.design,layout:row.designLayout}:data.design;
  if(row.explanation)return <ExplanationSlide row={row} data={data} theme={theme}/>;
  if(design)return EXPANDED_LAYOUTS.includes(design.layout)?<ExpandedSlide row={row} data={data} index={index} design={design}/>:<DesignedSlide row={row} data={data} index={index} design={design}/>;
- if(data.motion&&!row.video)return <MotionSlide row={row} data={data} index={index} theme={theme} motion={data.motion}/>;
+ if(data.motion&&!row.video)return <MotionSlide row={row} data={data} theme={theme} motion={data.motion}/>;
  return <SlideView row={row} data={data} theme={theme} index={index}/>;
 };
-export const NarratedPresentation=({data,theme}:{data:PresentationData;theme:Theme})=>{useJapaneseFont();return <AbsoluteFill><BackgroundMusic data={data}/>{data.promoOpening&&<Sequence durationInFrames={data.promoOpening.frames}><Bookend data={data} theme={theme} row={data.promoOpening}/></Sequence>}{data.rows.map((row,index)=><Sequence key={row.id} from={row.from} durationInFrames={row.frames+(data.gapFrames??7)}>{data.bookends?.titleRowId===row.id?<Bookend data={data} theme={theme} row={row}/>:data.promo?<PromoSlide row={row} data={data} index={index}/>:<CutTransition row={row} data={data} palette={data.design||theme}><BodySlide row={row} data={data} theme={theme} index={index}/></CutTransition>}</Sequence>)}{data.bookends&&data.bookends.frames>0&&<Sequence from={data.bookends.from} durationInFrames={data.bookends.frames}><Bookend data={data} theme={theme}/></Sequence>}</AbsoluteFill>;};
+export const NarratedPresentation=({data,theme}:{data:PresentationData;theme:Theme})=>{useJapaneseFont();return <AbsoluteFill><BackgroundMusic data={data}/>{data.promoOpening&&<Sequence durationInFrames={data.promoOpening.frames}><Bookend data={data} theme={theme} row={data.promoOpening}/></Sequence>}{data.rows.map((row,index)=><Sequence key={row.id} from={row.from} durationInFrames={row.frames+(data.gapFrames??7)}>{data.bookends?.titleRowId===row.id?<Bookend data={data} theme={theme} row={row}/>:data.promo?<PromoSlide row={row} data={data}/>:<CutTransition row={row} data={data} palette={data.design||theme}><BodySlide row={row} data={data} theme={theme} index={index}/></CutTransition>}</Sequence>)}{data.bookends&&data.bookends.frames>0&&<Sequence from={data.bookends.from} durationInFrames={data.bookends.frames}><Bookend data={data} theme={theme}/></Sequence>}</AbsoluteFill>;};
 export const NarratedPresentationComposition=({data,theme}:{data:PresentationData;theme:Theme})=><Composition id="GeminiNarratedPresentation" component={NarratedPresentation} defaultProps={{data,theme}} durationInFrames={data.durationInFrames} fps={data.fps} width={1920} height={1080}/>;

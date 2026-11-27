@@ -1,53 +1,63 @@
 // Declarative, offline choreography shared by rendering and the UI preview.
 // No scripts, URLs, provider calls or nondeterministic clocks enter a render.
-export const TRANSITION_VARIANTS=Object.freeze({wipe:4,diagonal:4,split:2,doors:2,blinds:2,checker:2,iris:5,diamond:1,ellipse:2,clock:2,stairs:4,tiles:4,fade:1});
+export const TRANSITION_VARIANTS=Object.freeze({wipe:4,diagonal:4,split:2,doors:2,blinds:2,checker:2,iris:5,diamond:1,ellipse:2,clock:2,stairs:4,tiles:4,fade:1,cut:1});
 export const TRANSITION_FAMILIES=Object.freeze(Object.keys(TRANSITION_VARIANTS));
 export const TRANSITION_TONES=Object.freeze(['image','background','accent','heading']);
-export const TRANSITION_INSTRUCTION='motion.transitionsに場面境界の順で切替を提案できます（最大30）。種類は'+TRANSITION_FAMILIES.join('/')+'。台本の意味、全体像から詳細への移動、要点の区切り、結びに合う切替を判断してください。同じ種類の連続や派手な効果の連発で退屈・散漫にせず、説明を読む静止時間を残します。静かな内容はfade/iris/ellipse、比較や手順はsplit/doors/blinds、場面の大きな変化はdiagonal/clock/tilesなどを使い分け、無理に全種類を使いません。motion.transitionTonesも同じ場面境界順で最大30件選べます。imageは次のカットに採用した実画像、background/accent/headingは選択中の背景色/アクセント色/文字色です。台本と配色の調和に合わせ、アクセント色一色の連発や明るい色の点滅を避けます。画像がない境界ではbackgroundを選び、静かな内容はimage/backgroundを中心にします。方向と時間は描画側が安全に決定します。';
-export const MOTION_SCHEMA={type:'object',additionalProperties:false,properties:{version:{type:'integer',enum:[1]},style:{type:'string',enum:['cinematic','kinetic','editorial']},intensity:{type:'string',enum:['subtle','standard','bold']},transitions:{type:'array',minItems:1,maxItems:30,items:{type:'string',enum:TRANSITION_FAMILIES}},transitionTones:{type:'array',minItems:1,maxItems:30,items:{type:'string',enum:TRANSITION_TONES}}},required:['version','style','intensity']};
+export function videoBackground(palette){
+ const base={backgroundColor:palette.background};
+ if(palette.decoration==='grid')return {...base,backgroundImage:`linear-gradient(${palette.accent}22 1px,transparent 1px),linear-gradient(90deg,${palette.accent}22 1px,transparent 1px)`,backgroundSize:'60px 60px'};
+ if(palette.decoration==='band')return {...base,backgroundImage:`linear-gradient(90deg,transparent 0 calc(100% - 40px),${palette.accent} calc(100% - 40px))`};
+ return base;
+}
+export const TRANSITION_INSTRUCTION='motion.transitionsとmotion.transitionTonesに場面境界の順で提案します。台本が1カットの場合は配列を省略し、2カット以上ではカット数から1を引いた数の項目を返します。種類は'+TRANSITION_FAMILIES.join('/')+'。見る人が操作・比較・場面の変化を理解する助けになる効果だけを選びます。演出する必要がない境界はcutです。色は採用画像または選択中の配色を使い、連続点滅を避けます。色の候補はimage、background、accent、headingです。';
+export const MOTION_SCHEMA={type:'object',additionalProperties:false,properties:{version:{type:'integer',enum:[1]},style:{type:'string',enum:['cinematic','kinetic','editorial']},intensity:{type:'string',enum:['subtle','standard','bold']},transitions:{type:'array',minItems:1,maxItems:299,items:{type:'string',enum:TRANSITION_FAMILIES}},transitionTones:{type:'array',minItems:1,maxItems:299,items:{type:'string',enum:TRANSITION_TONES}}},required:['version','style','intensity']};
 export function normalizeMotion(input){
  if(!input||typeof input!=='object'||Array.isArray(input)||!MOTION_SCHEMA.required.every(k=>Object.hasOwn(input,k))||Object.keys(input).some(k=>!Object.hasOwn(MOTION_SCHEMA.properties,k))||input.version!==1||!MOTION_SCHEMA.properties.style.enum.includes(input.style)||!MOTION_SCHEMA.properties.intensity.enum.includes(input.intensity))throw new Error('INVALID_MOTION');
- for(const [key,catalogue] of [['transitions',TRANSITION_FAMILIES],['transitionTones',TRANSITION_TONES]])if(Object.hasOwn(input,key)&&(!Array.isArray(input[key])||!input[key].length||input[key].length>30||input[key].some(t=>!catalogue.includes(t))))throw new Error('INVALID_MOTION');
+ for(const [key,catalogue] of [['transitions',TRANSITION_FAMILIES],['transitionTones',TRANSITION_TONES]])if(Object.hasOwn(input,key)&&(!Array.isArray(input[key])||!input[key].length||input[key].length>299||input[key].some(t=>!catalogue.includes(t))))throw new Error('INVALID_MOTION');
  return {version:1,style:input.style,intensity:input.intensity,...(input.transitions?{transitions:[...input.transitions]}:{}),...(input.transitionTones?{transitionTones:[...input.transitionTones]}:{})};
 }
-// Short promos have no planning API. Both renderers use the supplied
-// scene annotations and captions to pick a treatment locally.
-const promoTreatments=Object.freeze({
-  showcase:{id:'showcase',paper:'#111923',glow:'#253959',accent:'#a6bbff',surface:'#eaf2fb',beat:.5,shift:124,zoom:1.06,reveal:.32},
-  procedure:{id:'procedure',paper:'#091820',glow:'#103e45',accent:'#79ecdb',surface:'#e0f3ef',beat:.46,shift:38,zoom:1,reveal:.24},
-  comparison:{id:'comparison',paper:'#221917',glow:'#493024',accent:'#ffc67b',surface:'#fbefdf',beat:.58,shift:76,zoom:1,reveal:.37},
-  quiet:{id:'quiet',paper:'#221d2a',glow:'#42334c',accent:'#e9cafa',surface:'#f3ebf4',beat:.76,shift:0,zoom:1.025,reveal:.56},
-});
-export function promoSceneDirection({effect,title='',caption='',video}={}){
-  const text=title+' '+caption;
-  if(effect==='comparison')return promoTreatments.comparison;
-  if(effect==='focus'||effect==='steps')return promoTreatments.procedure;
-  if(/比較|比べ|違い|\b(?:comparison|compare|versus)\b/iu.test(text))return promoTreatments.comparison;
-  if(/静か|穏やか|風景|余韻|ゆっくり|\b(?:quiet|calm|scenic|reflective)\b/iu.test(text))return promoTreatments.quiet;
-  if(video||/操作|手順|手続き|クリック|ドロップ|\b(?:steps?|tutorial|click|setup)\b/iu.test(text))return promoTreatments.procedure;
-  return promoTreatments.showcase;
+// Both short renderers consume the same scenario plan. Geometry is chosen
+// from the intended use of the material, never from its sequence number.
+export function promoSceneDirection({promoDesign,designLayout,promoStyle,promoTransition,effect,video}={}){
+ const layout=designLayout||promoDesign?.layout||'split';
+ const stacked=(!effect||effect==='reveal')&&!video&&['poster','stack','focus','gallery'].includes(layout);
+ const imageLeft=promoDesign?.imageSide==='left';
+ const stage=stacked?{x:382,y:245,w:1152,h:648}:{x:imageLeft?76:632,y:160,w:1216,h:684};
+ const copy=stacked?{x:110,y:115,w:1700,h:120}:{x:imageLeft?1340:76,y:179,w:502,h:647};
+ const moving=!!promoStyle&&!!promoTransition&&promoTransition.family!=='cut';
+ const id=effect==='comparison'?'comparison':effect==='steps'||effect==='focus'||video||layout==='steps'?'procedure':promoStyle==='cinematic'?'quiet':promoStyle==='kinetic'?'kinetic':'editorial';
+ const beat={comparison:.62,procedure:.48,quiet:.79,kinetic:.41,editorial:.59}[id];
+ return {id,stage,copy,stacked,background:promoDesign?.background||'#14161e',heading:promoDesign?.heading||'#ffffff',foreground:promoDesign?.foreground||'#e1e4ec',accent:promoDesign?.accent||'#a9c6ff',reveal:moving?Math.min(.46,beat*.65):0};
 }
-// One choice per boundary, shared by the outgoing and incoming cuts. AI may
-// propose families; older projects use a deterministic, nonrepeating deck.
+
+// Apply the current plan to its corresponding boundary. For a repeated
+// effect, use an alternative that fits the next cut and its media.
+function alternateTransition(previous,next,motion){
+ const active=next?.layout==='steps'||next?.layout==='rail'||next?.video;
+ const comparison=next?.explanation?.type==='comparison';
+ const candidates=comparison?['split','doors','fade']
+  :active?['wipe','blinds','fade']
+  :next?.image&&motion.style==='cinematic'?['fade','ellipse','cut']
+  :['fade','wipe'];
+ return candidates.find(value=>value!==previous)||'cut';
+}
+
 export function transitionPlan({rows,motion}){
  const m=normalizeMotion(motion);
  if(!Array.isArray(rows))throw new Error('INVALID_TRANSITION');
- const style=MOTION_SCHEMA.properties.style.enum.indexOf(m.style);
- const pools={cinematic:['iris','diagonal','ellipse','wipe','diamond','split','fade','stairs','doors','clock','blinds','tiles','checker'],kinetic:['diagonal','tiles','split','clock','wipe','stairs','checker','diamond','doors','iris','blinds','ellipse','fade'],editorial:['blinds','split','stairs','doors','wipe','ellipse','fade','checker','iris','diagonal','diamond','tiles','clock']};
- const pool=m.intensity==='subtle'?['fade','iris','ellipse','wipe','split','doors']:pools[m.style],counts={};
- return Array.from({length:Math.max(0,rows.length-1)},(_,i)=>i).reduce((plan,i)=>{
-  let family=m.transitions?.[i]||pool[i%pool.length];
-  if(family===plan.at(-1)?.family)family=pool.find((t,j)=>j>=i%pool.length&&t!==family)||pool.find(t=>t!==family);
-  const variant=((counts[family]||0)+style)%TRANSITION_VARIANTS[family];counts[family]=(counts[family]||0)+1;
-  const hasImage=!!rows[i+1]?.image,tones=[...(hasImage?['image']:[]),'background','accent',...(m.intensity==='bold'?['heading']:[])];
-  let tone=m.transitionTones?.[i]||tones[i%tones.length];if(tone==='image'&&!hasImage)tone='background';
-  const previous=plan.at(-1);if(tone===previous?.tone&&(tone!=='image'||rows[i]?.image===rows[i+1]?.image))tone=tones.find(t=>t!==tone)||'background';
-  plan.push({family,variant,tone});return plan;
+ return rows.slice(1).reduce((plan,next,i)=>{
+  let family=m.transitions?.[i]||'cut';
+  if(family!=='cut'&&family===plan.at(-1)?.family)family=alternateTransition(family,next,m);
+  const tone=m.transitionTones?.[i]||'background';
+  const variant=plan.filter(choice=>choice.family===family).length%TRANSITION_VARIANTS[family];
+  plan.push({family,variant,tone:tone==='image'&&!next?.image?'background':tone});
+  return plan;
  },[]);
 }
+
 export function transitionSurface(choice,{palette,image}={}){
  if(!TRANSITION_TONES.includes(choice?.tone)||!palette||!['background','accent','heading'].every(k=>/^#[a-f\d]{6}$/i.test(palette[k])))throw new Error('INVALID_TRANSITION');
- if(image!==undefined&&(typeof image!=='string'||!/^cuts\/[a-z\d_-]+\.(?:png|jpe?g|webp|gif)$/i.test(image)))throw new Error('INVALID_TRANSITION');
+ if(image!==undefined&&(typeof image!=='string'||! /^(?:cuts|shots)\/[a-z\d_-]+\.(?:png|jpe?g|webp|gif)$/i.test(image)))throw new Error('INVALID_TRANSITION');
  return choice.tone==='image'?{color:palette.background,...(image?{image}:{})}:{color:palette[choice.tone]};
 }
 export function transitionFrame({frame,frames,fps,motion}){
@@ -62,7 +72,7 @@ export function transitionFrame({frame,frames,fps,motion}){
 export function transitionLayers(choice,coverage,color){
  const {family,variant}=choice||{};
  if(!TRANSITION_FAMILIES.includes(family)||!Number.isInteger(variant)||variant<0||variant>=TRANSITION_VARIANTS[family]||!Number.isFinite(coverage)||coverage<0||coverage>1||!/^#[a-f\d]{6}$/i.test(color))throw new Error('INVALID_TRANSITION');
- if(coverage===0)return [];if(coverage===1)return [{inset:0,background:color}];
+ if(coverage===0||family==='cut')return [];if(coverage===1)return [{inset:0,background:color}];
  const c=coverage,p=c*100,base={inset:0,background:color},clip=clipPath=>({...base,clipPath});
  const rect=(x,y,w,h)=>({left:x+'%',top:y+'%',width:w+'%',height:h+'%',background:color});
  if(family==='fade')return [{...base,opacity:c}];
@@ -124,11 +134,11 @@ export function motionFrame({frame,frames,fps,motion}){
  const entrance=Math.max(1,Math.min(fps*.8,frames*.22));
  return {progress,reveal:ease(frame/entrance),pan:(progress-.5)*36*strength,scale:1+progress*.065*strength,drift:Math.sin(progress*Math.PI)*22*strength,exit:ease((frame-(frames-Math.min(fps*.36,frames*.1)))/Math.max(1,Math.min(fps*.36,frames*.1))),strength};
 }
-export function sceneDirection({row,index,count,motion}){
+export function sceneDirection({row,motion,design}){
  normalizeMotion(motion);
  const points=row.points||[];
- const layout=index===0?'hero':index===count-1?'closing':points.length>=2?'sequence':row.image?'image':'statement';
- return {layout,side:index%2?'left':'right',style:motion.style};
+ const layout=points.length>=2?'sequence':row.image?'image':'statement';
+ return {layout,side:design?.imageSide||'right'};
 }
 const graphemeSegmenter=new Intl.Segmenter('ja',{granularity:'grapheme'}),wordSegmenter=new Intl.Segmenter('ja',{granularity:'word'});
 const graphemes=text=>[...graphemeSegmenter.segment(text)].map(s=>s.segment);

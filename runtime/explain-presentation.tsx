@@ -1,6 +1,6 @@
 import React from 'react';
 import {AbsoluteFill,Audio,Img,staticFile,useCurrentFrame} from 'remotion';
-import {ease,fitText} from './motion.mjs';
+import {ease,fitText,videoBackground} from './motion.mjs';
 import {captionAtFrame,fitSubtitleText} from './subtitles.mjs';
 import {explanationSchedule} from './explain-scenes.mjs';
 import type {Slide,PresentationData,Theme} from './presentation';
@@ -17,8 +17,7 @@ export const ExplanationSlide=({row,data,theme}:{row:Slide;data:PresentationData
  const reveal=(i:number)=>moving?ease((frame-times[i])/Math.max(1,Math.min(data.fps*.5,row.frames*.1))):1;
  const caption=fitSubtitleText(captionAtFrame(row,frame),{width:1700});
  const card=(i:number):React.CSSProperties=>({border:`2px solid ${d.accent}${active===i?'ff':'44'}`,borderRadius:20,background:`${d.accent}${active===i?'18':'08'}`,boxSizing:'border-box',overflow:'hidden'});
- return <AbsoluteFill data-explanation={e.type} style={{fontFamily:'NarrationJapanese',background:d.background,color:d.foreground,overflow:'hidden'}}>
-  <div aria-hidden="true" style={{position:'absolute',right:-180,top:-510,width:1100,height:1100,borderRadius:'50%',border:`2px solid ${d.accent}22`,transform:`scale(${1+intro*.05})`}}/>
+ return <AbsoluteFill data-explanation={e.type} style={{...videoBackground(d),fontFamily:'NarrationJapanese',color:d.foreground,overflow:'hidden'}}>
   <div style={{position:'absolute',left:110,top:93,width:100+150*intro,height:5,background:d.accent}}/>
   <div style={{position:'absolute',left:110,top:133,color:d.accent,fontSize:22,letterSpacing:2}}>{({comparison:'比べてわかる',steps:'順番に進める',stat:'数字で見る',bar:'数値を比べる'})[e.type]}</div>
   <div style={{position:'absolute',left:110,top:195,width:1700,height:125,opacity:intro,transform:`translateY(${(1-intro)*24*strength}px)`}}><Text text={row.title||row.scene||data.title} width={1700} height={125} size={76} color={d.heading}/></div>

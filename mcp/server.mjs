@@ -2,6 +2,8 @@ import {McpServer} from '@modelcontextprotocol/server';
 import {StdioServerTransport} from '@modelcontextprotocol/server/stdio';
 import * as z from 'zod/v4';
 import {readFile} from 'node:fs/promises';
+import {DESIGN_LAYOUTS,VIDEO_TEMPLATES} from '../runtime/designs.mjs';
+import {TRANSITION_FAMILIES,TRANSITION_TONES} from '../runtime/motion.mjs';
 
 const options=process.argv.slice(2);
 const port=options.length===0?6181:options.length===2&&options[0]==='--port'?Number(options[1]):0;
@@ -17,7 +19,7 @@ async function localAction(action,data){
   if(!/^[a-f0-9]{64}$/.test(token))throw new Error('STUDIO_IDENTITY_MISMATCH');
   const call=await fetch(origin+'/api/mcp-action',{
     method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':token},
-    body:JSON.stringify({action,...data}),redirect:'error',signal:AbortSignal.timeout(15000)
+    body:JSON.stringify({action,...data}),redirect:'error',signal:AbortSignal.timeout(action==='promo'?240000:15000)
   });
   const result=await call.json();
   if(!call.ok)throw new Error(/^[A-Z_]+$/.test(result.error)?result.error:'STUDIO_REQUEST_FAILED');
@@ -52,8 +54,8 @@ tool('studio_record_demo','Record only the localhost demo URL and exact UI steps
 tool('studio_edit_recording','Draft ordered cuts and Japanese captions from the names and timing of recorded operations. Call only after the user approves sending those details to Gemini. Never sends footage or entered values. Poll studio_project for recording.edit.','recording-edit',z.object({
   ...identity,file:recordingFile,sendOperationNamesToGemini:z.literal(true)
 }).strict(),false,true);
-tool('studio_render_promo','Render an animated product demo from imported screenshots or MP4s. Auto uses installed HyperFrames, otherwise Remotion. HyperFrames auto-selects a reveal, focus on the supplied region, sequential steps or a two-item comparison from supplied data. For narration, provide a separate titleCall audio asset to open before the body. Set openingTitleRequired to false only for an intentional exception. Poll studio_project for the verified MP4.','promo',z.object({
-  ...identity,title:z.string().min(1).max(90),watermarkEnabled:z.boolean().optional(),soundEnabled:z.boolean().optional(),narration:z.string().regex(/^[a-f0-9]{64}\.(wav|mp3)$/).optional(),titleCall:z.string().regex(/^[a-f0-9]{64}\.(wav|mp3)$/).optional(),openingTitleRequired:z.boolean().optional(),
+tool('studio_render_promo','Render an animated product demo from imported screenshots or MP4s. Provide a direction from this script and cut list, or set planConsent true after consent for one Gemini request with the cut titles and captions. With music on (default), the same consent authorizes a separate Lyria request. Set soundEnabled false for an offline render with an explicit direction. Auto chooses the installed renderer. For narration, provide a separate titleCall audio asset to open before the body. Set openingTitleRequired to false only for an intentional exception. Poll studio_project for the verified MP4.','promo',z.object({
+  ...identity,title:z.string().min(1).max(90),watermarkEnabled:z.boolean().optional(),soundEnabled:z.boolean().optional(),effectsEnabled:z.boolean().optional(),planConsent:z.boolean().optional(),direction:z.object({template:z.enum(VIDEO_TEMPLATES.map(t=>t.id)),motion:z.object({version:z.literal(1),style:z.enum(['cinematic','kinetic','editorial']),intensity:z.enum(['subtle','standard','bold']),transitions:z.array(z.enum(TRANSITION_FAMILIES)).min(1).max(299).optional(),transitionTones:z.array(z.enum(TRANSITION_TONES)).min(1).max(299).optional()}).strict().nullable(),layouts:z.array(z.enum(DESIGN_LAYOUTS).nullable()).min(1).max(6)}).strict().optional(),narration:z.string().regex(/^[a-f0-9]{64}\.(wav|mp3)$/).optional(),titleCall:z.string().regex(/^[a-f0-9]{64}\.(wav|mp3)$/).optional(),openingTitleRequired:z.boolean().optional(),
   renderer:z.enum(['auto','hyperframes','remotion']).optional(),
   cuts:z.array(z.object({
     image:z.string().regex(/^[a-f0-9]{64}\.(png|jpe?g|webp|mp4)$/),

@@ -6,6 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import {preparePromo} from '../promo.mjs';
 import {promoHtml} from '../hyperframes-promo.mjs';
+import {VIDEO_TEMPLATES} from '../designs.mjs';
 
 test('auto uses available HyperFrames, distinguishes cut effects, and respects an explicit renderer', async t => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'hyperframes-promo-'));
@@ -17,7 +18,10 @@ test('auto uses available HyperFrames, distinguishes cut effects, and respects a
   const steps = {...basic, steps: ['素材を選択', '出力を確認']};
   const focus = {...basic, focus: {x: 10, y: 20, width: 30, height: 15, label: '追加'}};
   const comparison = {...basic, comparison: [{label: '字幕', value: '3行'}, {label: '素材', value: '2点'}]};
-  const request = (input, installed) => preparePromo(dir, {title: '動作確認', ...input}, production, null, installed);
+  const request = (input, installed) => preparePromo(dir, {title: '動作確認', planConsent:true,soundEnabled:false,...input}, production, null, installed, {planDirection:async script=>{
+    assert.equal(script.split('\n').length,input.cuts.length);
+    return {title:'動作確認',template:'steps',motion:null,layouts:input.cuts.map(()=> 'steps')};
+  }});
   const draft = () => readFile(path.join(dir, 'promo.json'), 'utf8').then(JSON.parse);
 
   assert.equal((await request({cuts: [basic, steps, focus, comparison]}, true)).renderer, 'hyperframes');
@@ -42,7 +46,12 @@ test('auto uses available HyperFrames, distinguishes cut effects, and respects a
 test('long Japanese titles and captions are wrapped at sensible boundaries', () => {
   const title='ナレーション動画メーカー｜HyperFramesで操作デモ';
   const caption='録画した操作を見せたい順に並べ、伝わりやすいように字幕と読みを確かめます。';
-  const html=promoHtml({title,fps:30,durationInFrames:240,rows:[{title,caption,image:'shots/a.png',from:0,frames:120}],bookends:{from:120,frames:120,tools:['HyperFrames']}});
+  const html=promoHtml({title,fps:30,durationInFrames:310,promoOpening:{src:'shots/title.wav',seconds:2,frames:70},rows:[{title,caption,image:'shots/a.png',from:70,frames:120}],bookends:{from:190,frames:120,tools:['HyperFrames'],owner:'Creator',endUrl:'https://example.com',creationYear:2026}});
+  const ending=html.match(/<section class="clip end" id="ending"[^>]*>.*?<\/section>/)?.[0];
+  assert.ok(ending);
+  assert.match(ending, /制作クレジット/);
+  assert.doesNotMatch(ending, /HyperFramesで操作デモ/);
+  assert.match(ending, /@2026\/Creator/);
   assert.match(html, /<span>ナレーション動画メーカー<\/span><span>｜HyperFramesで操作デモ<\/span>/);
   assert.doesNotMatch(html, /<span>[モ。]<\/span>/);
   assert.match(html, /class="caption fitted-text"/);
@@ -55,31 +64,36 @@ test('the renderer can decode local video frames without opening page network ac
       {id:'cut-0', title:'素材', image:'shots/a.png', from:0, frames:90},
       {id:'cut-1', title:'録画', video:'shots/b.mp4', videoStart:15, from:90, frames:30},
     ],
-    bookends: {from:120,frames:120,tools:['HyperFrames']},
+    bookends: {from:120,frames:120,tools:['HyperFrames'],watermarkEnabled:false},
   });
   assert.match(result, /img-src &apos;self&apos; data:/);
   assert.match(result, /connect-src &apos;none&apos;/);
   assert.doesNotMatch(result, /<script>unexpected/);
   assert.match(result, /<\/section><video[^>]+data-start="3"[^>]+data-media-start="0.5" muted/);
+  assert.match(result, /class="left-credit"><strong>動画制作環境/);
+  assert.doesNotMatch(result, /class="right-credit"/);
 });
 
-test('short promos vary palette, timing and soundtrack with the same number of cuts', async () => {
+test('short promos follow selected layouts and only use optional sound at relevant boundaries', async () => {
   const {promoSceneDirection}=await import('../motion.mjs');
   const {promoSound}=await import('../promo-sound.mjs');
   const base={id:'cut-0',image:'shots/a.png',from:0,frames:90};
-  const quiet={...base,title:'静かな朝',caption:'ゆっくりと光が差します。'};
-  const tutorial={...base,title:'操作手順',caption:'画面のボタンをクリックします。'};
-  const compare={...base,title:'違いを比べる',caption:'変換した二つの原稿を比較。'};
+  const design=id=>VIDEO_TEMPLATES.find(template=>template.id===id).design;
+  const quiet={...base,title:'静かな朝',caption:'ゆっくりと光が差します。',promoStyle:'cinematic',promoDesign:design('gallery'),designLayout:'gallery'};
+  const tutorial={...base,title:'操作手順',caption:'画面のボタンをクリックします。',promoStyle:'editorial',promoDesign:design('flow'),designLayout:'steps'};
+  const compare={...base,title:'違いを比べる',caption:'変換した二つの原稿を比較。',promoStyle:'editorial',promoDesign:design('steps'),effect:'comparison',comparison:[]};
   assert.deepEqual([quiet,tutorial,compare].map(row=>promoSceneDirection(row).id),['quiet','procedure','comparison']);
   assert.equal(promoSceneDirection({...compare,effect:'steps'}).id,'procedure');
   const visual=row=>promoHtml({title:'紹介',fps:30,durationInFrames:210,rows:[row],
     bookends:{from:90,frames:120,tools:['HyperFrames']}});
-  assert.match(visual(quiet),/--scene-surface:#f3ebf4/);
-  assert.match(visual(tutorial),/--scene-surface:#e0f3ef/);
-  assert.match(visual(compare),/--scene-surface:#fbefdf/);
-  const pcm=row=>promoSound([row],7,30);
-  const audio=pcm(quiet);
-  assert.deepEqual(pcm(quiet),audio);
-  assert.notDeepEqual(audio,pcm(tutorial));
-  assert.notDeepEqual(pcm(tutorial),pcm(compare));
+  assert.match(visual(quiet),/--paper:#152b29/);
+  assert.match(visual(tutorial),/--paper:#f0f6f5/);
+  assert.match(visual(compare),/--paper:#fbf5e9/);
+  assert.doesNotMatch(visual(quiet),/class="meter"/);
+  assert.equal(promoSceneDirection(quiet).stacked,true);
+  assert.equal(promoSceneDirection(tutorial).stage.x,76);
+  const staticAudio=promoSound([quiet],7,30);
+  assert.ok(staticAudio.subarray(44).every(byte=>byte===0));
+  const activeAudio=promoSound([quiet,{...tutorial,from:90,promoTransition:{family:'wipe'}}],7,30);
+  assert.ok(activeAudio.subarray(44).some(byte=>byte!==0));
 });

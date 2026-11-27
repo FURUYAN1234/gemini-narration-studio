@@ -4,7 +4,7 @@ import {copyFile, mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {hyperframesInstallation} from './hyperframes-runtime.mjs';
-import {fitText,promoSceneDirection} from './motion.mjs';
+import {fitText,promoSceneDirection,transitionLayers,transitionSurface,videoBackground} from './motion.mjs';
 
 const font = fileURLToPath(new URL('./vendor/NotoSansJP.ttf', import.meta.url));
 const entities = {'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'};
@@ -33,104 +33,119 @@ function effectMarkup(row) {
   }
 }
 
-function mediaMarkup(row, index, fps) {
+const position = ({x,y,w,h}) => `left:${x}px;top:${y}px;width:${w}px;height:${h}px`;
+
+function mediaMarkup(row, index, fps, stage) {
   if (row.video) {
     const videoFrames = row.videoFrames ?? row.frames;
     const attrs = clock('video-' + index, seconds(row.from, fps), seconds(videoFrames, fps), 1);
-    const hold = row.holdImage ? '<img class="clip media video-stage" alt="" ' +
+    const stageStyle = ' style="' + position(stage) + '" ';
+    const hold = row.holdImage ? '<img class="clip media video-stage" alt="" ' + stageStyle +
       clock('hold-' + index, seconds(row.from + videoFrames, fps), seconds(row.frames - videoFrames, fps), 1) +
       ' src="' + escape(row.holdImage) + '">' : '';
-    return '<video class="media video-stage" ' + attrs + ' src="' + escape(row.video) +
+    return '<video class="media video-stage" ' + stageStyle + attrs + ' src="' + escape(row.video) +
       '" data-media-start="' + seconds(row.videoStart, fps) + '" muted playsinline></video>' + hold;
   }
   return '<img class="media" src="' + escape(row.image) + '" alt="">';
 }
 
 export function promoHtml(data) {
-  const {rows, fps, bookends, durationInFrames, promoAudio, promoNarration, promoNarrationSeconds, promoOpening} = data;
+  const {rows, fps, bookends, durationInFrames, promoAudio, promoNarration, promoNarrationSeconds, promoOpening,music} = data;
   const duration = seconds(durationInFrames, fps);
+  const palette = promoSceneDirection({promoDesign:data.design});
+  const background=videoBackground(data.design||palette);
   const scenes = rows.map((row, index) => {
     const attrs = clock('scene-' + index, seconds(row.from, fps), seconds(row.frames, fps), 0);
-    const heading = textBlock('h1', 'animated fitted-text', row.title, {width:473,height:210,maxSize:46,lineHeight:1.26});
+    const direction = promoSceneDirection(row);
+    const {stage,copy} = direction;
+    const heading = textBlock('h1', 'fitted-text', row.title, {width:copy.w,height:Math.min(copy.h,210),maxSize:direction.stacked?55:48,lineHeight:1.26});
     const caption = row.caption ? textBlock('p', 'caption fitted-text', row.caption, {width:1652,height:125,maxSize:35,lineHeight:1.18}) : '';
     const box = row.focus
-      ? '<div class="target animated" style="left:' + (76+row.focus.x*12.16) + 'px;top:' + (164+row.focus.y*6.84) +
-        'px;width:' + row.focus.width*12.16 + 'px;height:' + row.focus.height*6.84 + 'px"></div>'
+      ? '<div class="target" style="' + position({x:stage.x+row.focus.x*stage.w/100,y:stage.y+row.focus.y*stage.h/100,
+        w:row.focus.width*stage.w/100,h:row.focus.height*stage.h/100}) + '"></div>'
       : '';
-    const direction=promoSceneDirection(row);
-    return '<section class="clip scene" style="--scene-surface:'+direction.surface+';--scene-accent:'+direction.glow+'" ' + attrs + '><div class="identity">' + escape(data.title) +
-      '</div><div class="stage">' + (row.video?'':mediaMarkup(row, index, fps)) +
-      '</div>' + box + '<div class="copy">' + heading +
-      effectMarkup(row) + '</div>' + caption +
-      '<div class="meter"><i></i></div></section>' + (row.video?mediaMarkup(row, index, fps):'');
+    return '<section class="clip scene" style="--paper:'+direction.background+';--heading:'+direction.heading+
+      ';--text:'+direction.foreground+';--accent:'+direction.accent+'" ' + attrs + '><div class="identity">' + escape(data.title) +
+      '</div><div class="stage" style="' + position(stage) + '">' + (row.video?'':mediaMarkup(row,index,fps,stage)) +
+      '</div>' + box + '<div class="copy" style="' + position(copy) + '">' + heading +
+      effectMarkup(row) + '</div>' + caption + '</section>' + (row.video?mediaMarkup(row,index,fps,stage):'') +
+      (direction.reveal>0?'<div class="clip transition" '+clock('transition-'+index,seconds(row.from,fps),seconds(row.frames,fps),4)+'></div>':'');
   }).join('');
   const end = '<section class="clip end" ' + clock('ending', seconds(bookends.from, fps), seconds(bookends.frames, fps), 0)
-    + '><div class="end-inner">' + textBlock('h1', 'fitted-text', data.title, {width:1470,height:220,maxSize:65,lineHeight:1.28}) +
-      '<p>' + bookends.tools.map(escape).join(' · ') + '</p>'
-    + (bookends.watermarkEnabled ? '<small>' + escape(bookends.endLabel) + '<br>' + escape(bookends.endUrl) +
-       '<br>@' + escape(bookends.creationYear) + '/' + escape(bookends.owner) + '</small>' : '') + '</div></section>';
+    + '><div class="end-inner"><h1>制作クレジット</h1></div>'
+    + '<div class="left-credit"><strong>動画制作環境</strong><br>' + bookends.tools.map(escape).join('<br>') + '</div>'
+    + (bookends.watermarkEnabled !== false && (bookends.endLabel || bookends.endUrl || bookends.owner) ? '<div class="right-credit"><strong>' + escape(bookends.endLabel) + '</strong><br>' + escape(bookends.endUrl) +
+       (bookends.owner ? '<br>@' + escape(bookends.creationYear) + '/' + escape(bookends.owner) : '') + '</div>' : '') + '</section>';
   const opening = promoOpening ? '<section class="clip end" ' + clock('opening', 0, seconds(promoOpening.frames, fps), 0)
     + '><div class="end-inner">' + textBlock('h1', 'fitted-text', data.title, {width:1470,height:220,maxSize:78,lineHeight:1.28}) + '</div></section>' : '';
   const audio = (id, source, length, track, volume, from=0) => '<audio ' + clock(id, from, length, track) +
     ' src="' + escape(source) + '" data-volume="' + volume + '"></audio>';
   const timings = JSON.stringify(rows.map(row => {
-    const direction=promoSceneDirection(row);
-    return [seconds(row.from,fps),seconds(row.frames,fps),row.stepStarts,direction.reveal,direction.shift];
+    const direction = promoSceneDirection(row);
+    const transitionFrames = Math.max(1,Math.floor(Math.min(direction.reveal*fps,row.frames/4)));
+    const surface = direction.reveal>0?transitionSurface(row.promoTransition,{palette:direction,image:row.image}):null;
+    const frames = surface?Array.from({length:transitionFrames},(_,i)=>transitionLayers(row.promoTransition,1-i/transitionFrames,surface.color)):null;
+    return [seconds(row.from,fps),seconds(row.frames,fps),row.stepStarts,frames,surface?.image];
   }));
   return '<!doctype html><html lang="ja"><head><meta charset="utf-8">' +
     '<meta http-equiv="Content-Security-Policy" content="default-src &apos;self&apos;; img-src &apos;self&apos; data:; script-src &apos;self&apos; &apos;unsafe-inline&apos;; style-src &apos;unsafe-inline&apos;; connect-src &apos;none&apos;; object-src &apos;none&apos;; base-uri &apos;none&apos;">' +
     '<title>' + escape(data.title) + '</title><style>' + style + '</style><script src="./gsap.min.js"></script></head><body>' +
     '<main data-composition-id="studio-promo" data-start="0" data-duration="' + duration +
-    '" data-width="1920" data-height="1080" data-fps="' + fps + '">' + opening + scenes + end +
-    (promoAudio ? audio('music', promoAudio, duration, 2, promoNarration || promoOpening ? .42 : 1) : '') +
+    '" data-width="1920" data-height="1080" data-fps="' + fps + '" style="--paper:'+palette.background+';--heading:'+palette.heading+
+    ';--text:'+palette.foreground+';--accent:'+palette.accent+';--paper-pattern:'+(background.backgroundImage||'none')+
+    ';--paper-size:'+(background.backgroundSize||'auto')+'">' + opening + scenes + end +
+    (music?audio('music',music.src,Math.min(duration,music.durationSeconds),5,music.level):'') +
+    (promoAudio ? audio('effects', promoAudio, duration, 2, promoNarration || promoOpening ? .42 : 1) : '') +
     (promoOpening ? audio('opening-voice', promoOpening.src, promoOpening.seconds, 3, .93) : '') +
     (promoNarration ? audio('narration', promoNarration, promoNarrationSeconds, 3, .93, seconds(promoOpening?.frames??0, fps)) : '') +
     '</main><script>' +
     'const tl = gsap.timeline({paused: true});\n' +
-    timings + '.forEach(([from, length, steps, revealSeconds, shift], i) => {\n' +
+    timings + '.forEach(([from, length, steps, transition, image], i) => {\n' +
     '  const s = "#scene-" + i;\n' +
-    '  const reveal = Math.min(revealSeconds, length / 4);\n' +
-    '  tl.fromTo(s + " .stage", {opacity:shift ? .48 : .2, y:shift/5}, {opacity:1,y:0,duration:reveal,ease:"power2.out",immediateRender:false}, from);\n' +
-    '  const within = Math.min(.22, length/7);\n' +
-    '  tl.to(s + (steps ? " .animated:not(li)" : " .animated"), {opacity:1,y:0,duration:reveal,stagger:Math.min(.25,length/12),ease:"power2.out"}, from + within);\n' +
+    '  if (transition) {\n' +
+    '    const target = document.querySelector("#transition-" + i);\n' +
+    '    transition.forEach((layers,j)=>{\n' +
+    '      const frame = document.createElement("div"); frame.className="transition-frame"; frame.style.visibility="hidden";\n' +
+    '      for (const style of layers) { const layer=document.createElement("i"); Object.assign(layer.style,style); frame.append(layer);\n' +
+    '        if (image) { const picture=document.createElement("img"); picture.src=image; picture.alt=""; picture.style.left=-(parseFloat(style.left||0)*19.2)+"px"; picture.style.top=-(parseFloat(style.top||0)*8.95)+"px"; if(String(style.background).startsWith("conic-gradient")) layer.style.maskImage=style.background; if(style.transform) picture.style.transform=style.transform; layer.append(picture); }\n' +
+    '      }\n' +
+    '      target.append(frame); if(layers.length) { tl.set(frame,{visibility:"visible"},from+j/'+fps+'); tl.set(frame,{visibility:"hidden"},from+(j+1)/'+fps+'); }\n' +
+    '    });\n' +
+    '  }\n' +
     '  if (steps) document.querySelectorAll(s+" .steps li").forEach((item,j) => {\n' +
     '    const start = Math.min(steps[j], Math.max(0,length-1/30));\n' +
-    '    tl.to(item,{opacity:1,y:0,duration:Math.min(reveal,length-start),ease:"power2.out"},from+start);\n' +
+    '    item.style.opacity="0"; tl.set(item,{opacity:1},from+start);\n' +
     '  });\n' +
-    '  tl.to(s + " .meter i", {scaleX:1,duration:length,ease:"none"}, from);\n' +
     '});\n' +
-    'tl.fromTo(".end-inner",{opacity:0,y:16},{opacity:1,y:0,ease:"power2.out",duration:.42,immediateRender:false},' +
-     seconds(bookends.from, fps) + ');\n' +
     'window.__timelines = {"studio-promo": tl};</script></body></html>';
 }
 
 const style = '\
 @font-face{font-family:StudioJP;src:url("./StudioJP.ttf");font-display:block}\
 *{box-sizing:border-box}html,body,main{width:1920px;height:1080px;margin:0;overflow:hidden}\
-main{position:relative;background:#eaf2fb;color:#11263e;font-family:StudioJP,sans-serif}\
+main{position:relative;background:var(--paper);color:var(--text);font-family:StudioJP,sans-serif}\
 .clip{position:absolute;inset:0;overflow:hidden}\
-.scene{background:linear-gradient(135deg,#f9fbff,var(--scene-surface,#eaf2fb));padding:58px 76px}\
-.identity{height:66px;font-size:31px;line-height:1.3;color:#274a6d;font-weight:700;max-width:1740px}\
-.stage{position:absolute;left:76px;top:164px;width:1216px;height:684px;border-radius:26px;background:#162e49;overflow:hidden;outline:2px solid #b8cfe8;box-shadow:0 22px 48px #172d492b}\
+.scene,.end{background-color:var(--paper);background-image:var(--paper-pattern);background-size:var(--paper-size)}\
+.scene{padding:58px 76px}\
+.identity{height:66px;font-size:31px;line-height:1.3;color:var(--accent);font-weight:700;max-width:1740px}\
+.stage{position:absolute;border-radius:26px;background:var(--paper);overflow:hidden;}\
 .media{display:block;width:100%;height:100%;object-fit:contain}\
-.video-stage{position:absolute;left:76px;top:164px;width:1216px;height:684px;border-radius:26px;background:#162e49;z-index:2}\
-.copy{position:absolute;left:1348px;top:177px;right:76px;bottom:234px;display:flex;flex-direction:column;justify-content:center;overflow-wrap:anywhere}\
-h1{font-size:52px;line-height:1.28;margin:0;color:#142e4b;overflow-wrap:anywhere;max-height:8em}\
+.video-stage{position:absolute;border-radius:26px;background:var(--paper);z-index:2}\
+.copy{position:absolute;display:flex;flex-direction:column;justify-content:center;overflow-wrap:anywhere}\
+h1{font-size:52px;line-height:1.28;margin:0;color:var(--heading);overflow-wrap:anywhere;max-height:8em}\
 .copy h1{line-height:1.26;text-wrap:balance}\
 .fitted-text span{display:block;line-break:strict;word-break:normal}\
-.animated{opacity:0;transform:translateY(12px)}\
-.target{position:absolute;border:6px solid #ffb947;box-shadow:0 0 0 2px #142e4b;border-radius:8px;pointer-events:none;z-index:3}\
-.focus-label,.steps li,.comparison div{margin:16px 0 0;padding:15px 19px;border-left:5px solid #416b9b;background:#f9fcff;border-radius:0 10px 10px 0;font-size:28px;line-height:1.3;overflow-wrap:anywhere}\
-.focus-label{border-color:#c87918}\
+\
+.target{position:absolute;border:6px solid var(--accent);box-shadow:0 0 0 2px #142e4b;border-radius:8px;pointer-events:none;z-index:3}\
+.focus-label,.steps li,.comparison div{margin:16px 0 0;padding:15px 19px;border-left:5px solid var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--paper));border-radius:0 10px 10px 0;font-size:28px;line-height:1.3;overflow-wrap:anywhere}\
+.focus-label{border-color:var(--accent)}\
 .steps{margin:9px 0 0;padding-left:46px}\
-.steps li::marker{font-weight:bold;color:#345d8e}\
+.steps li::marker{font-weight:bold;color:var(--accent)}\
 .comparison{margin:9px 0 0;display:grid;gap:9px}.comparison div{margin:0}\
-.comparison dt{color:#31577f;font-size:24px}.comparison dd{font-weight:700;margin:6px 0 0}\
-.caption{position:absolute;left:76px;right:76px;bottom:43px;margin:0;height:143px;display:grid;align-content:center;padding:9px 43px;background:#102840;color:#fff;border-radius:18px;font-size:35px;line-height:1.18;overflow-wrap:anywhere}\
-.meter{position:absolute;bottom:27px;left:76px;right:76px;height:4px;background:#b8cfe8;border-radius:2px}\
-.meter i{display:block;width:100%;height:100%;transform:scaleX(0);transform-origin:left;background:var(--scene-accent,#416b9b)}\
-.end{background:linear-gradient(135deg,#112940,#26496e);color:#dceafb;display:grid;place-items:center;text-align:center}\
-.end-inner{width:1550px}.end h1{color:#fff;margin:0 0 39px;font-size:65px;text-wrap:balance}.end p{font-size:31px;line-height:1.42}.end small{display:block;margin-top:44px;font-size:25px;line-height:1.5}';
+.comparison dt{color:var(--accent);font-size:24px}.comparison dd{font-weight:700;margin:6px 0 0}\
+.caption{position:absolute;left:76px;right:76px;bottom:43px;margin:0;height:143px;display:grid;align-content:center;padding:9px 43px;background:var(--paper);color:var(--text);border-radius:18px;font-size:35px;line-height:1.18;overflow-wrap:anywhere}\
+.end{color:var(--text);display:grid;place-items:center;text-align:center}\
+.end-inner{width:1550px}.end h1{color:var(--heading);margin:0 0 39px;font-size:65px;text-wrap:balance}.transition{bottom:185px;z-index:4}.transition-frame{position:absolute;inset:0}.transition-frame i{position:absolute;overflow:hidden}.transition-frame img{position:absolute;width:1920px;height:895px;object-fit:contain}.left-credit,.right-credit{position:absolute;bottom:72px;font-size:31px;line-height:1.5}.left-credit{left:76px;text-align:left}.right-credit{right:76px;text-align:right}';
 
 export async function renderHyperframesPromo({data, project, output, browser, signal, report}) {
   const runtime = await hyperframesInstallation();

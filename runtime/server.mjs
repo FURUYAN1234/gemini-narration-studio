@@ -140,7 +140,11 @@ export async function startServer({session,port=6181,startupMode='resume',sample
     if(input.projectId!==projectId||input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');
     inputBusy=true;
     try{
-      const draft=await preparePromo(promo.sourceDir,input,production,rendererRoot,!!hyperframes);
+      const draft=await preparePromo(promo.sourceDir,input,production,rendererRoot,!!hyperframes,{
+        planDirection:async script=>(await session.planScenarioDirection({script,voiceMode:'manual'})).direction,
+        generateMusic:options=>musicFactory?musicFactory(options):session.generateMedia('music',options),
+        ...(musicFactory?{inspectMusic:(_target,result)=>result.durationSeconds}:{}),
+      });
       return {...promo.start({...draft,promo:true}),renderer:draft.renderer};
     }
     finally{inputBusy=false;}
@@ -563,7 +567,7 @@ export async function startServer({session,port=6181,startupMode='resume',sample
         if(input.consent!==true)throw new Error('GENERATION_CONSENT_REQUIRED');
         if(input.revision!==session.revision()||input.productionRevision!==production.finalInputsHash())throw new Error('STALE_REVISION');
         const brief=production.status().brief;
-        if(brief.scriptMode!=='existing'||brief.autoDirection!==true)throw new Error('SCRIPT_OPERATION_NOT_ALLOWED');
+        if(brief.autoDirection!==true)throw new Error('SCRIPT_OPERATION_NOT_ALLOWED');
         if(!parseScriptParts(brief.script).length)throw new Error('SCRIPT_REQUIRED');
         inputBusy=true;
         try{
