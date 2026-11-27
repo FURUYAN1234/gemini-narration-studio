@@ -702,7 +702,7 @@ $('save-bookends').addEventListener('click',guarded(async()=>{await pending(save
 function updateTimingControls(){
  const busy=state.busy||localBusy||isFinalized();
  $('watermark-enabled').checked=state.production?.watermarkEnabled!==false;$('watermark-enabled').disabled=!!(busy||state.video?.running);
- $('cut-pause').disabled=!!busy;$('cut-pause').value=String(state.production?.pauseSeconds??7/30);
+ $('cut-pause').disabled=!!(busy||state.video?.running);$('cut-pause').value=String(state.production?.pauseSeconds??7/30);
 }
 
 $('watermark-enabled').addEventListener('change',guarded(async()=>{const enabled=$('watermark-enabled').checked;await pending(async()=>render(await api('watermark-preference',{enabled,revision:state.revision,productionRevision:state.productionRevision}),true));message('末尾のウォーターマークを'+(enabled?'ON':'OFF')+'にしました。音声・BGMは再利用します。');}));

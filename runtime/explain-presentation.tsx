@@ -1,5 +1,5 @@
 import React from 'react';
-import {AbsoluteFill,Audio,Img,staticFile,useCurrentFrame} from 'remotion';
+import {AbsoluteFill,Img,staticFile,useCurrentFrame} from 'remotion';
 import {ease,fitText,videoBackground} from './motion.mjs';
 import {captionAtFrame,fitSubtitleText} from './subtitles.mjs';
 import {explanationSchedule} from './explain-scenes.mjs';
@@ -11,11 +11,11 @@ const Text=({text,width,height,size,color,weight=700}:{text:string;width:number;
  return <div data-explanation-text style={{fontSize:f.size,lineHeight:1.25,color,fontWeight:weight}}>{f.lines.map((line:string,i:number)=><div key={i} style={{whiteSpace:'pre'}}>{line}</div>)}</div>;
 };
 export const ExplanationSlide=({row,data,theme}:{row:Slide;data:PresentationData;theme:Theme})=>{
- const e=row.explanation!,d=data.design||theme,frame=Math.min(useCurrentFrame(),row.frames-1),times=explanationSchedule(row,e),moving=!!data.motion;
+ const localFrame=useCurrentFrame(),e=row.explanation!,d=data.design||theme,frame=Math.min(localFrame,row.frames-1),times=explanationSchedule(row,e),moving=!!data.motion;
  const strength={subtle:.35,standard:.7,bold:1}[data.motion?.intensity||'standard'],intro=moving?ease(frame/Math.max(1,Math.min(data.fps*.45,row.frames*.1))):1;
  const active=Math.max(0,times.findLastIndex((t:number)=>frame>=t)),width=row.image?1240:1700,top=355,height=460,gap=28;
  const reveal=(i:number)=>moving?ease((frame-times[i])/Math.max(1,Math.min(data.fps*.5,row.frames*.1))):1;
- const caption=fitSubtitleText(captionAtFrame(row,frame),{width:1700});
+ const caption=fitSubtitleText(captionAtFrame(row,localFrame),{width:1700});
  const card=(i:number):React.CSSProperties=>({border:`2px solid ${d.accent}${active===i?'ff':'44'}`,borderRadius:20,background:`${d.accent}${active===i?'18':'08'}`,boxSizing:'border-box',overflow:'hidden'});
  return <AbsoluteFill data-explanation={e.type} style={{...videoBackground(d),fontFamily:'NarrationJapanese',color:d.foreground,overflow:'hidden'}}>
   <div style={{position:'absolute',left:110,top:93,width:100+150*intro,height:5,background:d.accent}}/>
@@ -29,6 +29,5 @@ export const ExplanationSlide=({row,data,theme}:{row:Slide;data:PresentationData
    {e.type==='bar'&&(()=>{const max=Math.max(...e.items.map(i=>Number(i.value.replaceAll(',','')))),h=height/e.items.length,labelW=width*.25,valueW=width*.2,barW=width-labelW-valueW-32;return <>{e.items.map((item,i)=>{const r=reveal(i),fraction=Number(item.value.replaceAll(',',''))/max;return <div key={i} style={{position:'absolute',left:0,top:i*h,width,height:h-14,display:'flex',alignItems:'center',gap:16}}><div style={{width:labelW}}><Text text={item.label} width={labelW} height={h-20} size={36} color={d.foreground}/></div><div style={{width:barW,height:Math.min(60,h-28),background:`${d.accent}16`,borderLeft:`2px solid ${d.accent}`,borderRadius:4}}><div data-chart-bar style={{width:`${fraction*r*100}%`,height:'100%',background:d.accent,borderRadius:'0 4px 4px 0'}}/></div><div style={{width:valueW,opacity:.4+.6*r}}><Text text={item.value+e.unit} width={valueW} height={h-20} size={42} color={d.heading}/></div></div>;})}</>;})()}
   </div>
   <div style={{position:'absolute',left:0,right:0,top:895,height:185,background:d.background,borderTop:`1px solid ${d.accent}66`,display:'flex',alignItems:'center',justifyContent:'center'}}><div data-explanation-caption style={{fontSize:caption.size,lineHeight:1.35,textAlign:'center',color:d.foreground}}>{caption.lines.map((line:string,i:number)=><div key={i} style={{whiteSpace:'pre'}}>{line}</div>)}</div></div>
-  <Audio src={staticFile(row.src)}/>
  </AbsoluteFill>;
 };

@@ -11,7 +11,7 @@ import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {NarrationSession,SAMPLE_SETTINGS,VOICE_GENDERS,previewFingerprint} from './core.mjs';
 import {themeTokens,THEME_NAMES} from './themes.mjs';
-import {ProductionInputs,MAX_ASSET_BYTES,isHiraganaReading,normalizeReview,normalizeBrief,normalizeDraftRecord,bindVoiceChoice,voiceScriptHash,validateAsset,safeText,normalizeBookends,normalizeScriptReadings,isScriptReadingReady,isCutVideo} from './production.mjs';
+import {ProductionInputs,DEFAULT_CUT_PAUSE_SECONDS,MAX_ASSET_BYTES,isHiraganaReading,normalizeReview,normalizeBrief,normalizeDraftRecord,bindVoiceChoice,voiceScriptHash,validateAsset,safeText,normalizeBookends,normalizeScriptReadings,isScriptReadingReady,isCutVideo} from './production.mjs';
 import {assertScriptOperation,parseScriptParts,FRESH_BRIEF,FRESH_PRESENTATION} from './script-flow.mjs';
 import {VoiceSamples} from './samples.mjs';
 import {StudioVideo,findRendererRoot,mediaRange} from './video.mjs';
@@ -48,7 +48,7 @@ export async function startServer({session,port=6181,startupMode='resume',sample
   }else if(projectId!=='original')session=await session.openRelated(await projectPath(projectId));
   const rendererRoot=videoRendererRoot||await findRendererRoot(root);
   let production=await ProductionInputs.open(session.outputDir);
-  const hadJob=await stat(path.join(session.outputDir,'job.json')).then(()=>true,e=>{if(e.code==='ENOENT')return false;throw e;});if(!hadJob){await session.setPresentation(FRESH_PRESENTATION);await production.saveBrief(FRESH_BRIEF);await production.savePause(.8);}
+  const hadJob=await stat(path.join(session.outputDir,'job.json')).then(()=>true,e=>{if(e.code==='ENOENT')return false;throw e;});if(!hadJob){await session.setPresentation(FRESH_PRESENTATION);await production.saveBrief(FRESH_BRIEF);await production.savePause(DEFAULT_CUT_PAUSE_SECONDS);}
   if(startupMode==='new')await clearPreviousProjects(projectId);
   let unsavedDraft=null,draftCanceled=false,adoptionError=null;let resumed=hadJob;
   const sourceMediaOptions=rendererRoot?{videoDuration:async(file,signal)=>videoDuration(rendererRoot,await production.assetPath(file),signal)}:{};
@@ -371,7 +371,7 @@ export async function startServer({session,port=6181,startupMode='resume',sample
             await atomicWrite(path.join(destination,'production.json'),JSON.stringify(revisedProduction,null,2));
             try{await atomicWrite(path.join(destination,'video-scenes.json'),await readFile(path.join(source,'video-scenes.json'),'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
           }
-        }await switchProject(id,{fresh:route==='/api/new-project'});if(route==='/api/new-project'){await session.setPresentation(FRESH_PRESENTATION);await production.saveBrief(FRESH_BRIEF);await production.savePause(.8);}await clearPreviousProjects(id);}finally{inputBusy=false;}
+        }await switchProject(id,{fresh:route==='/api/new-project'});if(route==='/api/new-project'){await session.setPresentation(FRESH_PRESENTATION);await production.saveBrief(FRESH_BRIEF);await production.savePause(DEFAULT_CUT_PAUSE_SECONDS);}await clearPreviousProjects(id);}finally{inputBusy=false;}
         return json(res,200,status());
       }
       if(!['/api/key','/api/connection-check','/api/cancel','/api/preview','/api/prepare-samples','/api/render-video'].includes(route))production.assertWritable();

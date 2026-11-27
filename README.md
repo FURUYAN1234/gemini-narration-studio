@@ -120,6 +120,8 @@ The pictures are real app screens; their example script is for demonstrating ope
 
 Captions use bounded, word-aware balanced lines across all templates, retaining every character. Long subtitles shrink to fit their lane. BGM is automatic and its level drops during narration. / 字幕は全テンプレートで単語を考慮した均等な行割りを使い、文字を削らず枠内へ収めます。長い字幕は文字を縮小します。BGMは自動で付き、ナレーション中に音量を下げます。
 
+New narration projects leave one second between cuts by default. A new scene appears during the pause, before its narration and captions start. Adjust the pause in Step 3 and render again with existing audio and music. / 新しいナレーション動画では、カット間の標準の間は1秒です。余白の途中で次の場面が見え、その後に声と字幕が入ります。③で間を調整し、作成済みの音声・BGMで書き出し直せます。
+
 Use the optional cut-level image or script correction controls when needed. They state whether an API is used. To edit a finalized production, press **最終確定を解除して編集を再開**; this retains its assets and does not itself generate anything. / 必要なカットの画像や台本の修正欄を使います。API利用の有無は各操作に表示します。確定後の編集は **最終確定を解除して編集を再開** を押します。素材を引き継ぎ、この操作だけでは生成しません。
 
 ## Save, resume and start again / 保存・再開・新しい制作

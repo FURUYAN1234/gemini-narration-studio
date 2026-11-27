@@ -14,6 +14,7 @@ import {videoCredits} from './video-credits.mjs';
 import {promoPresentation} from './promo.mjs';
 import {renderHyperframesPromo} from './hyperframes-promo.mjs';
 import {videoDuration} from './demo-recording.mjs';
+import {planSceneSwitches} from './scene-timing.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url)),args=process.argv.slice(2),option=name=>{const index=args.indexOf(name);return index<0?undefined:args[index+1];};
 const report=event=>console.log(JSON.stringify(event));
@@ -51,6 +52,7 @@ try{
   let extraVideoFrames=0;
   for(const row of data.rows){
     row.from+=extraVideoFrames;
+    row.narrationFrames=row.frames;
     const asset=production.cutMedia(row);
     if(asset){
       const destination=path.join(publicDir,'cuts',asset.file),src='cuts/'+asset.file;
@@ -76,6 +78,8 @@ try{
   }
   data.bookends.from+=extraVideoFrames;
   data.durationInFrames+=extraVideoFrames;
+  const shots=planSceneSwitches(data.rows,data.bookends.from,data.gapFrames,data.fps);
+  data.rows.forEach((row,index)=>Object.assign(row,shots[index]));
   const music=production.effectiveMusic();if(music){await writeFile(path.join(publicDir,'cuts',music.file),await production.readAsset(music.file));data.music={src:'cuts/'+music.file,durationSeconds:music.durationSeconds,level:music.level};}
   data.bookends.tools=[...new Set([...videoCredits({provider:data.provider,settings:data.settings,music}),...artworkTools])];
   }
@@ -96,7 +100,7 @@ try{
   if(!video||Boolean(audio)!==requireAudio||video.width!==composition.width||video.height!==composition.height||Math.abs(Number(metadata.format.duration)-composition.durationInFrames/composition.fps)>0.25)throw new Error('VIDEO_MEDIA_QA_FAILED');
   if(!promo)await extractVideoAudio(ffmpeg,output,output.replace(/\.mp4$/,'.m4a'),{signal:controller.signal});
   checkCanceled();
-  await writeFile(path.join(sourceDir,'video','media-qa.json'),JSON.stringify({fullDecode:true,renderer:data.renderer||'remotion',frames:composition.durationInFrames,fps:composition.fps,metadata,provider:data.provider,settings:data.settings,...(data.music?{music:data.music}:{}),...(data.bookends?{bookends:data.bookends}:{}),rows:data.rows.map(r=>({id:r.id,image:r.image,video:r.video,videoStart:r.videoStart,videoFrames:r.videoFrames,from:r.from,file:r.file,frames:r.frames,explanation:r.explanation?.type,effect:r.effect})),renderedAt:new Date().toISOString()},null,2));report({stage:'verifying',progress:1});
+  await writeFile(path.join(sourceDir,'video','media-qa.json'),JSON.stringify({fullDecode:true,renderer:data.renderer||'remotion',frames:composition.durationInFrames,fps:composition.fps,metadata,provider:data.provider,settings:data.settings,...(data.music?{music:data.music}:{}),...(data.bookends?{bookends:data.bookends}:{}),rows:data.rows.map(r=>({id:r.id,image:r.image,video:r.video,videoStart:r.videoStart,videoFrames:r.videoFrames,from:r.from,screenFrom:r.screenFrom,screenFrames:r.screenFrames,narrationFrames:r.narrationFrames,file:r.file,frames:r.frames,explanation:r.explanation?.type,effect:r.effect})),renderedAt:new Date().toISOString()},null,2));report({stage:'verifying',progress:1});
 }catch(error){
   // This local renderer never receives credentials. Keep bounded, redacted
   // diagnostics on disk so encoding failures can be diagnosed without UI logs.

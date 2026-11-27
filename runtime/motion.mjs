@@ -60,12 +60,13 @@ export function transitionSurface(choice,{palette,image}={}){
  if(image!==undefined&&(typeof image!=='string'||! /^(?:cuts|shots)\/[a-z\d_-]+\.(?:png|jpe?g|webp|gif)$/i.test(image)))throw new Error('INVALID_TRANSITION');
  return choice.tone==='image'?{color:palette.background,...(image?{image}:{})}:{color:palette[choice.tone]};
 }
-export function transitionFrame({frame,frames,fps,motion}){
+export function transitionFrame({frame,frames,fps,motion,outgoingFrom=0}){
  const m=normalizeMotion(motion);
  if(!Number.isFinite(frame)||!Number.isInteger(frames)||frames<1||!Number.isFinite(fps)||fps<=0)throw new Error('INVALID_MOTION_TIMING');
  if(frames<8)return {incoming:0,outgoing:0};
  const duration=Math.max(1,Math.min(fps*({subtle:.28,standard:.4,bold:.5}[m.intensity]),(frames-1)*.12));
- return {incoming:1-ease(frame/duration),outgoing:ease((frame-(frames-1-duration))/duration)};
+ const outgoingDuration=Math.min(duration,frames-1-outgoingFrom);
+ return {incoming:1-ease(frame/duration),outgoing:outgoingDuration>0?ease((frame-(frames-1-outgoingDuration))/outgoingDuration):0};
 }
 // Native CSS masks, bounded to at most 24 tiles; the caller clips these layers
 // above the subtitle lane. Full/empty endpoints are exact for every variant.

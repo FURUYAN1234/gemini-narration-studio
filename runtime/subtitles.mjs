@@ -23,7 +23,11 @@ export function buildSubtitleCues({caption,speech,bytes,fps,frames}){
  for(let i=0;i<texts.length-1;i++){cumulative+=weights[i];const target=frames*cumulative/total,min=edges.at(-1)+1,max=frames-(texts.length-1-i),window=Math.max(fps*.5,frames*.12),candidates=pauses.filter(p=>p>=min&&p<=max&&Math.abs(p-target)<=window);const chosen=candidates.sort((a,b)=>Math.abs(a-target)-Math.abs(b-target))[0]??Math.round(target);edges.push(Math.max(min,Math.min(max,chosen)));}
  edges.push(frames);return texts.map((text,i)=>({text,from:edges[i],to:edges[i+1],timing:'estimated'}));
 }
-export function captionAtFrame(row,frame){return row.subtitles?row.subtitles.find(c=>frame>=c.from&&frame<c.to)?.text||'':row.caption||'';}
+export function captionAtFrame(row,frame){
+ const speechFrame=frame-(row.narrationLead??0);
+ if(speechFrame<0)return '';
+ return row.subtitles?row.subtitles.find(c=>speechFrame>=c.from&&speechFrame<c.to)?.text||'':row.caption||'';
+}
 
 // The same bounded, word-aware line layout is used by every video template.
 export function fitSubtitleText(text,{width=1700}={}){

@@ -9,6 +9,8 @@ import path from 'node:path';
 import {NarrationSession} from '../core.mjs';
 import {ProductionInputs,normalizePause} from '../production.mjs';
 import {startServer} from '../server.mjs';
+import {planSceneSwitches} from '../scene-timing.mjs';
+import {captionAtFrame} from '../subtitles.mjs';
 const file='a'.repeat(64)+'.png';
 const brief={scriptMode:'ai',assetMode:'mixed',script:'',instructions:'説明動画',references:{text:'制作の説明',urls:[]}};
 const output={visualStyle:'白地に青い図',title:'制作',summary:'制作の流れ',voice:'Kore',voiceReason:'解説',motion:{version:1,style:'editorial',intensity:'standard'},sources:[{id:'text',summary:'制作の説明'}],rows:[{purpose:'detail',caption:'制作します。',speech:'せいさくします。',title:'制作',points:[],imageFile:'',imagePrompt:'漫画制作の机とペン。文字なし。',imageReason:'工程を示す素材がない',sourceIds:['text']}]};
@@ -128,4 +130,35 @@ test('bookend image exemption is limited to title; ED extends music timing and s
  assert.equal((await ProductionInputs.open(dir)).status().bookends.creationYear,2021);
  const current={title:'制作',rows,pauseSeconds:.8};assert.equal(musicTimeline({...current,bookends:p.status().bookends}).durationInFrames,musicTimeline(current).durationInFrames+120);
  assert.throws(()=>musicTimeline({...current,bookends:{endSeconds:-4}}),/INVALID_BOOKENDS/);
+});
+
+test('new productions default to a one-second pause and respect an explicit zero',async(t)=>{
+ const dir=await mkdtemp(path.join(tmpdir(),'standard-cut-pause-'));t.after(()=>rm(dir,{recursive:true,force:true}));
+ const production=await ProductionInputs.open(dir);
+ assert.equal(production.status().pauseSeconds,1);
+ await production.savePause(0);
+ assert.equal((await ProductionInputs.open(dir)).status().pauseSeconds,0);
+});
+
+test('the next distinct picture appears inside a pause before its speech and subtitles',()=>{
+ const rows=[{from:0,frames:90},{from:120,frames:100},{from:250,frames:185}];
+ const shots=planSceneSwitches(rows,465,30,30);
+ assert.deepEqual(shots,[
+  {screenFrom:0,screenFrames:108,narrationLead:0},
+  {screenFrom:108,screenFrames:130,narrationLead:12},
+  {screenFrom:238,screenFrames:227,narrationLead:12},
+ ]);
+ const cut={...rows[1],...shots[1],subtitles:[{text:'あたらしい場面',from:0,to:100}]};
+ assert.equal(captionAtFrame(cut,11),'');
+ assert.equal(captionAtFrame(cut,12),'あたらしい場面');
+ assert.equal(captionAtFrame(cut,112),'');
+});
+
+test('adjacent ranges of one recording and explicit zero keep their exact frame boundaries',()=>{
+ const rows=[{from:0,video:'demo.mp4',videoStart:0,videoFrames:90},{from:120,video:'demo.mp4',videoStart:90,videoFrames:80}];
+ assert.deepEqual(planSceneSwitches(rows,230,30,30),[
+  {screenFrom:0,screenFrames:120,narrationLead:0},
+  {screenFrom:120,screenFrames:110,narrationLead:0},
+ ]);
+ assert.equal(planSceneSwitches([{from:0},{from:90}],170,0,30)[1].screenFrom,90);
 });

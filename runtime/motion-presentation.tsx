@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {AbsoluteFill,Audio,Img,staticFile,useCurrentFrame,delayRender,continueRender,cancelRender} from 'remotion';
+import {AbsoluteFill,Img,staticFile,useCurrentFrame,delayRender,continueRender,cancelRender} from 'remotion';
 import {ease,clamp,fitText,motionFrame,sceneDirection,pointSchedule,focusFrame,transitionPlan,transitionFrame,transitionLayers,transitionSurface} from './motion.mjs';
 import {captionAtFrame,fitSubtitleText} from './subtitles.mjs';
 import type {Slide,PresentationData,Design,Theme} from './presentation';
@@ -15,9 +15,12 @@ export const TransitionMask=({choice,coverage,color,image}:{choice:{family:strin
  return <div key={i} style={{position:'absolute',...style,...(image?{overflow:'hidden',background:color,...(clock?{maskImage:String(style.background).replace(color,'#ffffff')}: {})}:{})}}>{image&&<Img src={staticFile(image)} style={{position:'absolute',left:-x,top:-y,width:1920,height:895,objectFit:'contain',...(style.transform==='scaleX(-1)'?{transform:'scaleX(-1)'}:{})}}/>}</div>;
 })}</div>;
 export const CutTransition=({row,data,palette,children}:{row:Slide;data:PresentationData;palette:Design|Theme;children:React.ReactNode})=>{
- const frame=Math.min(useCurrentFrame(),row.frames-1);
+ const frames=row.screenFrames??row.frames;
+ const frame=Math.min(useCurrentFrame(),frames-1);
  if(!data.motion)return <>{children}</>;
- const rows=data.rows.filter(r=>r.id!==data.bookends?.titleRowId),index=rows.findIndex(r=>r.id===row.id),plan=transitionPlan({rows,motion:data.motion}),state=transitionFrame({frame,frames:row.frames,fps:data.fps,motion:data.motion});
+ const rows=data.rows.filter(r=>r.id!==data.bookends?.titleRowId),index=rows.findIndex(r=>r.id===row.id),plan=transitionPlan({rows,motion:data.motion});
+ const outgoingFrom=data.gapFrames&&row.screenFrames!==undefined?(row.narrationLead??0)+row.frames:0;
+ const state=transitionFrame({frame,frames,fps:data.fps,motion:data.motion,outgoingFrom});
  const incoming=index>0?plan[index-1]:undefined,outgoing=plan[index];
  return <>{children}{incoming&&incoming.family!=='cut'&&<TransitionMask choice={incoming} coverage={state.incoming} {...transitionSurface(incoming,{palette,image:row.image})}/>} {outgoing&&outgoing.family!=='cut'&&<TransitionMask choice={outgoing} coverage={state.outgoing} {...transitionSurface(outgoing,{palette,image:rows[index+1]?.image})}/>}</>;
 };
@@ -76,7 +79,7 @@ const Points=({row,box,d,frame,fps,style}:{row:Slide;box:Box;d:Design;frame:numb
 };
 
 export const MotionSlide=({row,data,design,theme,motion:m}:{row:Slide;data:PresentationData;design?:Design;theme:Theme;motion:Motion})=>{
- const frame=Math.min(useCurrentFrame(),row.frames-1),fps=data.fps,state=motionFrame({frame,frames:row.frames,fps,motion:m}),direction=sceneDirection({row,motion:m,design});
+ const localFrame=useCurrentFrame(),frame=Math.min(localFrame,row.frames-1),fps=data.fps,state=motionFrame({frame,frames:row.frames,fps,motion:m}),direction=sceneDirection({row,motion:m,design});
  const d:Design=design||{...theme,layout:'visual',decoration:'none',titleSize:64,imageSide:'right',imageRatio:.46,radius:16};
  const title=row.title||row.scene||data.title,points=row.points||[],hasImage=!!row.image,sequence=direction.layout==='sequence'&&m.style==='editorial',left=direction.side==='left',kinetic=m.style==='kinetic';
  const stage=ease((frame-Math.min(fps*.8,row.frames*.12))/Math.max(1,Math.min(fps*.8,row.frames*.14)));
@@ -84,7 +87,7 @@ export const MotionSlide=({row,data,design,theme,motion:m}:{row:Slide;data:Prese
  const textX=hasImage&&left?970:110,textW=hasImage?800:1700;
  const targetHead:Box=sequence?{x:110,y:165,w:hasImage?990:1640,h:180}:{x:textX,y:hasImage?235:245,w:textW,h:points.length?300:450};
  const headBox:Box=kinetic?{x:110+(targetHead.x-110)*stage,y:290+(targetHead.y-290)*stage,w:1700+(targetHead.w-1700)*stage,h:430+(targetHead.h-430)*stage}:targetHead;
- const caption=captionAtFrame(row,frame),captionFit=fitSubtitleText(caption,{width:1630});
+ const caption=captionAtFrame(row,localFrame),captionFit=fitSubtitleText(caption,{width:1630});
  return <AbsoluteFill style={{background:d.background,fontFamily:'NarrationJapanese',overflow:'hidden',color:d.heading}}>
   <div style={{position:'absolute',left:110,top:125,fontSize:22,letterSpacing:3,color:d.accent,opacity:state.reveal,maxWidth:1500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{row.scene||data.title}</div>
   {row.image&&(row.imageFocus?<FocusArtwork key={row.image} image={row.image} focus={row.imageFocus} box={imageBox} d={d} frame={frame} frames={row.frames} reveal={kinetic?stage:state.reveal}/>:<Artwork image={row.image} box={imageBox} m={m} state={{...state,reveal:kinetic?stage:state.reveal}} side={direction.side} frame={frame} fps={fps}/>)}
@@ -93,6 +96,5 @@ export const MotionSlide=({row,data,design,theme,motion:m}:{row:Slide;data:Prese
   <div style={{position:'absolute',bottom:0,left:0,right:0,height:185,background:d.background,borderTop:`1px solid ${d.accent}55`,padding:'24px 110px 26px',display:'flex',alignItems:'center',justifyContent:'center'}}>
    <div data-motion-text="caption" style={{color:d.foreground,fontSize:captionFit.size,lineHeight:1.35,textAlign:'center'}}>{captionFit.lines.map((line:string,i:number)=><div key={i} style={{whiteSpace:'pre'}}>{line.replace(/\r?\n$/,'')}</div>)}</div>
   </div>
-  <Audio src={staticFile(row.src)}/>
  </AbsoluteFill>;
 };
