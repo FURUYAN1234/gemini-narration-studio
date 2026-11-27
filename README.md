@@ -31,9 +31,9 @@ Turn reference materials and scripts into 16:9 videos with Japanese narration, c
 
 Use **使い方マニュアル（PDF）** in the app header to read the bundled guide in a separate tab and save it from the PDF viewer. / アプリ上部の **使い方マニュアル（PDF）** から別タブで読めます。保存はPDFビューアーから行えます。ネット接続やAPIキーは不要です。
 
-[![Watch the full v1.4.6 walkthrough / v1.4.6の全体紹介動画を見る](docs/screenshots/walkthrough-v1.4.6.jpg)](https://youtu.be/URZ5rFbBwEI)
+[![Watch the full app walkthrough / 全体紹介動画を見る](docs/screenshots/walkthrough-library.jpg)](https://youtu.be/K2r0mIIGJjA)
 
-**Full app walkthrough / 全体紹介動画（1分58秒）**. Follow the title call, materials and script, scenario-based direction, voice and reading review, music, and MP4 export in the live interface. Gemini 3.8 Flash TTS (Schedar) reads the title and all six body cuts. Google Lyria 3.5 supplies the music. / 素材と台本の準備、シナリオに合わせた演出、声と読みの確認、BGM、MP4の保存までを実画面で紹介します。冒頭タイトルと本文6カットの声は Gemini 3.8 Flash TTS（Schedar）、BGMは Google Lyria 3.5 で生成しました。
+**Full app walkthrough / 全体紹介動画（2分18秒）**. Follow a library book-return example from photos and a short script to voice selection, caption and reading review, video playback, and MP4 export. Gemini 3.8 Flash TTS (Sulafat) narrates the walkthrough and example, with music by Google Lyria 3.5. / 図書館の返却案内を例に、写真と台本の準備から、声選び、字幕と読みの確認、完成MP4の再生・保存までを実画面で紹介します。解説と作例の音声は Gemini 3.8 Flash TTS の Sulafat、BGMは Google Lyria 3.5 です。
 
 [Read the article and play the embedded video / 記事内で動画を再生する（note）](https://note.com/happy_duck780/n/n97d49c1c98b1)
 
