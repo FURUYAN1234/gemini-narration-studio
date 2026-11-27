@@ -11,16 +11,16 @@ import {ensureHyperframes,hyperframesInstallation} from './runtime/hyperframes-r
 export const appRoot = path.dirname(fileURLToPath(import.meta.url));
 export function options(args, home=os.homedir()) {
   const allowed = new Set(['--no-browser','--setup-only','--install-hyperframes','--resume','--output','--port']);
-  const result={openBrowser:true,setupOnly:false,output:path.join(home,'GeminiNarrationStudio'),port:6181,startupMode:'new'};
+  const result={openBrowser:true,setupOnly:false,output:path.join(home,'GeminiNarrationStudio'),port:6181,startupMode:'resume'};
   for(let i=0;i<args.length;i++) {
     const flag=args[i]; if(!allowed.has(flag))throw new Error('UNKNOWN_LAUNCH_OPTION');
     if(flag==='--no-browser')result.openBrowser=false;
     else if(flag==='--setup-only')result.setupOnly=true;
     else if(flag==='--install-hyperframes')result.installHyperframes=true;
-    else if(flag==='--resume')result.startupMode='resume';
+    else if(flag==='--resume')continue; // Keep existing shortcuts and commands working.
     else {
       const value=args[++i]; if(!value||value.startsWith('--'))throw new Error('MISSING_LAUNCH_VALUE');
-      if(flag==='--output'){result.output=path.resolve(value);result.startupMode='resume';}
+      if(flag==='--output')result.output=path.resolve(value);
       else {result.port=Number(value); if(!Number.isInteger(result.port)||result.port<1024||result.port>65535)throw new Error('INVALID_PORT');}
     }
   }
@@ -75,15 +75,6 @@ export async function existingStudio(port,output,identity) {
     return false;
   }
 }
-export async function reuseStudio(url,startupMode){
- if(!/^http:\/\/127\.0\.0\.1:\d+$/.test(url)||!['new','resume'].includes(startupMode))throw new Error('INVALID_STARTUP_MODE');
- const read=async(route,options={})=>{const response=await fetch(url+'/api/'+route,{...options,signal:AbortSignal.timeout(10000)});const result=await response.json();if(!response.ok)throw new Error(result.error||'STUDIO_REUSE_FAILED');return result;};
- const current=await read('status');if(startupMode==='resume')return current;
- if(current.busy||current.video?.running||current.promo?.running)throw new Error('BUSY');
- const boot=await read('bootstrap'),created=await read('new-project',{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':boot.token},body:JSON.stringify({sessionId:current.sessionId,revision:current.revision,discardPrevious:true})});
- if(created.projectId===current.projectId||created.rows.length||created.production.assets.length||created.production.brief.script)throw new Error('NEW_PROJECT_NOT_EMPTY');
- return created;
-}
 export function openLocalBrowser(url) {
   if(!/^http:\/\/127\.0\.0\.1:\d+$/.test(url))throw new Error('INVALID_LOCAL_URL');
   const child=spawn('powershell.exe',['-NoProfile','-Command',`Start-Process '${url}'`],{windowsHide:true,stdio:'ignore'});
@@ -103,8 +94,6 @@ export async function launch(args=process.argv.slice(2),home=os.homedir()) {
   const identity=await runtimeIdentity();
   if(await existingStudio(config.port,config.output,identity)) {
     const url='http://127.0.0.1:'+config.port;
-    await reuseStudio(url,config.startupMode);
-    if(config.startupMode==='new')console.log('NARRATION_STUDIO_NEW_PROJECT');
     console.log('NARRATION_STUDIO_REUSED '+url); if(config.openBrowser)openLocalBrowser(url); return;
   }
   // A bound port must never be stopped or silently reused as a different app.

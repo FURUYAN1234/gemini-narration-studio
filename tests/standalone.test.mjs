@@ -11,6 +11,7 @@ import {mkdtemp,mkdir,writeFile,rm,readFile} from 'node:fs/promises';
 import {execFileSync} from 'node:child_process';
 import os from 'node:os';
 import {createServer} from 'node:http';
+import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 
 test('release dependency audit fails closed on vulnerabilities or unavailable results',()=>{
@@ -24,22 +25,49 @@ test('portable launch keeps persistent data outside replaceable release copy',()
   assert.equal(config.output,path.join('C:/Users/Test User','GeminiNarrationStudio'));
   assert.equal(options(['--output','C:/Data With Spaces']).output,path.resolve('C:/Data With Spaces'));
 });
-test('batch defaults to a fresh production while explicit resume/output retains a selected session',()=>{
- assert.equal(options([]).startupMode,'new');
+test('batch preserves the current production unless the user starts a new one in the app',()=>{
+ assert.equal(options([]).startupMode,'resume');
  assert.equal(options(['--resume']).startupMode,'resume');
  assert.equal(options(['--output','C:/Selected']).startupMode,'resume');
 });
-test('running studio launch isolates a new production, explicit resume retains it, and busy reuse changes nothing',async t=>{
+test('launching an already running studio retains its project and does not interrupt an active job',async t=>{
  const priorCwd=process.cwd(),home=await mkdtemp(path.join(os.tmpdir(),'studio-launch-reuse-')),dir=path.join(home,'GeminiNarrationStudio');t.after(()=>{process.chdir(priorCwd);return rm(home,{recursive:true,force:true});});
  const session=await NarrationSession.open({outputDir:dir});session.setKey('fixture-key');await session.appendRow({id:'old',caption:'前の字幕。',speech:'まえのじまく。'});
  const production=await ProductionInputs.open(dir);await production.addAsset('前の画像.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jZioAAAAASUVORK5CYII=','base64'));
  const oldJob=await readFile(path.join(dir,'job.json')),oldProduction=await readFile(path.join(dir,'production.json'));const service=await startServer({session,port:0,videoRendererRoot:dir,launcherStatus:{app:'gemini-narration-studio',output:dir,...await launcher.runtimeIdentity()}});t.after(()=>service.close());const args=['--no-browser','--port',service.url.split(':').at(-1)];
- session.busy=true;await assert.rejects(launcher.launch(args,home),/BUSY/);session.busy=false;
- await launcher.launch(args,home);const created=await(await fetch(service.url+'/api/status')).json();assert.notEqual(created.projectId,'original');assert.equal(created.rows.length,0);assert.equal(created.production.assets.length,0);assert.equal(created.keyConfigured,true);
- await launcher.launch([...args,'--resume'],home);const resumed=await(await fetch(service.url+'/api/status')).json();assert.equal(resumed.projectId,created.projectId);assert.equal(resumed.rows.length,0);
- const boot=await(await fetch(service.url+'/api/bootstrap')).json(),switched=await fetch(service.url+'/api/project',{method:'POST',headers:{'Content-Type':'application/json','X-Narration-Token':boot.token},body:JSON.stringify({id:'original',sessionId:resumed.sessionId,revision:resumed.revision})});assert.equal(switched.status,404);
- const reopened=await launcher.reuseStudio(service.url,'resume');assert.equal(reopened.projectId,created.projectId);assert.equal(reopened.production.assets.length,0);
- assert.equal((await(await fetch(service.url+'/api/status')).json()).projectId,created.projectId);assert.deepEqual(await readFile(path.join(dir,'job.json')),oldJob);assert.deepEqual(await readFile(path.join(dir,'production.json')),oldProduction);
+ session.busy=true;
+ await launcher.launch(args,home);
+ assert.equal((await(await fetch(service.url+'/api/status')).json()).busy,true);
+ session.busy=false;
+ await launcher.launch([...args,'--resume'],home);
+ const reopened=await(await fetch(service.url+'/api/status')).json();
+ assert.equal(reopened.projectId,'original');assert.equal(reopened.rows.length,1);
+ assert.equal(reopened.production.assets.length,1);assert.equal(reopened.keyConfigured,true);
+ assert.deepEqual(await readFile(path.join(dir,'job.json')),oldJob);
+ assert.deepEqual(await readFile(path.join(dir,'production.json')),oldProduction);
+});
+
+test('a cold batch launch retains an existing managed production and its pointer',async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'studio-launch-cold-'));
+ t.after(()=>rm(root,{recursive:true,force:true}));
+ const {output,startupMode}=options([],root);
+ const projectId=randomUUID();
+ const project=path.join(output,'projects',projectId);
+ await mkdir(project,{recursive:true});
+ const saved=await NarrationSession.open({outputDir:project});
+ await saved.appendRow({id:'kept',caption:'保存した字幕。',speech:'ほぞんしたじまく。'});
+ const pointer=JSON.stringify({id:projectId});
+ await writeFile(path.join(output,'active-project.json'),pointer);
+ const job=await readFile(path.join(project,'job.json'));
+ const session=await NarrationSession.open({outputDir:output});
+ const service=await startServer({session,port:0,startupMode,videoRendererRoot:root});
+ try {
+  const status=await(await fetch(service.url+'/api/status')).json();
+  assert.equal(status.projectId,projectId);
+  assert.equal(status.rows[0]?.caption,'保存した字幕。');
+  assert.equal(await readFile(path.join(output,'active-project.json'),'utf8'),pointer);
+  assert.deepEqual(await readFile(path.join(project,'job.json')),job);
+ } finally {await service.close();}
 });
 
 test('reject invalid launch arguments',()=>{

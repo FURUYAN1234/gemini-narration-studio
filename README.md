@@ -85,7 +85,7 @@ The public website is a download and installation guide. Video processing runs o
 3. Move the extracted folder to a writable location, for example `C:\VideoTools\gemini-narration-studio`. Open the inner folder containing `package.json`. / 展開したフォルダーを、たとえば `C:\VideoTools\gemini-narration-studio` に移します。`package.json` がある内側のフォルダーを開きます。
 4. Double-click **start_narration_studio.bat**. If extensions are hidden, it may appear as **start_narration_studio**, with type Windows Batch File. / **start_narration_studio.bat** をダブルクリックします。拡張子が非表示なら **start_narration_studio** と表示され、種類はWindowsバッチファイルです。
 5. Keep the black terminal window open. The first launch prepares missing Node.js/npm, video libraries and the rendering browser; wait for completion. / 黒いウィンドウを開いたままにします。初回は不足するNode.js/npm、動画処理ライブラリ、描画ブラウザーを準備するので、完了まで待ちます。
-6. The app opens at `http://127.0.0.1:6181/`. If the browser does not open, enter that address manually after the terminal reports READY. / `http://127.0.0.1:6181/` にアプリが開きます。開かなければ、黒いウィンドウにREADYが出た後、そのアドレスをブラウザーへ入力します。
+6. The app opens in your default browser at `http://127.0.0.1:6181/`. Any saved production is resumed. If the browser does not open, enter that address after the terminal reports READY. / 既定のブラウザーで `http://127.0.0.1:6181/` にアプリが開きます。保存済みの制作があれば再開します。開かなければ、黒いウィンドウにREADYが出た後、そのアドレスをブラウザーへ入力します。
 
 Only obtain the ZIP from the official repository. If Windows displays a warning, verify the source and filename before deciding whether to run it; ask your administrator on managed PCs. / ZIPは公式リポジトリから取得してください。Windowsが警告を出した場合は入手元とファイル名を確認して実行を判断し、管理されたPCでは管理者へ相談してください。
 
@@ -128,13 +128,7 @@ Use the optional cut-level image or script correction controls when needed. They
 
 Working data is stored in `%USERPROFILE%\GeminiNarrationStudio`; exported MP4/M4A files are in Downloads. There is no production-history menu. / 作業データは `%USERPROFILE%\GeminiNarrationStudio`、書き出したMP4/M4Aはダウンロードに保存します。制作履歴のメニューはありません。
 
-**Normal batch launch starts a new production and clears the previous working data.** To resume your current work, open Command Prompt in the extracted folder and run the following command. Exported files in Downloads remain. / **通常のバッチ起動は新しい制作を開始し、前の作業データをクリアします。** 作業を再開したい場合は、展開フォルダーでコマンドプロンプトを開き、次を実行します。ダウンロードの書き出し済みファイルは残ります。
-
-```bat
-start_narration_studio.bat --resume
-```
-
-In PowerShell, prefix the command with ` .\`. / PowerShellでは先頭に `.\` を付け、`.\start_narration_studio.bat --resume` を実行します。
+**Double-click the batch to resume your saved production.** If the app is already running, the launcher reopens its current page while ongoing work continues. Existing commands or shortcuts using `--resume` still work. / **バッチをダブルクリックすると、保存した制作を再開します。** アプリが起動済みなら同じ画面を開き、処理中の作業も続きます。`--resume` を指定した既存のコマンドやショートカットも引き続き使えます。
 
 Use **制作をクリアして新しく始める** only after saving what you need. To exit, finish the current processing and press Ctrl+C in the black terminal window. / 必要なものを保存してから **制作をクリアして新しく始める** を使ってください。終了するには実行中の処理を終え、黒いウィンドウでCtrl+Cを押します。
 
