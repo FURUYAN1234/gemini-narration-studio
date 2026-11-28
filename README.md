@@ -56,6 +56,12 @@ These frames come from a 32-second narrated video created through the app from a
 
 Diagram-only cuts do not require pictures. Turning the diagram switch off uses the ordinary layout; this switch alone makes no generation request. Diagram text and numbers are checked against the current caption. Check the original source yourself. Reveals use estimated subtitle timing, not exact word alignment. / 図解だけのカットは画像なしでも作れます。OFFなら通常のレイアウトになり、切り替えだけでは生成APIを呼びません。図解の文字や数値は現在の字幕と照合しますが、資料自体の正しさは利用者が確認してください。表示は推定した字幕タイミングに合わせるため、単語単位の厳密な同期ではありません。
 
+## Subtitle boundaries and the production skill / 字幕の区切りと制作スキル
+
+In v1.5.0, a Japanese opening bracket stays with the quoted text in the next caption. Review the actual recording and voice around each cut in Step 3 and in the exported MP4. Caption timing is estimated from the reading and audio pauses. / v1.5.0では、日本語の開き括弧を、引用する操作名や文言と同じ字幕に表示します。③と書き出したMP4で、操作画面が変わる位置を音声と照合してください。字幕の時刻は読みと音声の間から推定します。
+
+The downloadable production skill includes planning full app walkthroughs, recording actions and results, reviewing caption boundaries, and checking the exported ending. The ending follows the type of video and the requested caption style. / 「制作スキルを取得」では、全体紹介の台本、操作と結果の実録画、字幕の区切り、書き出した末尾を確認する手順を配布します。まとめや挨拶の有無と字幕は動画の目的と指定に合わせます。
+
 ## Requirements / 用意するもの
 
 Use Windows 10 or 11, x64, a writable local folder, an internet connection and your own Gemini API key. ARM and macOS are unverified. / Windows 10または11のx64版、書き込み可能な保存場所、インターネット接続、ご自身のGemini APIキーを用意してください。ARM版とmacOSは動作未確認です。
