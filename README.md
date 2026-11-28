@@ -37,7 +37,7 @@ Use **使い方マニュアル（PDF）** in the app header to read the bundled 
 
 [Read the article and play the embedded video / 記事内で動画を再生する（note）](https://note.com/happy_duck780/n/n97d49c1c98b1)
 
-[Play the v1.5.0 HyperFrames sample on the installation page / 公開導入ページでv1.5.0のHyperFrames作例を再生](https://furuyan1234.github.io/gemini-narration-studio/)
+[Watch the narrated v1.5.0 walkthrough and HyperFrames output sample on the installation page / 公開導入ページでv1.5.0の音声付き全体紹介とHyperFramesの書き出し作例を再生](https://furuyan1234.github.io/gemini-narration-studio/#walkthrough-v150)
 
 ## Explain with pictures and diagrams / 画像と図解で伝える
 
