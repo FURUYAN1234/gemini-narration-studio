@@ -1,5 +1,19 @@
 import {fitText} from './motion.mjs';
 
+const sentenceSegmenter=new Intl.Segmenter('ja',{granularity:'sentence'});
+
+function splitSubtitleSentences(text){
+ const sentences=[...sentenceSegmenter.segment(text)].map(({segment})=>segment);
+ for(let i=0;i<sentences.length-1;i++){
+  // In Japanese, ICU can attach an opening bracket to the preceding sentence.
+  const opening=sentences[i].match(/[\p{Ps}\p{Pi}][\p{Ps}\p{Pi}\p{Z}\t]*$/u)?.[0];
+  if(!opening)continue;
+  sentences[i]=sentences[i].slice(0,-opening.length);
+  sentences[i+1]=opening+sentences[i+1];
+ }
+ return sentences.filter(sentence=>sentence.trim());
+}
+
 // Local timing estimate: reading length, snapped to nearby pauses in existing
 // PCM audio. This is not speech recognition or provider word-level timestamps.
 export function buildSubtitleCues({caption,speech,bytes,fps,frames}){
@@ -12,7 +26,7 @@ export function buildSubtitleCues({caption,speech,bytes,fps,frames}){
   if(kind==='data')for(let i=p+8;i<p+8+size;i+=2)samples.push(view.getInt16(i,true));p+=8+size+(size%2);
  }
  if(!rate||!samples.length)throw new Error('EMPTY_SUBTITLE_WAV');
- const split=text=>[...new Intl.Segmenter('ja',{granularity:'sentence'}).segment(text)].map(s=>s.segment).filter(s=>s.trim()),texts=split(caption),readings=split(speech||caption);
+ const texts=splitSubtitleSentences(caption),readings=splitSubtitleSentences(speech||caption);
  if(!texts.length||texts.length>frames)throw new Error('INVALID_SUBTITLE_TIMING');
  const weights=texts.map((t,i)=>Math.max(1,[...(readings.length===texts.length?readings[i]:t).replace(/[\p{P}\p{Z}\s]/gu,'')].length)),total=weights.reduce((a,b)=>a+b,0);
  const width=Math.max(1,Math.round(rate*.01)),energy=[];

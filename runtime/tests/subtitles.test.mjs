@@ -38,3 +38,17 @@ test('subtitle fitting preserves short text, explicit line breaks and bounded mu
  }
  assert.throws(()=>fitSubtitleText('字幕',{width:0}),/INVALID_MOTION_TEXT/);
 });
+
+
+test('sentence cues keep opening brackets with the following spoken button label',()=>{
+ for(const [first,second] of [
+  ['色を外した線画だけを確認できます。','「元絵とトレス結果」で、色付きの比較に戻ります。'],
+  ['配色Bの色チップを選んで青に変更します。','「適用」を押すと、同じ色レイヤーが一緒に変わります。'],
+  ['次の操作です。','「（推奨）元絵」を選びます。'],
+  ['最初の作業です。 ','（画像を取り込む）を押します。'],
+ ]){
+  const cues=buildSubtitleCues({caption:first+second,speech:first+second,bytes:audio(),fps:30,frames:180});
+  assert.deepEqual(cues.map(({text})=>text),[first,second]);
+  assert.equal(cues[0].to,cues[1].from);
+ }
+});
