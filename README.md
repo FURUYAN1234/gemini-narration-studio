@@ -6,9 +6,9 @@ Operation guide / 操作ガイド: Open the PDF to review the application workfl
 
 Read both Japanese A4 guides from the app header or the public installation page. / 日本語A4の操作・API設定ガイドは、アプリ上部と公開導入ページから別タブで開けます。
 
-# Narrated Video Maker / ナレーション動画メーカー v1.5.0
+# Narrated Video Maker / ナレーション動画メーカー v1.5.1
 
-[Release notes / 更新内容](docs/releases/v1.5.0.md)
+[Release notes / 更新内容](docs/releases/v1.5.1.md)
 
 Start an app explainer with the official app name on a title screen and in the first spoken line. New productions enable the opening title by default. Set the title and its reading before generating the video. Existing projects can enable the same option under the script settings. / アプリ紹介では、冒頭に正式名を表示し、最初のナレーションで読み上げます。新規制作では「冒頭にタイトルと読み上げを入れる」が初期状態で有効です。動画を作る前に、タイトルとその読みを確定してください。手入力で作る場合もMCP経由で書き出す場合もこの設定を使います。保存済みの制作では台本の設定から有効にできます。短尺紹介フォームと `studio_render_promo` で読み上げ音声を使うときは、冒頭タイトル用と本文用の音声を分けます。 / The setting covers manual production and the MCP preview. For narrated short promos, provide a separate title-call audio file before the body narration.
 
@@ -65,6 +65,10 @@ Diagram-only cuts do not require pictures. Turning the diagram switch off uses t
 In v1.5.0, a Japanese opening bracket stays with the quoted text in the next caption. Review the actual recording and voice around each cut in Step 3 and in the exported MP4. Caption timing is estimated from the reading and audio pauses. / v1.5.0では、日本語の開き括弧を、引用する操作名や文言と同じ字幕に表示します。③と書き出したMP4で、操作画面が変わる位置を音声と照合してください。字幕の時刻は読みと音声の間から推定します。
 
 The downloadable production skill includes planning full app walkthroughs, recording actions and results, reviewing caption boundaries, and checking the exported ending. The ending follows the type of video and the requested caption style. / 「制作スキルを取得」では、全体紹介の台本、操作と結果の実録画、字幕の区切り、書き出した末尾を確認する手順を配布します。まとめや挨拶の有無と字幕は動画の目的と指定に合わせます。
+
+In v1.5.1, the skill specifies Gemini TTS for both the opening title and body. Record the model and voice, check captions against the final speech, and verify that the published MP4 matches the approved export. / v1.5.1の制作スキルでは、冒頭タイトルと本文にGemini TTSを使います。使用したモデルと声を記録し、発話と字幕を完成MP4で照合します。公開後は、確認した動画と一致することを確かめます。Geminiに接続できない場合は音声生成を保留し、理由を伝えます。
+
+[Download the production skill ZIP / 制作スキルZIPを取得](https://furuyan1234.github.io/gemini-narration-studio/narrated-video-production.zip) · [API setup PDF / API設定ガイドPDF](docs/narration-api-guide.pdf)
 
 ## Requirements / 用意するもの
 

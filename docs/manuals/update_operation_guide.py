@@ -15,7 +15,8 @@ out = Path(os.environ['APP_MANUAL_OUTPUT'])
 guide = root / 'docs/narration-guide.pdf'
 marker = 'narration-emergency-stop-supplement'
 source = PdfReader(guide)
-count = len(source.pages) - (1 if source.metadata.get('/Subject') == marker else 0)
+supplement_count = int(source.metadata.get('/SupplementPages', 1)) if source.metadata.get('/Subject') == marker else 0
+count = len(source.pages) - supplement_count
 old = pdfium.PdfDocument(guide)
 before = [hashlib.sha256(old[i].render(scale=.5).to_pil().tobytes()).hexdigest() for i in range(count)]
 old.close()
@@ -36,23 +37,34 @@ builder['DATA']['manual'] = [{
         ['text', '③の「動画のカット間に置く間」は新規制作で標準1.0秒です。別の場面へ移るときは、間の途中で画面が切り替わり、その後に声と字幕が入ります。'],
         ['box', 'MCPから始めた処理を止めるには「停止して手動に戻る」を押します。通常のAI通信や動画処理には「緊急停止」を使います。「制作画面を一時退避」は待機中の画面を退避します。保存済みの台本・素材・音声は保持します。'],
     ],
+}, {
+    'title': '補足　ナレーションと字幕の公開前確認',
+    'lead': '制作スキルを使ったナレーション付き動画の確認手順です。',
+    'blocks': [
+        ['text', '冒頭タイトルと本文はGemini TTSで生成します。提供元・モデル・声名を記録し、生成結果と書き出しに渡す音声を照合します。Geminiに接続できない場合は音声生成を保留し、理由を伝えます。'],
+        ['text', '短尺紹介に声を付ける場合は、タイトルと本文の音声を別々に指定します。字幕は読み上げた文と対応させ、発話の開始・終了に合わせます。章の見出しや要約は、発話字幕とは別に表示してください。'],
+        ['box', '完成MP4を順に再生して、声、字幕と操作画面を照合します。公開する場合は確認したMP4を使い、公開先で動画が再生できること、尺とリンクが合うことを確かめます。'],
+    ],
 }]
 supplement, layout = builder['build']('manual')
 report = builder['verify'](supplement, layout)
 writer = PdfWriter()
 for page in source.pages[:count]:
     writer.add_page(page)
-writer.add_page(PdfReader(supplement).pages[0])
-writer.add_metadata({'/Title': 'ナレーション動画メーカー v' + builder['DATA']['version'] + ' 操作ガイド', '/Subject': marker})
+new_supplement = PdfReader(supplement)
+for page in new_supplement.pages:
+    writer.add_page(page)
+writer.add_metadata({'/Title': 'ナレーション動画メーカー v' + builder['DATA']['version'] + ' 操作ガイド', '/Subject': marker, '/SupplementPages': str(len(new_supplement.pages))})
 target = out / 'narration-guide.pdf'
 writer.write(target)
 updated = pdfium.PdfDocument(target)
 after = [hashlib.sha256(updated[i].render(scale=.5).to_pil().tobytes()).hexdigest() for i in range(count)]
 assert before == after, 'Original guide pages changed'
-updated[count].render(scale=1.25).to_pil().save(out / 'renders/narration-guide-supplement.png')
+for i in range(count, len(updated)):
+    updated[i].render(scale=1.25).to_pil().save(out / f'renders/narration-guide-supplement-{i - count + 1}.png')
 updated.close()
 (out / 'operation-guide-qa.json').write_text(json.dumps({
-    'version': builder['DATA']['version'], 'pages': count + 1, 'originalPagesPixelIdentical': True,
+    'version': builder['DATA']['version'], 'pages': count + len(new_supplement.pages), 'originalPagesPixelIdentical': True,
     'supplement': report, 'sha256': hashlib.sha256(target.read_bytes()).hexdigest(),
 }, ensure_ascii=False, indent=2), encoding='utf-8')
-print(f'OPERATION_GUIDE_SUPPLEMENT_READY pages={count + 1} original-pages-identical=true')
+print(f'OPERATION_GUIDE_SUPPLEMENT_READY pages={count + len(new_supplement.pages)} original-pages-identical=true')
