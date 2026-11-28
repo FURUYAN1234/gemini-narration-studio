@@ -18,7 +18,7 @@ export function initPromoTools({$,element,api,guarded,render,readState,errors}){
     RECORDING_SETUP_REQUIRED:'録画機能のセットアップが終わるまでお待ちください。',
     INVALID_PROMO_VIDEO_RANGE:'カットの開始と長さを元の動画内に収めてください。最短は0.6秒です。',
     PROMO_NARRATION_TOO_LONG:'ナレーションがカットの合計時間を超えています。映像を延ばすか音声を短くしてください。',
-    HYPERFRAMES_INSTALL_REQUIRED:'先にバッチでHyperFramesを導入してください。',
+    HYPERFRAMES_INSTALL_REQUIRED:'次回起動時にHyperFramesの自動準備を再試行できます。今すぐ書き出すには「自動」またはRemotionを選んでください。',
     HYPERFRAMES_RENDER_FAILED:'HyperFramesで書き出せませんでした。診断を確認してください。'
   });
   function drawCuts(){
@@ -79,7 +79,7 @@ export function initPromoTools({$,element,api,guarded,render,readState,errors}){
     if(renderer.value==='hyperframes'&&!intro.hyperframesVersion)renderer.value='auto';
     $('promo-renderer-help').textContent=intro.hyperframesVersion
       ? '自動はHyperFramesを使用します。操作録画に手順があれば、カットごとに表示します。'
-      : '自動はRemotionを使用します。HyperFramesは start_narration_studio.bat --install-hyperframes --setup-only で導入できます。';
+      : '自動はRemotionを使用します。HyperFramesの準備は次回起動時に自動で再試行します。';
     if(recording.asset&&recording.asset!==lastRecorded){
       lastRecorded=recording.asset;
       $('recording-source').value=recording.asset;

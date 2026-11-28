@@ -73,6 +73,29 @@ test('a cold batch launch retains an existing managed production and its pointer
 test('reject invalid launch arguments',()=>{
   for(const args of [['--port','0'],['--port','6181.2'],['--port','70000'],['--output'],['--api-key','secret']])assert.throws(()=>options(args));
 });
+test('Windows launcher prepares both promo dependencies and confirms the combined runtime',async()=>{
+  const calls=[];
+  const ready={cli:'hyperframes.mjs',gsap:'gsap.min.js',version:'0.9.83',ffmpeg:'ffmpeg.exe',ffprobe:'ffprobe.exe'};
+  const deps={
+    platform:'win32',
+    prepareFfmpeg:async()=>{calls.push('ffmpeg');},
+    install:async()=>{calls.push('hyperframes');return {reused:true};},
+    lookup:async()=>{calls.push('verify');return ready;},
+  };
+  assert.equal(await launcher.preparePromoRuntime(false,deps),ready);
+  assert.deepEqual(calls,['ffmpeg','hyperframes','verify']);
+});
+test('optional Windows promo setup falls back while explicit legacy setup reports the error',async()=>{
+  const offline=new Error('SETUP_COMMAND_FAILED');
+  const deps={platform:'win32',prepareFfmpeg:async()=>{throw offline;}};
+  assert.equal(await launcher.preparePromoRuntime(false,deps),null);
+  await assert.rejects(launcher.preparePromoRuntime(true,deps),error=>error===offline);
+  const incomplete={
+    platform:'win32',prepareFfmpeg:async()=>{},install:async()=>({reused:false}),lookup:async()=>null,
+  };
+  await assert.rejects(launcher.preparePromoRuntime(true,incomplete),/HYPERFRAMES_INSTALL_VERIFICATION_FAILED/);
+  assert.equal(await launcher.preparePromoRuntime(false,{platform:'linux'}),null);
+});
 test('distribution permits source and samples but rejects private state and settings',()=>{
   for(const file of ['docs/licenses/furu-application-terms-2026-10-08.txt','launch.mjs','scripts/bootstrap.ps1','docs/publication.md','docs/note-draft.md','package-lock.json','runtime/core.mjs','runtime/vendor/voice-samples/abc.wav','runtime/vendor/sources.json'])assert.equal(allowedFile(file),true,file);
   for(const file of ['.env','runtime/job.json','runtime/vendor/production.json','data/job.json','node_modules/a.js','runtime/vendor/.npmrc','output/private.png','runtime/private.txt'])assert.equal(allowedFile(file),false,file);
@@ -148,7 +171,7 @@ test('runtime identity is independent of root and changes with executable conten
  const first=await mkdtemp(path.join(os.tmpdir(),'studio-build-a-')),second=await mkdtemp(path.join(os.tmpdir(),'studio-build-b-'));t.after(()=>rm(first,{recursive:true,force:true}));t.after(()=>rm(second,{recursive:true,force:true}));
  for(const root of [first,second]){
   for(const directory of ['runtime/tests','mcp','scripts/recording-runtime','scripts/hyperframes-runtime'])await mkdir(path.join(root,directory),{recursive:true});
-  for(const [file,value] of [['launch.mjs','launch'],['package-lock.json','{}'],['scripts/recording-runtime/package-lock.json','{}'],['scripts/recording-runtime/package.json','{}'],['scripts/hyperframes-runtime/package.json','{}'],['scripts/hyperframes-runtime/package-lock.json','{}'],['runtime/server.mjs','server'],['runtime/tests/test.mjs','test']])await writeFile(path.join(root,file),value);
+  for(const [file,value] of [['launch.mjs','launch'],['package-lock.json','{}'],['scripts/bootstrap.ps1','bootstrap'],['scripts/recording-runtime/package-lock.json','{}'],['scripts/recording-runtime/package.json','{}'],['scripts/hyperframes-runtime/package.json','{}'],['scripts/hyperframes-runtime/package-lock.json','{}'],['runtime/server.mjs','server'],['runtime/tests/test.mjs','test']])await writeFile(path.join(root,file),value);
  }
  const initial=await runtimeIdentity(first);assert.deepEqual(await runtimeIdentity(second),initial);await writeFile(path.join(second,'runtime/tests/test.mjs'),'changed test');assert.deepEqual(await runtimeIdentity(second),initial);await writeFile(path.join(second,'scripts/hyperframes-runtime/package-lock.json'),'{"changed":true}');const updated=await runtimeIdentity(second);assert.notEqual(updated.buildId,initial.buildId);await writeFile(path.join(second,'runtime/server.mjs'),'changed executable');assert.notEqual((await runtimeIdentity(second)).buildId,updated.buildId);
 });

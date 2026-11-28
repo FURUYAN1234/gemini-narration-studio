@@ -1,4 +1,4 @@
-param([Parameter(ValueFromRemainingArguments=$true)][string[]]$LaunchArgs)
+param([switch]$PrepareHyperframesFfmpeg,[Parameter(ValueFromRemainingArguments=$true)][string[]]$LaunchArgs)
 
 $ErrorActionPreference = 'Stop'
 
@@ -131,8 +131,11 @@ function Initialize-HyperFramesFFmpeg {
 
 if ($MyInvocation.InvocationName -ne '.') {
     try {
+        if ($PrepareHyperframesFfmpeg) {
+            Initialize-HyperFramesFFmpeg
+            exit 0
+        }
         $studioNode = Get-StudioNode
-        if ($LaunchArgs -contains '--install-hyperframes') { Initialize-HyperFramesFFmpeg }
         $env:PATH = (Split-Path -Parent $studioNode) + ';' + $env:PATH
         & $studioNode (Join-Path (Split-Path -Parent $PSScriptRoot) 'launch.mjs') @LaunchArgs
         exit $LASTEXITCODE

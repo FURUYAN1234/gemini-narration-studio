@@ -6,9 +6,9 @@ Operation guide / 操作ガイド: Open the PDF to review the application workfl
 
 Read both Japanese A4 guides from the app header or the public installation page. / 日本語A4の操作・API設定ガイドは、アプリ上部と公開導入ページから別タブで開けます。
 
-# Narrated Video Maker / ナレーション動画メーカー v1.4.6
+# Narrated Video Maker / ナレーション動画メーカー v1.5.0
 
-[Release notes / 更新内容](docs/releases/v1.4.6.md)
+[Release notes / 更新内容](docs/releases/v1.5.0.md)
 
 Start an app explainer with the official app name on a title screen and in the first spoken line. New productions enable the opening title by default. Set the title and its reading before generating the video. Existing projects can enable the same option under the script settings. / アプリ紹介では、冒頭に正式名を表示し、最初のナレーションで読み上げます。新規制作では「冒頭にタイトルと読み上げを入れる」が初期状態で有効です。動画を作る前に、タイトルとその読みを確定してください。手入力で作る場合もMCP経由で書き出す場合もこの設定を使います。保存済みの制作では台本の設定から有効にできます。短尺紹介フォームと `studio_render_promo` で読み上げ音声を使うときは、冒頭タイトル用と本文用の音声を分けます。 / The setting covers manual production and the MCP preview. For narrated short promos, provide a separate title-call audio file before the body narration.
 
@@ -36,6 +36,8 @@ Use **使い方マニュアル（PDF）** in the app header to read the bundled 
 **Full app walkthrough / 全体紹介動画（2分18秒）**. Follow a library book-return example from photos and a short script to voice selection, caption and reading review, video playback, and MP4 export. Gemini 3.8 Flash TTS (Sulafat) narrates the walkthrough and example, with music by Google Lyria 3.5. / 図書館の返却案内を例に、写真と台本の準備から、声選び、字幕と読みの確認、完成MP4の再生・保存までを実画面で紹介します。解説と作例の音声は Gemini 3.8 Flash TTS の Sulafat、BGMは Google Lyria 3.5 です。
 
 [Read the article and play the embedded video / 記事内で動画を再生する（note）](https://note.com/happy_duck780/n/n97d49c1c98b1)
+
+[Play the v1.5.0 HyperFrames sample on the installation page / 公開導入ページでv1.5.0のHyperFrames作例を再生](https://furuyan1234.github.io/gemini-narration-studio/)
 
 ## Explain with pictures and diagrams / 画像と図解で伝える
 
@@ -81,7 +83,7 @@ The public website is a download and installation guide. Video processing runs o
 
 - Open the studio with `start_narration_studio.bat`, import screenshots or recordings, then open the short promo panel. Gemini receives the title and cut text to plan the visuals. BGM is enabled by default and adds one Lyria request with the cut timing. Transition sounds are optional. Play and save the MP4 at the bottom of the page. / バッチ起動後に画像や操作録画を取り込み、短尺紹介フォームを開きます。Geminiにタイトル・見出し・字幕を渡して演出を提案します。BGMは初期状態でオンで、カットの尺を添えてLyriaで1回作曲します。切り替え音は任意です。完成MP4はページ下部で再生・保存できます。
 - The studio toolbar provides the downloadable production skill and the MCP setup guide. The local MCP bridge can record and edit a demo and render it as MP4 in the approved project. / 画面上部に制作スキルとMCP導入ガイドがあります。許可したMCP接続で制作スキルから録画・編集・MP4書き出しを進められます。
-- Run `start_narration_studio.bat --install-hyperframes --setup-only` once to add HyperFrames to this Windows user account. “Auto” in the product-demo panel then selects HyperFrames. The MCP can supply a focus rectangle, steps or two comparison entries. Local recordings can supply their own steps. / `start_narration_studio.bat --install-hyperframes --setup-only` を実行すると、このWindowsユーザーにHyperFramesが入ります。以後、紹介動画の「自動」で使われます。操作録画に手順があれば表示でき、MCPからは強調範囲・手順・比較2項目も渡せます。
+- On Windows, opening `start_narration_studio.bat` or running `npm start` from a Git checkout prepares HyperFrames and its dedicated FFmpeg automatically. A fresh launch reuses the prepared tools. Choose **Auto** under the short promo's rendering options. It selects HyperFrames when ready and Remotion if setup fails. Check the network or write permissions and restart the studio to retry setup. The MCP can supply a focus rectangle, steps or two comparison entries. Local recordings can supply their own steps. / Windowsでは、バッチをダブルクリックするかGitで取得したフォルダーから `npm start` で起動すると、紹介動画用のHyperFramesと専用FFmpegが自動で準備されます。準備済みのツールは次回も使います。短尺紹介の「書き出し方式」で「自動」を選ぶと、準備済みならHyperFrames、準備に失敗したときはRemotionで書き出します。通信や書き込み権限を確認し、アプリを起動し直すと準備を再試行できます。操作録画に手順があれば表示でき、MCPからは強調範囲・手順・比較2項目も渡せます。
 - Built-in automatic recording requires a local web app. For Windows desktop demos, import a screen recording and use MCP to specify clips and captions and export an MP4. Codex Computer Use can operate the desktop app while a separate tool records the screen. / 内蔵の自動録画はローカルWebアプリ専用です。Windowsアプリの画面録画を取り込めば、MCPでカット範囲・字幕を指定し、MP4を書き出せます。AIによるWindowsアプリの操作にはCodexのComputer Useを使い、映像は別の画面録画ツールで収録します。
 - Remove the current BGM from the materials list to make the next video without it. The source audio is kept locally, and you can turn automatic BGM generation back on from the same section. / 「素材・台本」で使用中のBGMを素材一覧から外すと、次の動画をBGMなしで作成できます。元の音声ファイルはPCに残り、同じ欄からBGMの自動生成を再開できます。
 - The final card lists the tools used. Add an optional project name, author or public URL in the title settings. The watermark switch controls whether those details appear. / 末尾には使用した制作環境を表示します。作品名・作者名・公開URLはタイトル欄で任意に設定でき、ウォーターマークの切り替えで表示を選べます。
